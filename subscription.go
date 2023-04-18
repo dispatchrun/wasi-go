@@ -1,6 +1,8 @@
 package wasip1
 
-import "encoding/binary"
+import (
+	"unsafe"
+)
 
 // Subscription is a subscription to an event.
 type Subscription struct {
@@ -19,17 +21,40 @@ type Subscription struct {
 	variant [32]byte
 }
 
+// MakeSubscriptionFDReadWrite makes a Subscription of type FDRead or FDWrite.
+func MakeSubscriptionFDReadWrite(userData uint64, eventType EventType, fdrw SubscriptionFDReadWrite) Subscription {
+	s := Subscription{UserData: userData, EventType: eventType}
+	s.SetFDReadWrite(fdrw)
+	return s
+}
+
+// MakeSubscriptionClock makes a Subscription of type Clock.
+func MakeSubscriptionClock(userData uint64, eventType EventType, c SubscriptionClock) Subscription {
+	s := Subscription{UserData: userData, EventType: eventType}
+	s.SetClock(c)
+	return s
+}
+
 // SetFDReadWrite sets the subscription variant to a SubscriptionFDReadWrite.
 func (s *Subscription) SetFDReadWrite(fdrw SubscriptionFDReadWrite) {
-	s.variant = [32]byte{}
-	binary.LittleEndian.PutUint32(s.variant[:], uint32(fdrw.FD))
+	variant := (*SubscriptionFDReadWrite)(unsafe.Pointer(&s.variant))
+	*variant = fdrw
 }
 
 // GetFDReadWrite gets the embedded SubscriptionFDReadWrite.
 func (s *Subscription) GetFDReadWrite() SubscriptionFDReadWrite {
-	return SubscriptionFDReadWrite{
-		FD: int32(binary.LittleEndian.Uint32(s.variant[:])),
-	}
+	return *(*SubscriptionFDReadWrite)(unsafe.Pointer(&s.variant))
+}
+
+// SetClock sets the subscription variant to a SubscriptionClock.
+func (s *Subscription) SetClock(c SubscriptionClock) {
+	variant := (*SubscriptionClock)(unsafe.Pointer(&s.variant))
+	*variant = c
+}
+
+// GetClock gets the embedded SubscriptionClock.
+func (s *Subscription) GetClock() SubscriptionClock {
+	return *(*SubscriptionClock)(unsafe.Pointer(&s.variant))
 }
 
 // SubscriptionFDReadWrite is the contents of a subscription when type is type
@@ -39,6 +64,63 @@ type SubscriptionFDReadWrite struct {
 	// reading or writing.
 	FD int32
 }
+
+// SubscriptionClock is the contents of a subscription when type is Clock.
+type SubscriptionClock struct {
+	// ID is the clock against which to compare the timestamp.
+	ID ClockID
+	_  [4]byte
+
+	// Timeout is the absolute or relative timestamp.
+	Timeout Timestamp
+
+	// Precision is the amount of time that the implementation may wait
+	// additionally to coalesce with other events.
+	Precision Timestamp
+
+	// Flags specify whether the timeout is absolute or relative.
+	Flags SubscriptionClockFlags
+	_     [6]byte
+}
+
+// Timestamp is a timestamp in nanoseconds.
+type Timestamp uint64
+
+// ClockID is an identifier for clocks.
+type ClockID uint32
+
+const (
+	// Realtime is the clock measuring real time. Time value zero corresponds
+	// with 1970-01-01T00:00:00Z.
+	Realtime ClockID = iota
+
+	// Monotonic is the store-wide monotonic clock, which is defined as a clock
+	// measuring real time, whose value cannot be adjusted and which cannot
+	// have negative clock jumps. The epoch of this clock is undefined. The
+	// absolute time value of this clock therefore has no meaning.
+	Monotonic
+
+	// ProcessCPUTimeID is the CPU-time clock associated with the current
+	// process.
+	ProcessCPUTimeID
+
+	// ThreadCPUTimeID is the CPU-time clock associated with the current
+	// thread.
+	ThreadCPUTimeID
+)
+
+// SubscriptionClockFlags are flags determining how to interpret the timestamp
+// provided in SubscriptionClock.Timeout.
+type SubscriptionClockFlags uint16
+
+const (
+	// SubscriptionClockAbstime is a flag indicatating that the timestam
+	// provided in SubscriptionClock.Timeout is an absolute timestamp of
+	// clock SubscriptionClock.ID. If unset, treat the timestamp provided
+	// in SubscriptionClock.Timeout as relative to the current time value
+	// of clock SubscriptionClock.ID.
+	SubscriptionClockAbstime SubscriptionClockFlags = 1 << iota
+)
 
 // Event is an event that occurred.
 type Event struct {
