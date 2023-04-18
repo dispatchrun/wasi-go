@@ -69,7 +69,6 @@ type SubscriptionFDReadWrite struct {
 type SubscriptionClock struct {
 	// ID is the clock against which to compare the timestamp.
 	ID ClockID
-	_  [4]byte
 
 	// Timeout is the absolute or relative timestamp.
 	Timeout Timestamp
@@ -80,7 +79,6 @@ type SubscriptionClock struct {
 
 	// Flags specify whether the timeout is absolute or relative.
 	Flags SubscriptionClockFlags
-	_     [6]byte
 }
 
 // Timestamp is a timestamp in nanoseconds.
@@ -134,7 +132,6 @@ type Event struct {
 
 	// EventType is the type of event that occurred.
 	EventType EventType
-	_         [5]byte
 
 	// FDReadWrite is the contents of the event, if it is a FDRead or FDWrite.
 	// Clock events ignore this field.
@@ -149,7 +146,6 @@ type EventFDReadWrite struct {
 
 	// Flags is the state of the file descriptor.
 	Flags EventRWFlags
-	_     [6]byte
 }
 
 // EventType is a type of a subscription to an event, or its occurrence.
