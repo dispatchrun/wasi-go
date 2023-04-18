@@ -120,6 +120,11 @@ const (
 	Abstime ClockFlags = 1 << iota
 )
 
+// Has checks whether a flag is set.
+func (flags ClockFlags) Has(f ClockFlags) bool {
+	return (flags & f) != 0
+}
+
 // Event is an event that occurred.
 type Event struct {
 	// UserData is the user-provided value that got attached to
