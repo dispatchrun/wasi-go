@@ -74,7 +74,7 @@ func TestSubscriptionFDReadWrite(t *testing.T) {
 }
 
 func TestSubscriptionClock(t *testing.T) {
-	actual := MakeSubscriptionClock(0xFEEDF4CED00DCAFE, Clock, SubscriptionClock{
+	actual := MakeSubscriptionClock(0xFEEDF4CED00DCAFE, SubscriptionClock{
 		ID:        Realtime,
 		Timeout:   0xABCD,
 		Precision: 0x5678,

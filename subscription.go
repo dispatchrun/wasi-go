@@ -29,8 +29,8 @@ func MakeSubscriptionFDReadWrite(userData uint64, eventType EventType, fdrw Subs
 }
 
 // MakeSubscriptionClock makes a Subscription of type Clock.
-func MakeSubscriptionClock(userData uint64, eventType EventType, c SubscriptionClock) Subscription {
-	s := Subscription{UserData: userData, EventType: eventType}
+func MakeSubscriptionClock(userData uint64, c SubscriptionClock) Subscription {
+	s := Subscription{UserData: userData, EventType: Clock}
 	s.SetClock(c)
 	return s
 }
