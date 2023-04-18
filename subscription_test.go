@@ -33,8 +33,8 @@ func TestSubscription(t *testing.T) {
 	assertEqual(t, ProcessCPUTimeID, 2)
 	assertEqual(t, ThreadCPUTimeID, 3)
 
-	assertEqual(t, int(unsafe.Sizeof(SubscriptionClockFlags(0))), 2)
-	assertEqual(t, SubscriptionClockAbstime, 0x1)
+	assertEqual(t, int(unsafe.Sizeof(ClockFlags(0))), 2)
+	assertEqual(t, Abstime, 0x1)
 
 	assertEqual(t, int(unsafe.Sizeof(Event{})), 32)
 	assertEqual(t, int(unsafe.Offsetof(Event{}.UserData)), 0)
@@ -54,8 +54,8 @@ func TestSubscription(t *testing.T) {
 	assertEqual(t, FDRead, 1)
 	assertEqual(t, FDWrite, 2)
 
-	assertEqual(t, int(unsafe.Sizeof(EventRWFlags(0))), 2)
-	assertEqual(t, FDReadWriteHangup, 0x1)
+	assertEqual(t, int(unsafe.Sizeof(FDReadWriteFlags(0))), 2)
+	assertEqual(t, Hangup, 0x1)
 }
 
 func TestSubscriptionFDReadWrite(t *testing.T) {
@@ -78,7 +78,7 @@ func TestSubscriptionClock(t *testing.T) {
 		ID:        Realtime,
 		Timeout:   0xABCD,
 		Precision: 0x5678,
-		Flags:     SubscriptionClockAbstime,
+		Flags:     Abstime,
 	})
 
 	expected := Subscription{
@@ -89,14 +89,14 @@ func TestSubscriptionClock(t *testing.T) {
 	binary.LittleEndian.PutUint32(expected.variant[0:4], uint32(Realtime))
 	binary.LittleEndian.PutUint64(expected.variant[8:16], uint64(0xABCD))
 	binary.LittleEndian.PutUint64(expected.variant[16:24], uint64(0x5678))
-	binary.LittleEndian.PutUint16(expected.variant[24:26], uint16(SubscriptionClockAbstime))
+	binary.LittleEndian.PutUint16(expected.variant[24:26], uint16(Abstime))
 	assertEqual(t, actual, expected)
 
 	variant := actual.GetClock()
 	assertEqual(t, variant.ID, Realtime)
 	assertEqual(t, variant.Timeout, 0xABCD)
 	assertEqual(t, variant.Precision, 0x5678)
-	assertEqual(t, variant.Flags, SubscriptionClockAbstime)
+	assertEqual(t, variant.Flags, Abstime)
 }
 
 func assertEqual[T any](t *testing.T, actual, expected T) {

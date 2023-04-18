@@ -10,7 +10,7 @@ type Subscription struct {
 	// in the implementation and returned through Event.UserData.
 	UserData uint64
 
-	// EventType is the type of the event to which to subscribe.
+	// EventType is the type of the event to subscribe to.
 	EventType EventType
 	_         [7]byte
 
@@ -57,15 +57,15 @@ func (s *Subscription) GetClock() SubscriptionClock {
 	return *(*SubscriptionClock)(unsafe.Pointer(&s.variant))
 }
 
-// SubscriptionFDReadWrite is the contents of a subscription when type is type
+// SubscriptionFDReadWrite is the contents of a subscription when event type
 // is FDRead or FDWrite.
 type SubscriptionFDReadWrite struct {
-	// FD is the file descriptor on which to wait for it to become ready for
-	// reading or writing.
+	// FD is the file descriptor to wait on.
 	FD int32
 }
 
-// SubscriptionClock is the contents of a subscription when type is Clock.
+// SubscriptionClock is the contents of a subscription when event type is
+// Clock.
 type SubscriptionClock struct {
 	// ID is the clock against which to compare the timestamp.
 	ID ClockID
@@ -78,7 +78,7 @@ type SubscriptionClock struct {
 	Precision Timestamp
 
 	// Flags specify whether the timeout is absolute or relative.
-	Flags SubscriptionClockFlags
+	Flags ClockFlags
 }
 
 // Timestamp is a timestamp in nanoseconds.
@@ -107,17 +107,17 @@ const (
 	ThreadCPUTimeID
 )
 
-// SubscriptionClockFlags are flags determining how to interpret the timestamp
+// ClockFlags are flags determining how to interpret the timestamp
 // provided in SubscriptionClock.Timeout.
-type SubscriptionClockFlags uint16
+type ClockFlags uint16
 
 const (
-	// SubscriptionClockAbstime is a flag indicatating that the timestam
-	// provided in SubscriptionClock.Timeout is an absolute timestamp of
-	// clock SubscriptionClock.ID. If unset, treat the timestamp provided
-	// in SubscriptionClock.Timeout as relative to the current time value
-	// of clock SubscriptionClock.ID.
-	SubscriptionClockAbstime SubscriptionClockFlags = 1 << iota
+	// Abstime is a flag indicating that the timestamp provided in
+	// SubscriptionClock.Timeout is an absolute timestamp of clock
+	// SubscriptionClock.ID. If unset, treat the timestamp provided in
+	// SubscriptionClock.Timeout as relative to the current time value of clock
+	// SubscriptionClock.ID.
+	Abstime ClockFlags = 1 << iota
 )
 
 // Event is an event that occurred.
@@ -126,8 +126,8 @@ type Event struct {
 	// Subscription.UserData.
 	UserData uint64
 
-	// Errno is, if non-zero, an error that occurred while processing the
-	// subscription request.
+	// Errno is an error that occurred while processing the subscription
+	// request.
 	Errno uint16
 
 	// EventType is the type of event that occurred.
@@ -145,7 +145,7 @@ type EventFDReadWrite struct {
 	NBytes uint64
 
 	// Flags is the state of the file descriptor.
-	Flags EventRWFlags
+	Flags FDReadWriteFlags
 }
 
 // EventType is a type of a subscription to an event, or its occurrence.
@@ -165,17 +165,17 @@ const (
 	FDWrite
 )
 
-// EventRWFlags is the state of the file descriptor subscribed to with FDRead
-// or FDWrite.
-type EventRWFlags uint16
+// FDReadWriteFlags is the state of the file descriptor subscribed to with
+// FDRead or FDWrite.
+type FDReadWriteFlags uint16
 
 // Has checks whether a flag is set.
-func (flags EventRWFlags) Has(f EventRWFlags) bool {
+func (flags FDReadWriteFlags) Has(f FDReadWriteFlags) bool {
 	return (flags & f) != 0
 }
 
 const (
-	// FDReadWriteHangup is a flag that indicates that the peer of this socket
+	// Hangup is a flag that indicates that the peer of this socket
 	// has closed or disconnected.
-	FDReadWriteHangup EventRWFlags = 1 << iota
+	Hangup FDReadWriteFlags = 1 << iota
 )
