@@ -1,6 +1,8 @@
-Package wasip1 contains types and constants from [WASI][wasi] Preview 1.
+# WASI Preview 1
 
-Reference: [github.com/WebAssembly/WASI/blob/e324ce3/legacy/preview1/docs.md][ref]
+This package contains interfaces, types and constants from 
+[WebAssembly][wasm] System Interface ([WASI][wasi]) [preview 1][preview-1].
 
+[wasm]: https://webassembly.org
 [wasi]: https://github.com/WebAssembly/WASI
-[ref]: https://github.com/WebAssembly/WASI/blob/e324ce3/legacy/preview1/docs.md
+[preview-1]: https://github.com/WebAssembly/WASI/blob/e324ce3/legacy/preview1/docs.md
