@@ -1,36 +1,39 @@
 package wasip1
 
-import (
-	"unsafe"
-)
+import "unsafe"
 
 // Subscription is a subscription to an event.
 type Subscription struct {
 	// UserData is a user-provided value that is attached to the subscription
 	// in the implementation and returned through Event.UserData.
-	UserData uint64
+	UserData UserData
 
 	// EventType is the type of the event to subscribe to.
 	EventType EventType
 	_         [7]byte
 
-	// Variant is the contents of the event.
+	// Variant is the contents of the subscription.
 	//
 	// It's a union field; either SubscriptionFDReadWrite or SubscriptionClock.
 	// Use the Set and Get functions to access and mutate the variant.
 	variant [32]byte
 }
 
-// MakeSubscriptionFDReadWrite makes a Subscription of type FDRead or FDWrite.
-func MakeSubscriptionFDReadWrite(userData uint64, eventType EventType, fdrw SubscriptionFDReadWrite) Subscription {
+// UserData is a user-provided value that may be attached to objects that is
+// retained when extracted from the implementation.
+type UserData uint64
+
+// MakeSubscriptionFDReadWrite makes a Subscription for FDReadEvent or
+// FDWriteEvent events.
+func MakeSubscriptionFDReadWrite(userData UserData, eventType EventType, fdrw SubscriptionFDReadWrite) Subscription {
 	s := Subscription{UserData: userData, EventType: eventType}
 	s.SetFDReadWrite(fdrw)
 	return s
 }
 
-// MakeSubscriptionClock makes a Subscription of type Clock.
-func MakeSubscriptionClock(userData uint64, c SubscriptionClock) Subscription {
-	s := Subscription{UserData: userData, EventType: Clock}
+// MakeSubscriptionClock makes a Subscription for ClockEvent events.
+func MakeSubscriptionClock(userData UserData, c SubscriptionClock) Subscription {
+	s := Subscription{UserData: userData, EventType: ClockEvent}
 	s.SetClock(c)
 	return s
 }
@@ -58,14 +61,14 @@ func (s *Subscription) GetClock() SubscriptionClock {
 }
 
 // SubscriptionFDReadWrite is the contents of a subscription when event type
-// is FDRead or FDWrite.
+// is FDReadEvent or FDWriteEvent.
 type SubscriptionFDReadWrite struct {
 	// FD is the file descriptor to wait on.
-	FD int32
+	FD FD
 }
 
 // SubscriptionClock is the contents of a subscription when event type is
-// Clock.
+// ClockEvent.
 type SubscriptionClock struct {
 	// ID is the clock against which to compare the timestamp.
 	ID ClockID
@@ -78,38 +81,12 @@ type SubscriptionClock struct {
 	Precision Timestamp
 
 	// Flags specify whether the timeout is absolute or relative.
-	Flags ClockFlags
+	Flags SubscriptionClockFlags
 }
 
-// Timestamp is a timestamp in nanoseconds.
-type Timestamp uint64
-
-// ClockID is an identifier for clocks.
-type ClockID uint32
-
-const (
-	// Realtime is the clock measuring real time. Time value zero corresponds
-	// with 1970-01-01T00:00:00Z.
-	Realtime ClockID = iota
-
-	// Monotonic is the store-wide monotonic clock, which is defined as a clock
-	// measuring real time, whose value cannot be adjusted and which cannot
-	// have negative clock jumps. The epoch of this clock is undefined. The
-	// absolute time value of this clock therefore has no meaning.
-	Monotonic
-
-	// ProcessCPUTimeID is the CPU-time clock associated with the current
-	// process.
-	ProcessCPUTimeID
-
-	// ThreadCPUTimeID is the CPU-time clock associated with the current
-	// thread.
-	ThreadCPUTimeID
-)
-
-// ClockFlags are flags determining how to interpret the timestamp
+// SubscriptionClockFlags are flags determining how to interpret the timestamp
 // provided in SubscriptionClock.Timeout.
-type ClockFlags uint16
+type SubscriptionClockFlags uint16
 
 const (
 	// Abstime is a flag indicating that the timestamp provided in
@@ -117,11 +94,11 @@ const (
 	// SubscriptionClock.ID. If unset, treat the timestamp provided in
 	// SubscriptionClock.Timeout as relative to the current time value of clock
 	// SubscriptionClock.ID.
-	Abstime ClockFlags = 1 << iota
+	Abstime SubscriptionClockFlags = 1 << iota
 )
 
 // Has checks whether a flag is set.
-func (flags ClockFlags) Has(f ClockFlags) bool {
+func (flags SubscriptionClockFlags) Has(f SubscriptionClockFlags) bool {
 	return (flags & f) != 0
 }
 
@@ -129,58 +106,58 @@ func (flags ClockFlags) Has(f ClockFlags) bool {
 type Event struct {
 	// UserData is the user-provided value that got attached to
 	// Subscription.UserData.
-	UserData uint64
+	UserData UserData
 
 	// Errno is an error that occurred while processing the subscription
 	// request.
-	Errno uint16
+	Errno Errno
 
 	// EventType is the type of event that occurred.
 	EventType EventType
 
-	// FDReadWrite is the contents of the event, if it is a FDRead or FDWrite.
-	// Clock events ignore this field.
+	// FDReadWrite is the contents of the event, if it is a FDReadEvent or
+	// FDWriteEvent. ClockEvent events ignore this field.
 	FDReadWrite EventFDReadWrite
 }
 
-// EventFDReadWrite is the contents of an event when event type is FDRead or
-// FDWrite.
+// EventFDReadWrite is the contents of an event when event type is FDReadEvent
+// or FDWriteEvent.
 type EventFDReadWrite struct {
 	// NBytes is the number of bytes available for reading or writing.
-	NBytes uint64
+	NBytes FileSize
 
 	// Flags is the state of the file descriptor.
-	Flags FDReadWriteFlags
+	Flags EventFDReadWriteFlags
 }
 
 // EventType is a type of a subscription to an event, or its occurrence.
 type EventType uint8
 
 const (
-	// Clock is an event type that indicates that the time value of clock
+	// ClockEvent is an event type that indicates that the time value of clock
 	// SubscriptionClock.ID has reached timestamp SubscriptionClock.Timeout.
-	Clock EventType = iota
+	ClockEvent EventType = iota
 
-	// FDRead is an event type that indicates that the file descriptor
+	// FDReadEvent is an event type that indicates that the file descriptor
 	// SubscriptionFDReadWrite.FD has data available for reading.
-	FDRead
+	FDReadEvent
 
-	// FDWrite is an event type that indicates that the file descriptor
+	// FDWriteEvent is an event type that indicates that the file descriptor
 	// SubscriptionFDReadWrite.FD has data available for writing.
-	FDWrite
+	FDWriteEvent
 )
 
-// FDReadWriteFlags is the state of the file descriptor subscribed to with
-// FDRead or FDWrite.
-type FDReadWriteFlags uint16
+// EventFDReadWriteFlags is the state of the file descriptor subscribed to with
+// FDReadEvent or FDWriteEvent.
+type EventFDReadWriteFlags uint16
 
 // Has checks whether a flag is set.
-func (flags FDReadWriteFlags) Has(f FDReadWriteFlags) bool {
+func (flags EventFDReadWriteFlags) Has(f EventFDReadWriteFlags) bool {
 	return (flags & f) != 0
 }
 
 const (
 	// Hangup is a flag that indicates that the peer of this socket
 	// has closed or disconnected.
-	Hangup FDReadWriteFlags = 1 << iota
+	Hangup EventFDReadWriteFlags = 1 << iota
 )
