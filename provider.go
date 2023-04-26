@@ -288,6 +288,3 @@ type Provider interface {
 	// Close closes the Provider.
 	Close() error
 }
-
-// IOVec is a slice of bytes.
-type IOVec []byte
