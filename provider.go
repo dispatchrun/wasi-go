@@ -284,4 +284,7 @@ type Provider interface {
 	//
 	// Note: This is similar to shutdown in POSIX.
 	SockShutdown(FD, SDFlags) Errno
+
+	// Close closes the Provider.
+	Close() error
 }
