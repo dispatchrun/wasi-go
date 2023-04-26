@@ -8,81 +8,231 @@ package wasip1
 type Errno uint16
 
 const (
+	// E2BIG means an argument list is too long.
 	E2BIG Errno = iota + 1
+
+	// EACCES means permission is denied.
 	EACCES
+
+	// EADDRINUSE means an address is already in use.
 	EADDRINUSE
+
+	// EADDRNOTAVAIL means an address is not available.
 	EADDRNOTAVAIL
+
+	// EAFNOSUPPORT means an address family is not supported by a protocol family.
 	EAFNOSUPPORT
+
+	// EAGAIN means the caller should try again.
 	EAGAIN
+
+	// EALREADY means a socket already connected
 	EALREADY
+
+	// EBADF means bad file number.
 	EBADF
+
+	// EBADMSG indicates that the caller is trying to read an unreadable message.
 	EBADMSG
+
+	// EBUSY means a device or resource busy.
 	EBUSY
+
+	// ECANCELED means an operation was canceled.
 	ECANCELED
+
+	// ECHILD means no child processes.
 	ECHILD
+
+	// ECONNABORTED means a connection was aborted.
 	ECONNABORTED
+
+	// ECONNREFUSED means connection was refused.
 	ECONNREFUSED
+
+	// ECONNRESET means a connection was reset by peer.
 	ECONNRESET
+
+	// EDEADLK indicates a deadlock condition.
 	EDEADLK
+
+	// EDESTADDRREQ means a destination address is required.
 	EDESTADDRREQ
+
+	// EDOM means a math argument is out of domain of func.
 	EDOM
+
+	// EDQUOT means a quota was exceeded.
 	EDQUOT
+
+	// EEXIST means a file exists.
 	EEXIST
+
+	// EFAULT means bad address.
 	EFAULT
+
+	// EFBIG indicates a file is too large.
 	EFBIG
+
+	// EHOSTUNREACH means a host is unreachable.
 	EHOSTUNREACH
+
+	// EIDRM means identifier removed.
 	EIDRM
+
+	// EILSEQ indicates an illegal byte sequence
 	EILSEQ
+
+	// EINPROGRESS means a connection is already in progress.
 	EINPROGRESS
+
+	// EINTR means a system call was interrupted.
 	EINTR
+
+	// EINVAL means an argument was invalid.
 	EINVAL
+
+	// EIO means an I/O error occurred.
 	EIO
+
+	// EISCONN means a socket is already connected.
 	EISCONN
+
+	// EISDIR means a file is a directory.
 	EISDIR
+
+	// ELOOP indicates that there are too many symbolic links.
 	ELOOP
+
+	// EMFILE indicates that there are too many open files
 	EMFILE
+
+	// EMLINK indicates that there are too many links
 	EMLINK
+
+	// EMSGSIZE means a message is too long.
 	EMSGSIZE
+
+	// EMULTIHOP means a multihop was attempted.
 	EMULTIHOP
+
+	// ENAMETOOLONG means a file name is too long.
 	ENAMETOOLONG
+
+	// ENETDOWN means a network interface is not configured.
 	ENETDOWN
+
+	// ENETRESET means a network was dropped connection on reset.
 	ENETRESET
+
+	// ENETUNREACH means a network is unreachable.
 	ENETUNREACH
+
+	// ENFILE means a file table overflow occurred.
 	ENFILE
+
+	// ENOBUFS means that no buffer space is available.
 	ENOBUFS
+
+	// ENODEV means no such device.
 	ENODEV
+
+	// ENOENT means no such file or directory.
 	ENOENT
+	// ENOEXEC means an exec format error.
 	ENOEXEC
+
+	// ENOLCK means that there are no record locks available
 	ENOLCK
+
+	// ENOLINK means the link has been severed.
 	ENOLINK
+
+	// ENOMEM means out of memory.
 	ENOMEM
+
+	// ENOMSG means that there is no message of desired type.
 	ENOMSG
+
+	// ENOPROTOOPT means a protocol is not available.
 	ENOPROTOOPT
+
+	// ENOSPC means that there is no space left on a device.
 	ENOSPC
+
+	// ENOSYS means not implemented.
 	ENOSYS
+
+	// ENOTCONN means a socket is not connected.
 	ENOTCONN
+
+	// ENOTDIR means a file is not a directory
 	ENOTDIR
+
+	// ENOTEMPTY means a directory is not empty.
 	ENOTEMPTY
+
+	// ENOTRECOVERABLE means state is not recoverable.
 	ENOTRECOVERABLE
+
+	// ENOTSOCK means a socket operation was attempted on a non-socket.
 	ENOTSOCK
+
+	// ENOTSUP means not supported.
 	ENOTSUP
+
+	// ENOTTY means not a typewriter.
 	ENOTTY
+
+	// ENXIO means no such device or address.
 	ENXIO
+
+	// EOVERFLOW means the value is too large for defined data type.
 	EOVERFLOW
+
+	// EOWNERDEAD means an owner died.
 	EOWNERDEAD
+
+	// EPERM means an operation is not permitted.
 	EPERM
+
+	// EPIPE means broken pipe.
 	EPIPE
+
+	// EPROTO means a protocol error ocurred.
 	EPROTO
+
+	// EPROTONOSUPPORT means a protocol is not supported.
 	EPROTONOSUPPORT
+
+	// EPROTOTYPE means that a protocol is the wrong type for socket.
 	EPROTOTYPE
+
+	// ERANGE means a math result is not representable.
 	ERANGE
+
+	// EROFS means a file system is read-only.
 	EROFS
+
+	// ESPIPE means a seek is illegal.
 	ESPIPE
+
+	// ESRCH means no such process.
 	ESRCH
+
+	// ESTALE means a file handle is stale.
 	ESTALE
+
+	// ETIMEDOUT means a connection timed out.
 	ETIMEDOUT
+
+	// ETXTBSY means text file busy.
 	ETXTBSY
+
+	// EXDEV means cross-device link.
 	EXDEV
+
+	// ENOTCAPABLE means capabilities are insufficient.
 	ENOTCAPABLE
 
 	// SUCCESS indicates that no error occurred (system call completed
@@ -129,7 +279,7 @@ var errorStrings = [...]string{
 	EFBIG:           "File too large",
 	EHOSTUNREACH:    "Host is unreachable",
 	EIDRM:           "Identifier removed",
-	EILSEQ:          "EILSEQ",
+	EILSEQ:          "Illegal byte sequence",
 	EINPROGRESS:     "Connection already in progress",
 	EINTR:           "Interrupted system call",
 	EINVAL:          "Invalid argument",
@@ -170,7 +320,7 @@ var errorStrings = [...]string{
 	EPERM:           "Operation not permitted",
 	EPIPE:           "Broken pipe",
 	EPROTO:          "Protocol error",
-	EPROTONOSUPPORT: "UnknownType protocol",
+	EPROTONOSUPPORT: "Unknown protocol",
 	EPROTOTYPE:      "Protocol wrong type for socket",
 	ERANGE:          "Math result not representable",
 	EROFS:           "Read-only file system",
