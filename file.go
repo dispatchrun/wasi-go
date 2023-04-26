@@ -344,11 +344,23 @@ const (
 
 	// AllRights is the set of all available rights
 	AllRights Rights = (1 << 30) - 1
+
+	// ReadRights are rights related to reads.
+	ReadRights Rights = FDReadRight | FDReadDirRight
+
+	// WriteRights are rights related to writes.
+	WriteRights Rights = FDWriteRight | FDAllocateRight | FDFileStatSetSizeRight | FDDataSyncRight
 )
 
-// Has is true if the flag is set.
+// Has is true if the flag is set. If multiple flags are specified, Has returns
+// true if all flags are set.
 func (flags Rights) Has(f Rights) bool {
 	return (flags & f) == f
+}
+
+// HasAny is true if any flag in a set of flags is set.
+func (flags Rights) HasAny(f Rights) bool {
+	return (flags & f) != 0
 }
 
 var rightsStrings = [...]string{
