@@ -490,6 +490,8 @@ func TestFile(t *testing.T) {
 	assertEqual(t, unsafe.Offsetof(PreStat{}.Type), 0)
 	assertEqual(t, unsafe.Sizeof(PreStat{}.PreStatDir), 4)
 	assertEqual(t, unsafe.Offsetof(PreStat{}.PreStatDir), 4)
+
+	assertEqual(t, unsafe.Sizeof(Size(0)), 4)
 }
 
 func TestSubscription(t *testing.T) {

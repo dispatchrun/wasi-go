@@ -404,3 +404,6 @@ type PreStat struct {
 	// PreStatDir is directory information when type is PreOpenDir.
 	PreStatDir PreStatDir
 }
+
+// Size represents a size.
+type Size uint32
