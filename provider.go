@@ -89,7 +89,7 @@ type Provider interface {
 	// an Errno.
 	//
 	// Note: This is similar to preadv in Linux (and other Unix-es).
-	FDPread(fd FD, iovecs [][]byte, offset FileSize) (Size, Errno)
+	FDPread(fd FD, iovecs []IOVec, offset FileSize) (Size, Errno)
 
 	// FDPreStatGet returns a description of the given pre-opened file
 	// descriptor.
@@ -110,7 +110,7 @@ type Provider interface {
 	// Like Linux (and other Unix-es), any calls of pwrite (and other functions
 	// to read or write) for a regular file by other threads in the WASI
 	// process should not be interleaved while pwrite is executed.
-	FDPwrite(fd FD, iovecs [][]byte, offset FileSize) (Size, Errno)
+	FDPwrite(fd FD, iovecs []IOVec, offset FileSize) (Size, Errno)
 
 	// FDRead reads from a file descriptor.
 	//
@@ -118,7 +118,7 @@ type Provider interface {
 	// an Errno.
 	//
 	// Note: This is similar to readv in POSIX.
-	FDRead(fd FD, iovecs [][]byte) (Size, Errno)
+	FDRead(FD, []IOVec) (Size, Errno)
 
 	// FDReadDir reads directory entries from a directory.
 	//
@@ -161,7 +161,7 @@ type Provider interface {
 	// Like POSIX, any calls of write (and other functions to read or write)
 	// for a regular file by other threads in the WASI process should not be
 	// interleaved while write is executed.
-	FDWrite(fd FD, iovecs [][]byte) (Size, Errno)
+	FDWrite(FD, []IOVec) (Size, Errno)
 
 	// PathCreateDirectory create a directory.
 	//
@@ -269,7 +269,7 @@ type Provider interface {
 	//
 	// Note: This is similar to recv in POSIX, though it also supports reading
 	// the data into multiple buffers in the manner of readv.
-	SockRecv(fd FD, iovecs [][]byte, flags RIFlags) (Size, ROFlags, Errno)
+	SockRecv(FD, []IOVec, RIFlags) (Size, ROFlags, Errno)
 
 	// SockSend sends a message on a socket.
 	//
@@ -278,7 +278,7 @@ type Provider interface {
 	//
 	// Note: This is similar to send in POSIX, though it also supports
 	// writing the data from multiple buffers in the manner of writev.
-	SockSend(fd FD, iovecs [][]byte, flags SIFlags) (Size, Errno)
+	SockSend(FD, []IOVec, SIFlags) (Size, Errno)
 
 	// SockShutdown shuts down a socket's send and/or receive channels.
 	//
@@ -288,3 +288,6 @@ type Provider interface {
 	// Close closes the Provider.
 	Close() error
 }
+
+// IOVec is a slice of bytes.
+type IOVec []byte
