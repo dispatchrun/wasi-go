@@ -64,7 +64,7 @@ type Provider interface {
 	//
 	// This can only be used to remove rights, and returns ENOTCAPABLE if
 	// called in a way that would attempt to add rights.
-	FDStatSetRights(fd FD, rightsBase, rightsInheriting Rights)
+	FDStatSetRights(fd FD, rightsBase, rightsInheriting Rights) Errno
 
 	// FDFileStatGet returns the attributes of an open file.
 	FDFileStatGet(FD) (FileStat, Errno)
