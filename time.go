@@ -1,5 +1,7 @@
 package wasip1
 
+import "fmt"
+
 // Timestamp is a timestamp in nanoseconds.
 type Timestamp uint64
 
@@ -25,3 +27,18 @@ const (
 	// thread.
 	ThreadCPUTimeID
 )
+
+func (c ClockID) String() string {
+	switch c {
+	case Realtime:
+		return "Realtime"
+	case Monotonic:
+		return "Monotonic"
+	case ProcessCPUTimeID:
+		return "ProcessCPUTimeID"
+	case ThreadCPUTimeID:
+		return "ThreadCPUTimeID"
+	default:
+		return fmt.Sprintf("ClockID(%d)", c)
+	}
+}

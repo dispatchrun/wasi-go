@@ -2,6 +2,7 @@ package wasip1
 
 import (
 	"encoding/binary"
+	"math"
 	"reflect"
 	"testing"
 	"unsafe"
@@ -375,6 +376,9 @@ func TestFile(t *testing.T) {
 	assertEqual(t, WhenceStart, 0)
 	assertEqual(t, WhenceCurrent, 1)
 	assertEqual(t, WhenceEnd, 2)
+	assertEqual(t, WhenceStart.String(), "WhenceStart")
+	assertEqual(t, WhenceCurrent.String(), "WhenceCurrent")
+	assertEqual(t, WhenceEnd.String(), "WhenceEnd")
 
 	assertEqual(t, unsafe.Sizeof(FileType(0)), 1)
 	assertEqual(t, UnknownType, 0)
@@ -385,6 +389,14 @@ func TestFile(t *testing.T) {
 	assertEqual(t, SocketDGramType, 5)
 	assertEqual(t, SocketStreamType, 6)
 	assertEqual(t, SymbolicLinkType, 7)
+	assertEqual(t, UnknownType.String(), "UnknownType")
+	assertEqual(t, BlockDeviceType.String(), "BlockDeviceType")
+	assertEqual(t, CharacterDeviceType.String(), "CharacterDeviceType")
+	assertEqual(t, DirectoryType.String(), "DirectoryType")
+	assertEqual(t, RegularFileType.String(), "RegularFileType")
+	assertEqual(t, SocketDGramType.String(), "SocketDGramType")
+	assertEqual(t, SocketStreamType.String(), "SocketStreamType")
+	assertEqual(t, SymbolicLinkType.String(), "SymbolicLinkType")
 
 	assertEqual(t, unsafe.Sizeof(FDFlags(0)), 2)
 	assertEqual(t, Append, 1<<0)
@@ -392,6 +404,12 @@ func TestFile(t *testing.T) {
 	assertEqual(t, NonBlock, 1<<2)
 	assertEqual(t, RSync, 1<<3)
 	assertEqual(t, Sync, 1<<4)
+	assertEqual(t, Append.String(), "Append")
+	assertEqual(t, DSync.String(), "DSync")
+	assertEqual(t, NonBlock.String(), "NonBlock")
+	assertEqual(t, RSync.String(), "RSync")
+	assertEqual(t, Sync.String(), "Sync")
+	assertEqual(t, (DSync | NonBlock).String(), "DSync|NonBlock")
 
 	assertEqual(t, unsafe.Sizeof(FDStat{}), 24)
 	assertEqual(t, unsafe.Sizeof(FDStat{}.FileType), 1)
@@ -441,6 +459,40 @@ func TestFile(t *testing.T) {
 	for i := 30; i < 64; i++ {
 		assertEqual(t, AllRights.Has(1<<30), false)
 	}
+	assertEqual(t, FDDataSyncRight.String(), "FDDataSyncRight")
+	assertEqual(t, FDReadRight.String(), "FDReadRight")
+	assertEqual(t, FDSeekRight.String(), "FDSeekRight")
+	assertEqual(t, FDStatSetFlagsRight.String(), "FDStatSetFlagsRight")
+	assertEqual(t, FDSyncRight.String(), "FDSyncRight")
+	assertEqual(t, FDTellRight.String(), "FDTellRight")
+	assertEqual(t, FDWriteRight.String(), "FDWriteRight")
+	assertEqual(t, FDAdviseRight.String(), "FDAdviseRight")
+	assertEqual(t, FDAllocateRight.String(), "FDAllocateRight")
+	assertEqual(t, PathCreateDirectoryRight.String(), "PathCreateDirectoryRight")
+	assertEqual(t, PathCreateFileRight.String(), "PathCreateFileRight")
+	assertEqual(t, PathLinkSourceRight.String(), "PathLinkSourceRight")
+	assertEqual(t, PathLinkTargetRight.String(), "PathLinkTargetRight")
+	assertEqual(t, PathOpenRight.String(), "PathOpenRight")
+	assertEqual(t, FDReadDirRight.String(), "FDReadDirRight")
+	assertEqual(t, PathReadLinkRight.String(), "PathReadLinkRight")
+	assertEqual(t, PathRenameSourceRight.String(), "PathRenameSourceRight")
+	assertEqual(t, PathRenameTargetRight.String(), "PathRenameTargetRight")
+	assertEqual(t, PathFileStatGetRight.String(), "PathFileStatGetRight")
+	assertEqual(t, PathFileStatSetSizeRight.String(), "PathFileStatSetSizeRight")
+	assertEqual(t, PathFileStatSetTimesRight.String(), "PathFileStatSetTimesRight")
+	assertEqual(t, FDFileStatGetRight.String(), "FDFileStatGetRight")
+	assertEqual(t, FDFileStatSetSizeRight.String(), "FDFileStatSetSizeRight")
+	assertEqual(t, FDFileStatSetTimesRight.String(), "FDFileStatSetTimesRight")
+	assertEqual(t, PathSymlinkRight.String(), "PathSymlinkRight")
+	assertEqual(t, PathRemoveDirectoryRight.String(), "PathRemoveDirectoryRight")
+	assertEqual(t, PathUnlinkFileRight.String(), "PathUnlinkFileRight")
+	assertEqual(t, PollFDReadWriteRight.String(), "PollFDReadWriteRight")
+	assertEqual(t, SockShutdownRight.String(), "SockShutdownRight")
+	assertEqual(t, SockAcceptRight.String(), "SockAcceptRight")
+	assertEqual(t, (FDFileStatGetRight | PathSymlinkRight).String(), "FDFileStatGetRight|PathSymlinkRight")
+	assertEqual(t, Rights(0).String(), "Rights(0)")
+	assertEqual(t, AllRights.String(), "AllRights")
+	assertEqual(t, Rights(math.MaxUint32).String(), "AllRights")
 
 	assertEqual(t, unsafe.Sizeof(DirEntry{}), 24)
 	assertEqual(t, unsafe.Sizeof(DirEntry{}.Next), 8)
@@ -462,24 +514,42 @@ func TestFile(t *testing.T) {
 	assertEqual(t, WillNeed, 3)
 	assertEqual(t, DontNeed, 4)
 	assertEqual(t, NoReuse, 5)
+	assertEqual(t, Normal.String(), "Normal")
+	assertEqual(t, Sequential.String(), "Sequential")
+	assertEqual(t, Random.String(), "Random")
+	assertEqual(t, WillNeed.String(), "WillNeed")
+	assertEqual(t, DontNeed.String(), "DontNeed")
+	assertEqual(t, NoReuse.String(), "NoReuse")
 
 	assertEqual(t, unsafe.Sizeof(FSTFlags(0)), 2)
 	assertEqual(t, AccessTime, 1<<0)
 	assertEqual(t, AccessTimeNow, 1<<1)
 	assertEqual(t, ModifyTime, 1<<2)
 	assertEqual(t, ModifyTimeNow, 1<<3)
+	assertEqual(t, AccessTime.String(), "AccessTime")
+	assertEqual(t, AccessTimeNow.String(), "AccessTimeNow")
+	assertEqual(t, ModifyTime.String(), "ModifyTime")
+	assertEqual(t, ModifyTimeNow.String(), "ModifyTimeNow")
+	assertEqual(t, (AccessTime | ModifyTimeNow).String(), "AccessTime|ModifyTimeNow")
 
 	assertEqual(t, unsafe.Sizeof(LookupFlags(0)), 4)
 	assertEqual(t, SymlinkFollow, 1<<0)
+	assertEqual(t, SymlinkFollow.String(), "SymlinkFollow")
 
 	assertEqual(t, unsafe.Sizeof(OpenFlags(0)), 2)
 	assertEqual(t, OpenCreate, 1<<0)
 	assertEqual(t, OpenDirectory, 1<<1)
 	assertEqual(t, OpenExclusive, 1<<2)
 	assertEqual(t, OpenTruncate, 1<<3)
+	assertEqual(t, OpenCreate.String(), "OpenCreate")
+	assertEqual(t, OpenDirectory.String(), "OpenDirectory")
+	assertEqual(t, OpenExclusive.String(), "OpenExclusive")
+	assertEqual(t, OpenTruncate.String(), "OpenTruncate")
+	assertEqual(t, (OpenCreate | OpenExclusive | OpenTruncate).String(), "OpenCreate|OpenExclusive|OpenTruncate")
 
 	assertEqual(t, unsafe.Sizeof(PreOpenType(0)), 1)
 	assertEqual(t, PreOpenDir, 0)
+	assertEqual(t, PreOpenDir.String(), "PreOpenDir")
 
 	assertEqual(t, unsafe.Sizeof(PreStatDir{}), 4)
 	assertEqual(t, unsafe.Sizeof(PreStatDir{}.NameLength), 4)
@@ -514,6 +584,7 @@ func TestSubscription(t *testing.T) {
 
 	assertEqual(t, unsafe.Sizeof(SubscriptionClockFlags(0)), 2)
 	assertEqual(t, Abstime, 0x1)
+	assertEqual(t, Abstime.String(), "Abstime")
 }
 
 func TestSubscriptionFDReadWrite(t *testing.T) {
@@ -575,24 +646,35 @@ func TestEvent(t *testing.T) {
 	assertEqual(t, ClockEvent, 0)
 	assertEqual(t, FDReadEvent, 1)
 	assertEqual(t, FDWriteEvent, 2)
+	assertEqual(t, ClockEvent.String(), "ClockEvent")
+	assertEqual(t, FDReadEvent.String(), "FDReadEvent")
+	assertEqual(t, FDWriteEvent.String(), "FDWriteEvent")
 
 	assertEqual(t, unsafe.Sizeof(EventFDReadWriteFlags(0)), 2)
 	assertEqual(t, Hangup, 0x1)
+	assertEqual(t, Hangup.String(), "Hangup")
 }
 
 func TestSocket(t *testing.T) {
 	assertEqual(t, unsafe.Sizeof(RIFlags(0)), 2)
 	assertEqual(t, RecvPeek, 1<<0)
 	assertEqual(t, RecvWaitAll, 1<<1)
+	assertEqual(t, RecvPeek.String(), "RecvPeek")
+	assertEqual(t, RecvWaitAll.String(), "RecvWaitAll")
+	assertEqual(t, (RecvPeek | RecvWaitAll).String(), "RecvPeek|RecvWaitAll")
 
 	assertEqual(t, unsafe.Sizeof(ROFlags(0)), 2)
 	assertEqual(t, RecvDataTruncated, 1<<0)
+	assertEqual(t, RecvDataTruncated.String(), "RecvDataTruncated")
 
 	assertEqual(t, unsafe.Sizeof(SIFlags(0)), 2)
 
 	assertEqual(t, unsafe.Sizeof(SDFlags(0)), 2)
 	assertEqual(t, ShutdownRD, 1<<0)
 	assertEqual(t, ShutdownWR, 1<<1)
+	assertEqual(t, ShutdownRD.String(), "ShutdownRD")
+	assertEqual(t, ShutdownWR.String(), "ShutdownWR")
+	assertEqual(t, (ShutdownRD | ShutdownWR).String(), "ShutdownRD|ShutdownWR")
 }
 
 func TestTime(t *testing.T) {
@@ -603,6 +685,10 @@ func TestTime(t *testing.T) {
 	assertEqual(t, Monotonic, 1)
 	assertEqual(t, ProcessCPUTimeID, 2)
 	assertEqual(t, ThreadCPUTimeID, 3)
+	assertEqual(t, Realtime.String(), "Realtime")
+	assertEqual(t, Monotonic.String(), "Monotonic")
+	assertEqual(t, ProcessCPUTimeID.String(), "ProcessCPUTimeID")
+	assertEqual(t, ThreadCPUTimeID.String(), "ThreadCPUTimeID")
 }
 
 func assertEqual[T any](t *testing.T, actual, expected T) {

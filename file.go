@@ -1,5 +1,7 @@
 package wasip1
 
+import "fmt"
+
 // FD is a file descriptor handle.
 type FD int32
 
@@ -65,6 +67,19 @@ const (
 	WhenceEnd
 )
 
+func (w Whence) String() string {
+	switch w {
+	case WhenceStart:
+		return "WhenceStart"
+	case WhenceCurrent:
+		return "WhenceCurrent"
+	case WhenceEnd:
+		return "WhenceEnd"
+	default:
+		return fmt.Sprintf("Whence(%d)", w)
+	}
+}
+
 // FileType is the type of a file descriptor or file.
 type FileType uint8
 
@@ -102,6 +117,29 @@ const (
 	SymbolicLinkType
 )
 
+func (f FileType) String() string {
+	switch f {
+	case UnknownType:
+		return "UnknownType"
+	case BlockDeviceType:
+		return "BlockDeviceType"
+	case CharacterDeviceType:
+		return "CharacterDeviceType"
+	case DirectoryType:
+		return "DirectoryType"
+	case RegularFileType:
+		return "RegularFileType"
+	case SocketDGramType:
+		return "SocketDGramType"
+	case SocketStreamType:
+		return "SocketStreamType"
+	case SymbolicLinkType:
+		return "SymbolicLinkType"
+	default:
+		return fmt.Sprintf("FileType(%d)", f)
+	}
+}
+
 // FDFlags are file descriptor flags.
 type FDFlags uint16
 
@@ -130,6 +168,38 @@ const (
 	Sync
 )
 
+// Has is true if the flag is set.
+func (flags FDFlags) Has(f FDFlags) bool {
+	return (flags & f) == f
+}
+
+var fdflagsStrings = [...]string{
+	"Append",
+	"DSync",
+	"NonBlock",
+	"RSync",
+	"Sync",
+}
+
+func (flags FDFlags) String() (s string) {
+	if flags == 0 {
+		return "FDFlags(0)"
+	}
+	for i, name := range fdflagsStrings {
+		if !flags.Has(1 << i) {
+			continue
+		}
+		if len(s) > 0 {
+			s += "|"
+		}
+		s += name
+	}
+	if len(s) == 0 {
+		return fmt.Sprintf("FDFlags(%d)", flags)
+	}
+	return
+}
+
 // FDStat is file descriptor attributes.
 type FDStat struct {
 	// FileType is the file type.
@@ -149,11 +219,6 @@ type FDStat struct {
 
 // Rights are file descriptor rights, determining which actions may be performed.
 type Rights uint64
-
-// Has is true if the flag is set.
-func (flags Rights) Has(f Rights) bool {
-	return (flags & f) != 0
-}
 
 const (
 	// FDDataSyncRight is the right to invoke FDDataSync.
@@ -281,6 +346,65 @@ const (
 	AllRights Rights = (1 << 30) - 1
 )
 
+// Has is true if the flag is set.
+func (flags Rights) Has(f Rights) bool {
+	return (flags & f) == f
+}
+
+var rightsStrings = [...]string{
+	"FDDataSyncRight",
+	"FDReadRight",
+	"FDSeekRight",
+	"FDStatSetFlagsRight",
+	"FDSyncRight",
+	"FDTellRight",
+	"FDWriteRight",
+	"FDAdviseRight",
+	"FDAllocateRight",
+	"PathCreateDirectoryRight",
+	"PathCreateFileRight",
+	"PathLinkSourceRight",
+	"PathLinkTargetRight",
+	"PathOpenRight",
+	"FDReadDirRight",
+	"PathReadLinkRight",
+	"PathRenameSourceRight",
+	"PathRenameTargetRight",
+	"PathFileStatGetRight",
+	"PathFileStatSetSizeRight",
+	"PathFileStatSetTimesRight",
+	"FDFileStatGetRight",
+	"FDFileStatSetSizeRight",
+	"FDFileStatSetTimesRight",
+	"PathSymlinkRight",
+	"PathRemoveDirectoryRight",
+	"PathUnlinkFileRight",
+	"PollFDReadWriteRight",
+	"SockShutdownRight",
+	"SockAcceptRight",
+}
+
+func (flags Rights) String() (s string) {
+	if flags == 0 {
+		return "Rights(0)"
+	} else if flags.Has(AllRights) {
+		return "AllRights"
+	}
+	for i, name := range rightsStrings {
+		if !flags.Has(1 << i) {
+			continue
+		}
+		if len(s) > 0 {
+			s += "|"
+		}
+		s += name
+	}
+	if len(s) == 0 {
+		return fmt.Sprintf("Rights(%d)", flags)
+	}
+	return
+}
+
 // DirEntry is a directory entry.
 type DirEntry struct {
 	// Next is the offset of the next directory entry stored in this directory.
@@ -334,6 +458,25 @@ const (
 	NoReuse
 )
 
+func (a Advice) String() string {
+	switch a {
+	case Normal:
+		return "Normal"
+	case Sequential:
+		return "Sequential"
+	case Random:
+		return "Random"
+	case WillNeed:
+		return "WillNeed"
+	case DontNeed:
+		return "DontNeed"
+	case NoReuse:
+		return "NoReuse"
+	default:
+		return fmt.Sprintf("Advice(%d)", a)
+	}
+}
+
 // FSTFlags indicate which file time attributes to adjust.
 type FSTFlags uint16
 
@@ -355,6 +498,37 @@ const (
 	ModifyTimeNow
 )
 
+// Has is true if the flag is set.
+func (flags FSTFlags) Has(f FSTFlags) bool {
+	return (flags & f) == f
+}
+
+var fstflagsStrings = [...]string{
+	"AccessTime",
+	"AccessTimeNow",
+	"ModifyTime",
+	"ModifyTimeNow",
+}
+
+func (flags FSTFlags) String() (s string) {
+	if flags == 0 {
+		return "FSTFlags(0)"
+	}
+	for i, name := range fstflagsStrings {
+		if !flags.Has(1 << i) {
+			continue
+		}
+		if len(s) > 0 {
+			s += "|"
+		}
+		s += name
+	}
+	if len(s) == 0 {
+		return fmt.Sprintf("FSTFlags(%d)", flags)
+	}
+	return
+}
+
 // LookupFlags determine the method of how paths are resolved.
 type LookupFlags uint32
 
@@ -363,6 +537,20 @@ const (
 	// symbolic link, it is expanded.
 	SymlinkFollow LookupFlags = 1 << iota
 )
+
+// Has is true if the flag is set.
+func (flags LookupFlags) Has(f LookupFlags) bool {
+	return (flags & f) == f
+}
+
+func (flags LookupFlags) String() string {
+	switch flags {
+	case SymlinkFollow:
+		return "SymlinkFollow"
+	default:
+		return fmt.Sprintf("LookupFlags(%d)", flags)
+	}
+}
 
 // OpenFlags are flags used by PathOpen.
 type OpenFlags uint16
@@ -381,6 +569,37 @@ const (
 	OpenTruncate
 )
 
+// Has is true if the flag is set.
+func (flags OpenFlags) Has(f OpenFlags) bool {
+	return (flags & f) == f
+}
+
+var openflagsStrings = [...]string{
+	"OpenCreate",
+	"OpenDirectory",
+	"OpenExclusive",
+	"OpenTruncate",
+}
+
+func (flags OpenFlags) String() (s string) {
+	if flags == 0 {
+		return "OpenFlags(0)"
+	}
+	for i, name := range openflagsStrings {
+		if !flags.Has(1 << i) {
+			continue
+		}
+		if len(s) > 0 {
+			s += "|"
+		}
+		s += name
+	}
+	if len(s) == 0 {
+		return fmt.Sprintf("OpenFlags(%d)", flags)
+	}
+	return
+}
+
 // PreOpenType are identifiers for pre-opened capabilities.
 type PreOpenType uint8
 
@@ -388,6 +607,15 @@ const (
 	// PreOpenDir is a pre-opened directory.
 	PreOpenDir PreOpenType = iota
 )
+
+func (p PreOpenType) String() string {
+	switch p {
+	case PreOpenDir:
+		return "PreOpenDir"
+	default:
+		return fmt.Sprintf("PreOpenType(%d)", p)
+	}
+}
 
 // PreStatDir is the contents of a PreStat when type is PreOpenDir.
 type PreStatDir struct {

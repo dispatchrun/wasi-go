@@ -1,6 +1,9 @@
 package wasip1
 
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
 
 // Subscription is a subscription to an event.
 type Subscription struct {
@@ -97,9 +100,18 @@ const (
 	Abstime SubscriptionClockFlags = 1 << iota
 )
 
-// Has checks whether a flag is set.
+// Has is true if the flag is set.
 func (flags SubscriptionClockFlags) Has(f SubscriptionClockFlags) bool {
-	return (flags & f) != 0
+	return (flags & f) == f
+}
+
+func (flags SubscriptionClockFlags) String() string {
+	switch flags {
+	case Abstime:
+		return "Abstime"
+	default:
+		return fmt.Sprintf("SubscriptionClockFlags(%d)", flags)
+	}
 }
 
 // Event is an event that occurred.
@@ -147,17 +159,39 @@ const (
 	FDWriteEvent
 )
 
+func (e EventType) String() string {
+	switch e {
+	case ClockEvent:
+		return "ClockEvent"
+	case FDReadEvent:
+		return "FDReadEvent"
+	case FDWriteEvent:
+		return "FDWriteEvent"
+	default:
+		return fmt.Sprintf("EventType(%d)", e)
+	}
+}
+
 // EventFDReadWriteFlags is the state of the file descriptor subscribed to with
 // FDReadEvent or FDWriteEvent.
 type EventFDReadWriteFlags uint16
-
-// Has checks whether a flag is set.
-func (flags EventFDReadWriteFlags) Has(f EventFDReadWriteFlags) bool {
-	return (flags & f) != 0
-}
 
 const (
 	// Hangup is a flag that indicates that the peer of this socket
 	// has closed or disconnected.
 	Hangup EventFDReadWriteFlags = 1 << iota
 )
+
+// Has is true if the flag is set.
+func (flags EventFDReadWriteFlags) Has(f EventFDReadWriteFlags) bool {
+	return (flags & f) == f
+}
+
+func (flags EventFDReadWriteFlags) String() string {
+	switch flags {
+	case Hangup:
+		return "Hangup"
+	default:
+		return fmt.Sprintf("EventFDReadWriteFlags(%d)", flags)
+	}
+}
