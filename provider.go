@@ -58,7 +58,7 @@ type Provider interface {
 	// FDStatSetFlags adjusts the flags associated with a file descriptor.
 	//
 	// Note: This is similar to fcntl(fd, F_SETFL, flags) in POSIX.
-	FDStatSetFlags(FD, FDFlags) (FDStat, Errno)
+	FDStatSetFlags(FD, FDFlags) Errno
 
 	// FDStatSetRights adjusts the rights associated with a file descriptor.
 	//
