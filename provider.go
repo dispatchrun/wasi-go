@@ -1,6 +1,11 @@
 package wasip1
 
 // Provider provides an implementation of WASI preview 1.
+//
+// The functions here are higher-level than those found in the spec.
+// This is so that implementations don't have to concern themselves with
+// serialization details. For example, {args_get,args_sizes_get} can
+// both be implemented elsewhere using the higher-level ArgsGet.
 type Provider interface {
 	// ArgsGet reads command-line argument data.
 	ArgsGet() ([]string, Errno)
@@ -122,9 +127,13 @@ type Provider interface {
 
 	// FDReadDir reads directory entries from a directory.
 	//
-	// At most cap(output) entries will be written. On success, the function
-	// returns the number of entries written. On failure, it returns an Errno.
-	FDReadDir(fd FD, output []DirEntry, cookie DirCookie) (Size, Errno)
+	// The implementation must append entries to the provided buffer and then
+	// return it.
+	//
+	// The implementation must ensure that no more than maxBytes worth of
+	// entries are written to the buffer, where entry size is equal to
+	// unsafe.Sizeof(DirEntry{}) + DirEntry.NameLength.
+	FDReadDir(fd FD, buffer []DirEntryName, maxBytes int, cookie DirCookie) ([]DirEntryName, Errno)
 
 	// FDRenumber atomically replaces a file descriptor by renumbering another
 	// file descriptor. Due to the strong focus on thread safety, this

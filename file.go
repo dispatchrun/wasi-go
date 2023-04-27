@@ -433,6 +433,15 @@ type DirEntry struct {
 	Type FileType
 }
 
+// DirEntryName is a directory entry along with a name.
+type DirEntryName struct {
+	// Entry is the directory entry.
+	Entry DirEntry
+
+	// Name of the entry. The length must equal Entry.NameLength.
+	Name string
+}
+
 // DirCookie is a reference to the offset of a directory entry.
 //
 // The value 0 signifies the start of the directory.
