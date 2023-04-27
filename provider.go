@@ -236,8 +236,8 @@ type Provider interface {
 	//
 	// If len(subscriptions) == 0, EINVAL is returned.
 	//
-	// The function uses the provided []Event buffer to write output events.
-	// If there is not enough space (len(subscriptions) > cap(events)) a new
+	// The function appends events to the provided []Event buffer. If there
+	// is not enough space (len(subscriptions) > cap(events)) a new
 	// buffer will be created and returned.
 	PollOneOff(subscriptions []Subscription, events []Event) ([]Event, Errno)
 
