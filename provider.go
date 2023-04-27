@@ -185,7 +185,7 @@ type Provider interface {
 	// PathFileStatSetTimes adjusts the timestamps of a file or directory.
 	//
 	// Note: This is similar to utimensat in POSIX.
-	PathFileStatSetTimes(fd FD, accessTime, modifyTime Timestamp, flags FSTFlags) Errno
+	PathFileStatSetTimes(fd FD, lookupFlags LookupFlags, path string, accessTime, modifyTime Timestamp, flags FSTFlags) Errno
 
 	// PathLink creates a hard link.
 	//
