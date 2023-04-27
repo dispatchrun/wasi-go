@@ -656,3 +656,6 @@ type PreStat struct {
 
 // Size represents a size.
 type Size uint32
+
+// IOVec is a slice of bytes.
+type IOVec []byte
