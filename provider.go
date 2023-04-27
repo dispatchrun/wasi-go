@@ -206,7 +206,7 @@ type Provider interface {
 	// PathReadLink reads the contents of a symbolic link.
 	//
 	// Note: This is similar to readlinkat in POSIX.
-	PathReadLink(FD, string) (string, Size, Errno)
+	PathReadLink(FD, string) (string, Errno)
 
 	// PathRemoveDirectory removes a directory.
 	//
