@@ -373,12 +373,12 @@ func TestFile(t *testing.T) {
 	assertEqual(t, unsafe.Offsetof(FileStat{}.ChangeTime), 56)
 
 	assertEqual(t, unsafe.Sizeof(Whence(0)), 1)
-	assertEqual(t, WhenceStart, 0)
-	assertEqual(t, WhenceCurrent, 1)
-	assertEqual(t, WhenceEnd, 2)
-	assertEqual(t, WhenceStart.String(), "WhenceStart")
-	assertEqual(t, WhenceCurrent.String(), "WhenceCurrent")
-	assertEqual(t, WhenceEnd.String(), "WhenceEnd")
+	assertEqual(t, SeekStart, 0)
+	assertEqual(t, SeekCurrent, 1)
+	assertEqual(t, SeekEnd, 2)
+	assertEqual(t, SeekStart.String(), "SeekStart")
+	assertEqual(t, SeekCurrent.String(), "SeekCurrent")
+	assertEqual(t, SeekEnd.String(), "SeekEnd")
 
 	assertEqual(t, unsafe.Sizeof(FileType(0)), 1)
 	assertEqual(t, UnknownType, 0)

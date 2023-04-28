@@ -57,24 +57,24 @@ type FileStat struct {
 type Whence uint8
 
 const (
-	// WhenceStart seeks relative to start-of-file.
-	WhenceStart Whence = iota
+	// SeekStart seeks relative to the origin of the file.
+	SeekStart Whence = iota
 
-	// WhenceCurrent seeks relative to current position.
-	WhenceCurrent
+	// SeekCurrent seeks relative to current offset.
+	SeekCurrent
 
-	// WhenceEnd seeks relative to end-of-file.
-	WhenceEnd
+	// SeekEnd seeks relative to end of the file.
+	SeekEnd
 )
 
 func (w Whence) String() string {
 	switch w {
-	case WhenceStart:
-		return "WhenceStart"
-	case WhenceCurrent:
-		return "WhenceCurrent"
-	case WhenceEnd:
-		return "WhenceEnd"
+	case SeekStart:
+		return "SeekStart"
+	case SeekCurrent:
+		return "SeekCurrent"
+	case SeekEnd:
+		return "SeekEnd"
 	default:
 		return fmt.Sprintf("Whence(%d)", w)
 	}
