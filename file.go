@@ -349,7 +349,7 @@ const (
 	ReadRights Rights = FDReadRight | FDReadDirRight
 
 	// WriteRights are rights related to writes.
-	WriteRights Rights = FDWriteRight | FDAllocateRight | FDFileStatSetSizeRight | FDDataSyncRight
+	WriteRights Rights = FDWriteRight | FDAllocateRight | PathFileStatSetSizeRight | FDDataSyncRight
 )
 
 // Has is true if the flag is set. If multiple flags are specified, Has returns
