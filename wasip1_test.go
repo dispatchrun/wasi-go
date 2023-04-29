@@ -11,7 +11,7 @@ import (
 func TestErrors(t *testing.T) {
 	assertEqual(t, unsafe.Sizeof(Errno(0)), 2)
 
-	assertEqual(t, int(SUCCESS), 0)
+	assertEqual(t, int(ESUCCESS), 0)
 	assertEqual(t, int(E2BIG), 1)
 	assertEqual(t, int(EACCES), 2)
 	assertEqual(t, int(EADDRINUSE), 3)

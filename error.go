@@ -1,5 +1,7 @@
 package wasip1
 
+import "fmt"
+
 // Errno are the error codes returned by functions.
 //
 // Not all of these error codes are returned by the functions provided by this
@@ -8,8 +10,12 @@ package wasip1
 type Errno uint16
 
 const (
+	// ESUCCESS indicates that no error occurred (system call completed
+	// successfully).
+	ESUCCESS Errno = iota
+
 	// E2BIG means an argument list is too long.
-	E2BIG Errno = iota + 1
+	E2BIG
 
 	// EACCES means permission is denied.
 	EACCES
@@ -234,27 +240,24 @@ const (
 
 	// ENOTCAPABLE means capabilities are insufficient.
 	ENOTCAPABLE
-
-	// SUCCESS indicates that no error occurred (system call completed
-	// successfully).
-	SUCCESS = 0
 )
 
 func (e Errno) Error() string {
-	if e >= 1 && int(e) <= len(errorStrings) {
-		return errorStrings[e]
+	if i := int(e); i >= 0 && i < len(errorStrings) {
+		return errorStrings[i]
 	}
-	return ""
+	return fmt.Sprintf("Unknown Error (%d)", int(e))
 }
 
 func (e Errno) Name() string {
-	if e >= 1 && int(e) <= len(errorNames) {
-		return errorNames[e]
+	if i := int(e); i >= 0 && i < len(errorNames) {
+		return errorNames[i]
 	}
-	return ""
+	return fmt.Sprintf("errno(%d)", int(e))
 }
 
 var errorStrings = [...]string{
+	ESUCCESS:        "OK",
 	E2BIG:           "Argument list too long",
 	EACCES:          "Permission denied",
 	EADDRINUSE:      "Address already in use",
@@ -334,6 +337,7 @@ var errorStrings = [...]string{
 }
 
 var errorNames = [...]string{
+	ESUCCESS:        "ESUCCESS",
 	E2BIG:           "E2BIG",
 	EACCES:          "EACCES",
 	EADDRINUSE:      "EADDRINUSE",
