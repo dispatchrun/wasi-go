@@ -100,13 +100,9 @@ func run(args []string) error {
 	defer runtime.Close(ctx)
 
 	provider := &wasiunix.Provider{
-		Args:    append([]string{wasmName}, args...),
-		Environ: envs,
-		Realtime: func() uint64 {
-			now := time.Now()
-			sec, nsec := uint64(now.Second()), uint64(now.Nanosecond())
-			return sec*1e9 + nsec
-		},
+		Args:               append([]string{wasmName}, args...),
+		Environ:            envs,
+		Realtime:           func() uint64 { return uint64(time.Now().UnixNano()) },
 		RealtimePrecision:  time.Microsecond,
 		Monotonic:          nanotime,
 		MonotonicPrecision: time.Nanosecond,
