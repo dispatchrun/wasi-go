@@ -98,7 +98,7 @@ func (t Timestamp) Format(w io.Writer) {
 }
 
 func (c SubscriptionFDReadWrite) Format(w io.Writer) {
-	fmt.Fprintf(w, `{file_descriptor:%d}`, c.FD)
+	fmt.Fprintf(w, `{FD:%d}`, c.FD)
 }
 
 func (c SubscriptionClock) Format(w io.Writer) {
@@ -113,7 +113,7 @@ func (c SubscriptionClock) Format(w io.Writer) {
 		}
 	}
 
-	fmt.Fprintf(w, `{id:%s,timeout:%s,precision:%s,flags:%s}`,
+	fmt.Fprintf(w, `{ID:%s,Timeout:%s,Precision:%s,Flags:%s}`,
 		c.ID,
 		formatTimestamp(c.Timeout),
 		formatTimestamp(c.Precision),
