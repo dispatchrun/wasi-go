@@ -366,10 +366,10 @@ func (p *Provider) FDRead(fd wasi.FD, iovecs []wasi.IOVec) (wasi.Size, wasi.Errn
 	return wasi.Size(n), makeErrno(err)
 }
 
-func (p *Provider) FDReadDir(fd wasi.FD, buffer []wasi.DirEntryName, maxBytes int, cookie wasi.DirCookie) ([]wasi.DirEntryName, bool, wasi.Errno) {
+func (p *Provider) FDReadDir(fd wasi.FD, buffer []wasi.DirEntryName, bufferSizeBytes int, cookie wasi.DirCookie) ([]wasi.DirEntryName, wasi.Errno) {
 	f, errno := p.lookupFD(fd, wasi.FDReadDirRight)
 	if errno != wasi.ESUCCESS {
-		return nil, false, errno
+		return nil, errno
 	}
 
 	// TODO: use a readdir iterator
@@ -378,7 +378,7 @@ func (p *Provider) FDReadDir(fd wasi.FD, buffer []wasi.DirEntryName, maxBytes in
 	if cookie == 0 {
 		entries, err := os.ReadDir(f.Path)
 		if err != nil {
-			return buffer, false, makeErrno(err)
+			return buffer, makeErrno(err)
 		}
 		f.DirEntries = entries
 		// Add . and .. entries, since they're stripped by os.ReadDir
@@ -390,20 +390,16 @@ func (p *Provider) FDReadDir(fd wasi.FD, buffer []wasi.DirEntryName, maxBytes in
 		}
 	}
 	if cookie > math.MaxInt {
-		return buffer, false, wasi.EINVAL
+		return buffer, wasi.EINVAL
 	}
 	var n int
 	pos := int(cookie)
-	for ; pos < len(f.DirEntries); pos++ {
+	for ; pos < len(f.DirEntries) && n < bufferSizeBytes; pos++ {
 		e := f.DirEntries[pos]
 		name := e.Name()
-		entrySize := int(unsafe.Sizeof(wasi.DirEntry{})) + len(name)
-		if n+entrySize > maxBytes {
-			break
-		}
 		info, err := e.Info()
 		if err != nil {
-			return buffer, false, makeErrno(err)
+			return buffer, makeErrno(err)
 		}
 		s := info.Sys().(*syscall.Stat_t)
 		buffer = append(buffer, wasi.DirEntryName{
@@ -415,10 +411,9 @@ func (p *Provider) FDReadDir(fd wasi.FD, buffer []wasi.DirEntryName, maxBytes in
 			},
 			Name: name,
 		})
-		n += entrySize
+		n += int(unsafe.Sizeof(wasi.DirEntry{})) + len(name)
 	}
-	eof := pos == len(f.DirEntries)
-	return buffer, eof, wasi.ESUCCESS
+	return buffer, wasi.ESUCCESS
 }
 
 func (p *Provider) FDRenumber(from, to wasi.FD) wasi.Errno {

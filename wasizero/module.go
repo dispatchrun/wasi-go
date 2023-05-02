@@ -299,7 +299,7 @@ func (m *Module) FDRead(ctx context.Context, fd Int32, iovecs List[IOVec], nread
 
 func (m *Module) FDReadDir(ctx context.Context, fd Int32, buf Bytes, cookie Uint64, nwritten Pointer[Int32]) Errno {
 	var errno wasi.Errno
-	m.dirent, _, errno = m.WASI.FDReadDir(wasi.FD(fd), m.dirent[:0], len(buf), wasi.DirCookie(cookie))
+	m.dirent, errno = m.WASI.FDReadDir(wasi.FD(fd), m.dirent[:0], len(buf), wasi.DirCookie(cookie))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -307,10 +307,14 @@ func (m *Module) FDReadDir(ctx context.Context, fd Int32, buf Bytes, cookie Uint
 	var n int
 	for i := range m.dirent {
 		e := &m.dirent[i]
-		copy(buf[n:], unsafe.Slice((*byte)(unsafe.Pointer(&e.Entry)), sizeofDirEnt))
-		n += sizeofDirEnt
-		copy(buf[n:], e.Name)
-		n += len(e.Name)
+		n += copy(buf[n:], unsafe.Slice((*byte)(unsafe.Pointer(&e.Entry)), sizeofDirEnt))
+		if n == len(buf) {
+			break
+		}
+		n += copy(buf[n:], e.Name)
+		if n == len(buf) {
+			break
+		}
 	}
 	nwritten.Store(Int32(n))
 	return Errno(wasi.ESUCCESS)
