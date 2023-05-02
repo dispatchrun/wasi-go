@@ -4,8 +4,12 @@ import (
 	"encoding/binary"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 	"unsafe"
+
+	"github.com/stealthrocket/wazergo/types"
 )
 
 func TestErrors(t *testing.T) {
@@ -575,16 +579,26 @@ func TestSubscription(t *testing.T) {
 	assertEqual(t, unsafe.Sizeof(SubscriptionFDReadWrite{}), 4)
 	assertEqual(t, unsafe.Offsetof(SubscriptionFDReadWrite{}.FD), 0)
 	assertEqual(t, unsafe.Sizeof(SubscriptionFDReadWrite{}.FD), 4)
+	assertEqual(t, format(SubscriptionFDReadWrite{FD: 42}), `{FD:42}`)
 
+	now := Timestamp(time.Date(2023, 5, 2, 12, 2, 0, 0, time.UTC).UnixNano())
 	assertEqual(t, unsafe.Sizeof(SubscriptionClock{}), 32)
 	assertEqual(t, unsafe.Offsetof(SubscriptionClock{}.ID), 0)
 	assertEqual(t, unsafe.Offsetof(SubscriptionClock{}.Timeout), 8)
 	assertEqual(t, unsafe.Offsetof(SubscriptionClock{}.Precision), 16)
 	assertEqual(t, unsafe.Offsetof(SubscriptionClock{}.Flags), 24)
+	assertEqual(t, format(SubscriptionClock{ID: Monotonic, Timeout: 10e3, Precision: 1}), `{ID:Monotonic,Timeout:10µs,Precision:1ns}`)
+	assertEqual(t, format(SubscriptionClock{ID: Monotonic, Timeout: now, Precision: 1, Flags: Abstime}), `{ID:Monotonic,Timeout:2023-05-02T12:02:00Z,Precision:1ns}`)
 
 	assertEqual(t, unsafe.Sizeof(SubscriptionClockFlags(0)), 2)
 	assertEqual(t, Abstime, 0x1)
 	assertEqual(t, Abstime.String(), "Abstime")
+}
+
+func format(v types.Formatter) string {
+	s := new(strings.Builder)
+	v.Format(s)
+	return s.String()
 }
 
 func TestSubscriptionFDReadWrite(t *testing.T) {

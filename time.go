@@ -1,9 +1,24 @@
 package wasi
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Timestamp is a timestamp in nanoseconds.
 type Timestamp uint64
+
+func (t Timestamp) Duration() time.Duration {
+	return time.Duration(t)
+}
+
+func (t Timestamp) Time() time.Time {
+	return time.Unix(0, int64(t)).UTC()
+}
+
+func (t Timestamp) String() string {
+	return t.Time().Format(time.RFC3339Nano)
+}
 
 // ClockID is an identifier for clocks.
 type ClockID uint32

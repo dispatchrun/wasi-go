@@ -2,6 +2,7 @@ package wasi
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"unsafe"
 
@@ -25,17 +26,42 @@ func (p PreStat) LoadObject(_ api.Memory, b []byte) PreStat        { return unsa
 func (p PreStat) StoreObject(_ api.Memory, b []byte)               { unsafeStore(b, p) }
 func (p PreStat) FormatObject(w io.Writer, _ api.Memory, b []byte) { formatObject(w, b, p) }
 
-func (s Subscription) ObjectSize() int { return int(unsafe.Sizeof(Subscription{})) }
-func (s Subscription) LoadObject(_ api.Memory, b []byte) Subscription {
-	return unsafeLoad[Subscription](b)
-}
-func (s Subscription) StoreObject(_ api.Memory, b []byte)               { unsafeStore(b, s) }
-func (s Subscription) FormatObject(w io.Writer, _ api.Memory, b []byte) { formatObject(w, b, s) }
-
 func (e Event) ObjectSize() int                                  { return int(unsafe.Sizeof(Event{})) }
 func (e Event) LoadObject(_ api.Memory, b []byte) Event          { return unsafeLoad[Event](b) }
 func (e Event) StoreObject(_ api.Memory, b []byte)               { unsafeStore(b, e) }
 func (e Event) FormatObject(w io.Writer, _ api.Memory, b []byte) { formatObject(w, b, e) }
+
+func (s Subscription) ObjectSize() int {
+	return int(unsafe.Sizeof(Subscription{}))
+}
+
+func (s Subscription) LoadObject(_ api.Memory, b []byte) Subscription {
+	return unsafeLoad[Subscription](b)
+}
+
+func (s Subscription) StoreObject(_ api.Memory, b []byte) {
+	unsafeStore(b, s)
+}
+
+func (s Subscription) FormatObject(w io.Writer, m api.Memory, b []byte) {
+	s = s.LoadObject(m, b)
+	fmt.Fprintf(w, `{UserData:%#016x,EventType:%s,`, s.UserData, s.EventType)
+
+	switch s.EventType {
+	case ClockEvent:
+		io.WriteString(w, `SubscriptionClock:`)
+		s.GetClock().Format(w)
+
+	case FDReadEvent, FDWriteEvent:
+		io.WriteString(w, `SubscriptionFDReadWrite:`)
+		s.GetFDReadWrite().Format(w)
+
+	default:
+		fmt.Fprintf(w, `SubscriptionU:%x`, s.variant)
+	}
+
+	fmt.Fprintf(w, `}`)
+}
 
 func (arg IOVec) ObjectSize() int {
 	return 8
@@ -66,3 +92,35 @@ func unsafeStore[T types.Object[T]](b []byte, t T) {
 func unsafeLoad[T types.Object[T]](b []byte) T {
 	return types.UnsafeLoadObject[T](b)
 }
+
+func (t Timestamp) Format(w io.Writer) {
+	io.WriteString(w, t.String())
+}
+
+func (c SubscriptionFDReadWrite) Format(w io.Writer) {
+	fmt.Fprintf(w, `{FD:%d}`, c.FD)
+}
+
+func (c SubscriptionClock) Format(w io.Writer) {
+	var formatTimeout func(Timestamp) string
+
+	switch c.Flags {
+	case Abstime:
+		formatTimeout = Timestamp.String
+	default:
+		formatTimeout = func(t Timestamp) string {
+			return t.Duration().String()
+		}
+	}
+
+	fmt.Fprintf(w, `{ID:%s,Timeout:%s,Precision:%s}`,
+		c.ID,
+		formatTimeout(c.Timeout),
+		c.Precision.Duration().String(),
+	)
+}
+
+var (
+	_ types.Formatter = Timestamp(0)
+	_ types.Formatter = SubscriptionClock{}
+)
