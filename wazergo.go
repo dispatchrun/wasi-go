@@ -10,59 +10,35 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-func (FDStat) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	panic("not implemented")
-}
+func (FDStat) ObjectSize() int                                    { return int(unsafe.Sizeof(FDStat{})) }
+func (FDStat) LoadObject(_ api.Memory, b []byte) FDStat           { return unsafeLoad[FDStat](b) }
+func (f FDStat) StoreObject(_ api.Memory, b []byte)               { unsafeStore(b, f) }
+func (f FDStat) FormatObject(w io.Writer, _ api.Memory, b []byte) { formatObject(w, f) }
 
-func (FDStat) LoadObject(memory api.Memory, object []byte) (f FDStat) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&f)), f.ObjectSize()), object)
-	return
-}
+func (FileStat) ObjectSize() int                                    { return int(unsafe.Sizeof(FileStat{})) }
+func (FileStat) LoadObject(_ api.Memory, b []byte) FileStat         { return unsafeLoad[FileStat](b) }
+func (f FileStat) StoreObject(_ api.Memory, b []byte)               { unsafeStore(b, f) }
+func (f FileStat) FormatObject(w io.Writer, _ api.Memory, b []byte) { formatObject(w, f) }
 
-func (f FDStat) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&f)), f.ObjectSize()))
-}
+func (PreStat) ObjectSize() int                                    { return int(unsafe.Sizeof(PreStat{})) }
+func (PreStat) LoadObject(_ api.Memory, b []byte) PreStat          { return unsafeLoad[PreStat](b) }
+func (p PreStat) StoreObject(_ api.Memory, b []byte)               { unsafeStore(b, p) }
+func (p PreStat) FormatObject(w io.Writer, _ api.Memory, b []byte) { formatObject(w, p) }
 
-func (FDStat) ObjectSize() int {
-	return int(unsafe.Sizeof(FDStat{}))
+func (Subscription) ObjectSize() int { return int(unsafe.Sizeof(Subscription{})) }
+func (Subscription) LoadObject(_ api.Memory, b []byte) Subscription {
+	return unsafeLoad[Subscription](b)
 }
+func (s Subscription) StoreObject(_ api.Memory, b []byte)               { unsafeStore(b, s) }
+func (s Subscription) FormatObject(w io.Writer, _ api.Memory, b []byte) { formatObject(w, s) }
 
-func (FileStat) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	panic("not implemented")
-}
+func (Event) ObjectSize() int                                    { return int(unsafe.Sizeof(Event{})) }
+func (Event) LoadObject(_ api.Memory, b []byte) Event            { return unsafeLoad[Event](b) }
+func (e Event) StoreObject(_ api.Memory, b []byte)               { unsafeStore(b, e) }
+func (e Event) FormatObject(w io.Writer, _ api.Memory, b []byte) { formatObject(w, e) }
 
-func (FileStat) LoadObject(memory api.Memory, object []byte) (f FileStat) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&f)), f.ObjectSize()), object)
-	return
-}
-
-func (f FileStat) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&f)), f.ObjectSize()))
-}
-
-func (FileStat) ObjectSize() int {
-	return int(unsafe.Sizeof(FileStat{}))
-}
-
-func (PreStat) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	panic("not implemented")
-}
-
-func (PreStat) LoadObject(memory api.Memory, object []byte) (p PreStat) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&p)), p.ObjectSize()), object)
-	return
-}
-
-func (p PreStat) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&p)), p.ObjectSize()))
-}
-
-func (PreStat) ObjectSize() int {
-	return int(unsafe.Sizeof(PreStat{}))
-}
-
-func (arg IOVec) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	types.Bytes(arg.LoadObject(memory, object)).Format(w)
+func (arg IOVec) ObjectSize() int {
+	return 8
 }
 
 func (arg IOVec) LoadObject(memory api.Memory, object []byte) IOVec {
@@ -72,43 +48,22 @@ func (arg IOVec) LoadObject(memory api.Memory, object []byte) IOVec {
 }
 
 func (arg IOVec) StoreObject(memory api.Memory, object []byte) {
-	panic("NOT IMPLEMENTED")
-}
-
-func (arg IOVec) ObjectSize() int {
-	return 8
-}
-
-func (Subscription) FormatObject(w io.Writer, memory api.Memory, object []byte) {
 	panic("not implemented")
 }
 
-func (Subscription) LoadObject(memory api.Memory, object []byte) (s Subscription) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&s)), s.ObjectSize()), object)
-	return
+func (arg IOVec) FormatObject(w io.Writer, memory api.Memory, object []byte) {
+	types.Bytes(arg.LoadObject(memory, object)).Format(w)
 }
 
-func (s Subscription) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&s)), s.ObjectSize()))
-}
-
-func (Subscription) ObjectSize() int {
-	return int(unsafe.Sizeof(Subscription{}))
-}
-
-func (Event) FormatObject(w io.Writer, memory api.Memory, object []byte) {
+func formatObject(w io.Writer, obj any) {
 	panic("not implemented")
 }
 
-func (Event) LoadObject(memory api.Memory, object []byte) (e Event) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&e)), e.ObjectSize()), object)
+func unsafeStore[T types.Object[T]](b []byte, t T) {
+	copy(b, unsafe.Slice((*byte)(unsafe.Pointer(&t)), t.ObjectSize()))
+}
+
+func unsafeLoad[T types.Object[T]](b []byte) (t T) {
+	copy(unsafe.Slice((*byte)(unsafe.Pointer(&t)), t.ObjectSize()), b)
 	return
-}
-
-func (e Event) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&e)), e.ObjectSize()))
-}
-
-func (Event) ObjectSize() int {
-	return int(unsafe.Sizeof(Event{}))
 }
