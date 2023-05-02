@@ -1,3 +1,7 @@
+[![Build](https://github.com/stealthrocket/wasi/actions/workflows/go.yml/badge.svg)](https://github.com/stealthrocket/wasi/actions/workflows/go.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/stealthrocket/wasi.svg)](https://pkg.go.dev/github.com/stealthrocket/wasi)
+[![Apache 2 License](https://img.shields.io/badge/license-Apache%202-blue.svg)](LICENSE)
+
 # WASI
 
 This is a Go implementation of the WebAssembly System Interface ([WASI][wasi]).
