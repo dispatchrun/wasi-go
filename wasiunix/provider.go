@@ -38,15 +38,15 @@ type Provider struct {
 
 	// Yield is called when SchedYield is called. If Yield is nil,
 	// SchedYield is a noop.
-	Yield func(context.Context)
+	Yield func(context.Context) error
 
 	// Exit is called with an exit code when ProcExit is called.
 	// If Exit is nil, ProcExit is a noop.
-	Exit func(context.Context, int)
+	Exit func(context.Context, int) error
 
 	// Raise is called with a signal when ProcRaise is called.
 	// If Raise is nil, ProcRaise is a noop.
-	Raise func(context.Context, int)
+	Raise func(context.Context, int) error
 
 	// Rand is the source for RandomGet.
 	Rand io.Reader
@@ -820,23 +820,23 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 
 func (p *Provider) ProcExit(ctx context.Context, code wasi.ExitCode) wasi.Errno {
 	if p.Exit != nil {
-		p.Exit(ctx, int(code))
+		return makeErrno(p.Exit(ctx, int(code)))
 	}
-	return wasi.ESUCCESS
+	return wasi.ENOSYS
 }
 
 func (p *Provider) ProcRaise(ctx context.Context, signal wasi.Signal) wasi.Errno {
 	if p.Raise != nil {
-		p.Raise(ctx, int(signal))
+		return makeErrno(p.Raise(ctx, int(signal)))
 	}
-	return wasi.ESUCCESS
+	return wasi.ENOSYS
 }
 
 func (p *Provider) SchedYield(ctx context.Context) wasi.Errno {
 	if p.Yield != nil {
-		p.Yield(ctx)
+		return makeErrno(p.Yield(ctx))
 	}
-	return wasi.ESUCCESS
+	return wasi.ENOSYS
 }
 
 func (p *Provider) RandomGet(ctx context.Context, b []byte) wasi.Errno {

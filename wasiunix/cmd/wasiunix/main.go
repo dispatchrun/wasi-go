@@ -172,8 +172,9 @@ func monotonic(context.Context) (uint64, error) {
 	return uint64(time.Since(epoch)), nil
 }
 
-func exit(ctx context.Context, exitCode int) {
+func exit(ctx context.Context, exitCode int) error {
 	os.Exit(exitCode)
+	return nil
 }
 
 type strings []string
