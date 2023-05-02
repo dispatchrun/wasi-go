@@ -1,8 +1,14 @@
-# WASI Preview 1
+# WASI
 
-This package contains interfaces, types and constants from 
-[WebAssembly][wasm] System Interface ([WASI][wasi]) [preview 1][preview-1].
+This is a Go implementation of the WebAssembly System Interface ([WASI][wasi]).
 
-[wasm]: https://webassembly.org
 [wasi]: https://github.com/WebAssembly/WASI
+
+## Package Layout
+
+- `./`: types and constants from the [WASI preview 1 specification][preview-1]
+- `./wasiunix`: a Unix implementation
+- `./wasizero`: a host module for the [wazero][wazero] runtime
+
 [preview-1]: https://github.com/WebAssembly/WASI/blob/e324ce3/legacy/preview1/docs.md
+[wazero]: https://wazero.io
