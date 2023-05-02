@@ -766,7 +766,7 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 			select {
 			case <-t.C:
 			case <-ctx.Done():
-				return events, wasi.ECANCELED
+				return events, makeErrno(ctx.Err())
 			}
 		}
 		return events, wasi.ESUCCESS
