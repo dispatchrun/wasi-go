@@ -1,6 +1,7 @@
 package wasiunix
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"unsafe"
@@ -12,6 +13,9 @@ import (
 func makeErrno(err error) wasi.Errno {
 	if err == nil {
 		return wasi.ESUCCESS
+	}
+	if err == context.Canceled {
+		return wasi.ECANCELED
 	}
 	var sysErrno unix.Errno
 	if errors.As(err, &sysErrno) {

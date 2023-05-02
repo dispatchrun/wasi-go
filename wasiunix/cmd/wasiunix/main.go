@@ -107,12 +107,12 @@ func run(args []string) error {
 	provider := &wasiunix.Provider{
 		Args:               append([]string{wasmName}, args...),
 		Environ:            envs,
-		Realtime:           func() uint64 { return uint64(time.Now().UnixNano()) },
+		Realtime:           realtime,
 		RealtimePrecision:  time.Microsecond,
-		Monotonic:          nanotime,
+		Monotonic:          monotonic,
 		MonotonicPrecision: time.Nanosecond,
 		Rand:               rand.Reader,
-		Exit:               os.Exit,
+		Exit:               exit,
 	}
 
 	for _, stdio := range []struct {
@@ -162,8 +162,20 @@ func run(args []string) error {
 	return instance.Close(ctx)
 }
 
-//go:linkname nanotime runtime.nanotime
-func nanotime() uint64
+var epoch = time.Now()
+
+func realtime(context.Context) (uint64, error) {
+	return uint64(time.Now().UnixNano()), nil
+}
+
+func monotonic(context.Context) (uint64, error) {
+	return uint64(time.Since(epoch)), nil
+}
+
+func exit(ctx context.Context, exitCode int) error {
+	os.Exit(exitCode)
+	return nil
+}
 
 type strings []string
 

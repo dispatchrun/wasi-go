@@ -1,5 +1,7 @@
 package wasi
 
+import "context"
+
 // Provider provides an implementation of WASI preview 1.
 //
 // The functions here are higher-level than those found in the spec.
@@ -8,12 +10,12 @@ package wasi
 // both be implemented elsewhere using the higher-level ArgsGet.
 type Provider interface {
 	// ArgsGet reads command-line argument data.
-	ArgsGet() ([]string, Errno)
+	ArgsGet(ctx context.Context) ([]string, Errno)
 
 	// EnvironGet reads environment variable data.
 	//
 	// Key/value pairs are expected to be joined with an '=' char.
-	EnvironGet() ([]string, Errno)
+	EnvironGet(ctx context.Context) ([]string, Errno)
 
 	// ClockResGet returns the resolution of a clock.
 	//
@@ -23,7 +25,7 @@ type Provider interface {
 	// clocks. For unsupported clocks, EINVAL is returned.
 	//
 	// Note: This is similar to clock_getres in POSIX.
-	ClockResGet(ClockID) (Timestamp, Errno)
+	ClockResGet(ctx context.Context, id ClockID) (Timestamp, Errno)
 
 	// ClockTimeGet returns the time value of a clock.
 	//
@@ -32,47 +34,47 @@ type Provider interface {
 	// that the returned time value may have, compared to its actual value.
 	//
 	// Note: This is similar to clock_gettime in POSIX.
-	ClockTimeGet(id ClockID, precision Timestamp) (Timestamp, Errno)
+	ClockTimeGet(ctx context.Context, id ClockID, precision Timestamp) (Timestamp, Errno)
 
 	// FDAdvise provides file advisory information on a file descriptor
 	//
 	// Note: This is similar to posix_fadvise in POSIX.
-	FDAdvise(fd FD, offset FileSize, length FileSize, advice Advice) Errno
+	FDAdvise(ctx context.Context, fd FD, offset FileSize, length FileSize, advice Advice) Errno
 
 	// FDAllocate forces the allocation of space in a file.
 	//
 	// Note: This is similar to posix_fallocate in POSIX.
-	FDAllocate(fd FD, offset FileSize, length FileSize) Errno
+	FDAllocate(ctx context.Context, fd FD, offset FileSize, length FileSize) Errno
 
 	// FDClose closes a file descriptor.
 	//
 	// Note: This is similar to close in POSIX.
-	FDClose(FD) Errno
+	FDClose(ctx context.Context, fd FD) Errno
 
 	// FDDataSync synchronizes the data of a file to disk.
 	//
 	// Note: This is similar to fdatasync in POSIX.
-	FDDataSync(FD) Errno
+	FDDataSync(ctx context.Context, fd FD) Errno
 
 	// FDStatGet gets the attributes of a file descriptor.
 	//
 	// Note: This returns similar flags to fcntl(fd, F_GETFL) in POSIX, as
 	// well as additional fields.
-	FDStatGet(FD) (FDStat, Errno)
+	FDStatGet(ctx context.Context, fd FD) (FDStat, Errno)
 
 	// FDStatSetFlags adjusts the flags associated with a file descriptor.
 	//
 	// Note: This is similar to fcntl(fd, F_SETFL, flags) in POSIX.
-	FDStatSetFlags(FD, FDFlags) Errno
+	FDStatSetFlags(ctx context.Context, fd FD, flags FDFlags) Errno
 
 	// FDStatSetRights adjusts the rights associated with a file descriptor.
 	//
 	// This can only be used to remove rights, and returns ENOTCAPABLE if
 	// called in a way that would attempt to add rights.
-	FDStatSetRights(fd FD, rightsBase, rightsInheriting Rights) Errno
+	FDStatSetRights(ctx context.Context, fd FD, rightsBase, rightsInheriting Rights) Errno
 
 	// FDFileStatGet returns the attributes of an open file.
-	FDFileStatGet(FD) (FileStat, Errno)
+	FDFileStatGet(ctx context.Context, fd FD) (FileStat, Errno)
 
 	// FDFileStatSetSize adjusts the size of an open file.
 	//
@@ -80,12 +82,12 @@ type Provider interface {
 	// zeros.
 	//
 	// Note: This is similar to ftruncate in POSIX.
-	FDFileStatSetSize(FD, FileSize) Errno
+	FDFileStatSetSize(ctx context.Context, fd FD, size FileSize) Errno
 
 	// FDFileStatSetTimes adjusts the timestamps of an open file or directory.
 	//
 	// Note: This is similar to futimens in POSIX.
-	FDFileStatSetTimes(fd FD, accessTime, modifyTime Timestamp, flags FSTFlags) Errno
+	FDFileStatSetTimes(ctx context.Context, fd FD, accessTime, modifyTime Timestamp, flags FSTFlags) Errno
 
 	// FDPread reads from a file descriptor, without using and updating the
 	// file descriptor's offset.
@@ -94,15 +96,15 @@ type Provider interface {
 	// an Errno.
 	//
 	// Note: This is similar to preadv in Linux (and other Unix-es).
-	FDPread(fd FD, iovecs []IOVec, offset FileSize) (Size, Errno)
+	FDPread(ctx context.Context, fd FD, iovecs []IOVec, offset FileSize) (Size, Errno)
 
 	// FDPreStatGet returns a description of the given pre-opened file
 	// descriptor.
-	FDPreStatGet(FD) (PreStat, Errno)
+	FDPreStatGet(ctx context.Context, fd FD) (PreStat, Errno)
 
 	// FDPreStatDirName returns a description of the given pre-opened file
 	// descriptor.
-	FDPreStatDirName(FD) (string, Errno)
+	FDPreStatDirName(ctx context.Context, fd FD) (string, Errno)
 
 	// FDPwrite writes from a file descriptor, without using and updating the
 	// file descriptor's offset.
@@ -115,7 +117,7 @@ type Provider interface {
 	// Like Linux (and other Unix-es), any calls of pwrite (and other functions
 	// to read or write) for a regular file by other threads in the WASI
 	// process should not be interleaved while pwrite is executed.
-	FDPwrite(fd FD, iovecs []IOVec, offset FileSize) (Size, Errno)
+	FDPwrite(ctx context.Context, fd FD, iovecs []IOVec, offset FileSize) (Size, Errno)
 
 	// FDRead reads from a file descriptor.
 	//
@@ -123,7 +125,7 @@ type Provider interface {
 	// an Errno.
 	//
 	// Note: This is similar to readv in POSIX.
-	FDRead(FD, []IOVec) (Size, Errno)
+	FDRead(ctx context.Context, fd FD, iovecs []IOVec) (Size, Errno)
 
 	// FDReadDir reads directory entries from a directory.
 	//
@@ -137,7 +139,7 @@ type Provider interface {
 	// The implementation must ensure that no more than maxBytes worth of
 	// entries are written to the buffer, where entry size is equal to
 	// unsafe.Sizeof(DirEntry{}) + DirEntry.NameLength.
-	FDReadDir(fd FD, entries []DirEntryName, bufferSizeBytes int, cookie DirCookie) ([]DirEntryName, Errno)
+	FDReadDir(ctx context.Context, fd FD, entries []DirEntryName, bufferSizeBytes int, cookie DirCookie) ([]DirEntryName, Errno)
 
 	// FDRenumber atomically replaces a file descriptor by renumbering another
 	// file descriptor. Due to the strong focus on thread safety, this
@@ -147,7 +149,7 @@ type Provider interface {
 	// be allocated by a different thread at the same time. This function
 	// provides a way to atomically renumber file descriptors, which would
 	// disappear if dup2() were to be removed entirely.
-	FDRenumber(from, to FD) Errno
+	FDRenumber(ctx context.Context, from, to FD) Errno
 
 	// FDSeek moves the offset of a file descriptor.
 	//
@@ -155,17 +157,17 @@ type Provider interface {
 	// to the start of the file. On failure, it returns an Errno.
 	//
 	// Note: This is similar to lseek in POSIX.
-	FDSeek(FD, FileDelta, Whence) (FileSize, Errno)
+	FDSeek(ctx context.Context, fd FD, offset FileDelta, whence Whence) (FileSize, Errno)
 
 	// FDSync synchronizes the data and metadata of a file to disk.
 	//
 	// Note: This is similar to fsync in POSIX.
-	FDSync(FD) Errno
+	FDSync(ctx context.Context, fd FD) Errno
 
 	// FDTell returns the current offset of a file descriptor.
 	//
 	// Note: This is similar to lseek(fd, 0, SEEK_CUR) in POSIX.
-	FDTell(FD) (FileSize, Errno)
+	FDTell(ctx context.Context, fd FD) (FileSize, Errno)
 
 	// FDWrite write to a file descriptor.
 	//
@@ -174,27 +176,27 @@ type Provider interface {
 	// Like POSIX, any calls of write (and other functions to read or write)
 	// for a regular file by other threads in the WASI process should not be
 	// interleaved while write is executed.
-	FDWrite(FD, []IOVec) (Size, Errno)
+	FDWrite(ctx context.Context, fd FD, iovecs []IOVec) (Size, Errno)
 
 	// PathCreateDirectory create a directory.
 	//
 	// Note: This is similar to mkdirat in POSIX.
-	PathCreateDirectory(FD, string) Errno
+	PathCreateDirectory(ctx context.Context, fd FD, path string) Errno
 
 	// PathFileStatGet returns the attributes of a file or directory.
 	//
 	// Note: This is similar to stat in POSIX.
-	PathFileStatGet(FD, LookupFlags, string) (FileStat, Errno)
+	PathFileStatGet(ctx context.Context, fd FD, lookupFlags LookupFlags, path string) (FileStat, Errno)
 
 	// PathFileStatSetTimes adjusts the timestamps of a file or directory.
 	//
 	// Note: This is similar to utimensat in POSIX.
-	PathFileStatSetTimes(fd FD, lookupFlags LookupFlags, path string, accessTime, modifyTime Timestamp, flags FSTFlags) Errno
+	PathFileStatSetTimes(ctx context.Context, fd FD, lookupFlags LookupFlags, path string, accessTime, modifyTime Timestamp, flags FSTFlags) Errno
 
 	// PathLink creates a hard link.
 	//
 	// Note: This is similar to linkat in POSIX.
-	PathLink(oldFD FD, oldFlags LookupFlags, oldPath string, newFD FD, newPath string) Errno
+	PathLink(ctx context.Context, oldFD FD, oldFlags LookupFlags, oldPath string, newFD FD, newPath string) Errno
 
 	// PathOpen opens a file or directory.
 	//
@@ -205,7 +207,7 @@ type Provider interface {
 	// descriptor is guaranteed to be less than 2**31.
 	//
 	// Note: This is similar to openat in POSIX.
-	PathOpen(fd FD, dirFlags LookupFlags, path string, openFlags OpenFlags, rightsBase, rightsInheriting Rights, fdFlags FDFlags) (FD, Errno)
+	PathOpen(ctx context.Context, fd FD, dirFlags LookupFlags, path string, openFlags OpenFlags, rightsBase, rightsInheriting Rights, fdFlags FDFlags) (FD, Errno)
 
 	// PathReadLink reads the contents of a symbolic link.
 	//
@@ -214,31 +216,31 @@ type Provider interface {
 	// symbolic link, the implementation must return ERANGE.
 	//
 	// Note: This is similar to readlinkat in POSIX.
-	PathReadLink(fd FD, path string, buffer []byte) ([]byte, Errno)
+	PathReadLink(ctx context.Context, fd FD, path string, buffer []byte) ([]byte, Errno)
 
 	// PathRemoveDirectory removes a directory.
 	//
 	// If the directory is not empty, ENOTEMPTY is returned.
 	//
 	// Note: This is similar to unlinkat(fd, path, AT_REMOVEDIR) in POSIX.
-	PathRemoveDirectory(FD, string) Errno
+	PathRemoveDirectory(ctx context.Context, fd FD, path string) Errno
 
 	// PathRename renames a file or directory.
 	//
 	// Note: This is similar to renameat in POSIX.
-	PathRename(fd FD, oldPath string, newFD FD, newPath string) Errno
+	PathRename(ctx context.Context, fd FD, oldPath string, newFD FD, newPath string) Errno
 
 	// PathSymlink creates a symbolic link.
 	//
 	// Note: This is similar to symlinkat in POSIX.
-	PathSymlink(oldPath string, fd FD, newPath string) Errno
+	PathSymlink(ctx context.Context, oldPath string, fd FD, newPath string) Errno
 
 	// PathUnlinkFile unlinks a file.
 	//
 	// If the path refers to a directory, EISDIR is returned.
 	//
 	// Note: This is similar to unlinkat(fd, path, 0) in POSIX.
-	PathUnlinkFile(FD, string) Errno
+	PathUnlinkFile(ctx context.Context, fd FD, path string) Errno
 
 	// PollOneOff concurrently polls for the occurrence of a set of events.
 	//
@@ -247,23 +249,23 @@ type Provider interface {
 	// The function appends events to the provided []Event buffer. If there
 	// is not enough space (len(subscriptions) > cap(events)) a new
 	// buffer will be created and returned.
-	PollOneOff(subscriptions []Subscription, events []Event) ([]Event, Errno)
+	PollOneOff(ctx context.Context, subscriptions []Subscription, events []Event) ([]Event, Errno)
 
 	// ProcExit terminates the process normally.
 	//
 	// An exit code of 0 indicates successful termination of the program.
 	// The meanings of other values is dependent on the environment.
-	ProcExit(ExitCode) Errno
+	ProcExit(ctx context.Context, exitCode ExitCode) Errno
 
 	// ProcRaise sends a signal to the process of the calling thread.
 	//
 	// Note: This is similar to raise in POSIX.
-	ProcRaise(Signal) Errno
+	ProcRaise(ctx context.Context, signal Signal) Errno
 
 	// SchedYield temporarily yields execution of the calling thread.
 	//
 	// Note: This is similar to sched_yield in POSIX.
-	SchedYield() Errno
+	SchedYield(ctx context.Context) Errno
 
 	// RandomGet write high-quality random data into a buffer.
 	//
@@ -272,12 +274,12 @@ type Provider interface {
 	// slowly, so when large mounts of random data are required, it's
 	// advisable to use this function to seed a pseudo-random number generator,
 	// rather than to provide the random data directly.
-	RandomGet(b []byte) Errno
+	RandomGet(ctx context.Context, b []byte) Errno
 
 	// SockAccept accepts a new incoming connection.
 	//
 	// Note: This is similar to accept in POSIX.
-	SockAccept(FD, FDFlags) (FD, Errno)
+	SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, Errno)
 
 	// SockRecv receives a message from a socket.
 	//
@@ -286,7 +288,7 @@ type Provider interface {
 	//
 	// Note: This is similar to recv in POSIX, though it also supports reading
 	// the data into multiple buffers in the manner of readv.
-	SockRecv(FD, []IOVec, RIFlags) (Size, ROFlags, Errno)
+	SockRecv(ctx context.Context, fd FD, iovecs []IOVec, flags RIFlags) (Size, ROFlags, Errno)
 
 	// SockSend sends a message on a socket.
 	//
@@ -295,13 +297,13 @@ type Provider interface {
 	//
 	// Note: This is similar to send in POSIX, though it also supports
 	// writing the data from multiple buffers in the manner of writev.
-	SockSend(FD, []IOVec, SIFlags) (Size, Errno)
+	SockSend(ctx context.Context, fd FD, iovecs []IOVec, flags SIFlags) (Size, Errno)
 
 	// SockShutdown shuts down a socket's send and/or receive channels.
 	//
 	// Note: This is similar to shutdown in POSIX.
-	SockShutdown(FD, SDFlags) Errno
+	SockShutdown(ctx context.Context, fd FD, flags SDFlags) Errno
 
 	// Close closes the Provider.
-	Close() error
+	Close(ctx context.Context) error
 }
