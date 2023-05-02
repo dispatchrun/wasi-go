@@ -12,8 +12,8 @@ import (
 	_ "unsafe" // for go:linktime
 
 	"github.com/stealthrocket/wasi"
+	"github.com/stealthrocket/wasi/imports/wasi_snapshot_preview1"
 	"github.com/stealthrocket/wasi/wasiunix"
-	"github.com/stealthrocket/wasi/wasizero"
 	"github.com/stealthrocket/wazergo"
 	"github.com/tetratelabs/wazero"
 )
@@ -131,7 +131,10 @@ func run(args []string) error {
 		})
 	}
 
-	module := wazergo.MustInstantiate(ctx, runtime, wasizero.HostModule, wasizero.WithWASI(provider))
+	module := wazergo.MustInstantiate(ctx, runtime,
+		wasi_snapshot_preview1.HostModule,
+		wasi_snapshot_preview1.WithWASI(provider),
+	)
 	ctx = wazergo.WithModuleInstance(ctx, module)
 
 	instance, err := runtime.Instantiate(ctx, wasmCode)
