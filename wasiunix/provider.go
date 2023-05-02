@@ -185,8 +185,8 @@ func (p *Provider) FDClose(fd wasi.FD) wasi.Errno {
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	// Note: closing pre-opens are allowed, according to
-	// github.com/WebAssembly/wasi-testsuite/blob/1b1d4a57/tests/rust/src/bin/close_preopen.rs
+	// Note: closing pre-opens is allowed.
+	// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/close_preopen.rs
 	p.fds.Delete(fd)
 	err := unix.Close(f.FD)
 	return makeErrno(err)
@@ -274,6 +274,7 @@ func (p *Provider) FDFileStatGet(fd wasi.FD) (wasi.FileStat, wasi.Errno) {
 	switch f.FD {
 	case syscall.Stdin, syscall.Stdout, syscall.Stderr:
 		// Override stdio size/times.
+		// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/fd_filestat_get.rs
 		stat.Size = 0
 		stat.AccessTime = 0
 		stat.ModifyTime = 0
@@ -453,6 +454,9 @@ func (p *Provider) FDTell(fd wasi.FD) (wasi.FileSize, wasi.Errno) {
 }
 
 func (p *Provider) fdseek(fd wasi.FD, rights wasi.Rights, delta wasi.FileDelta, whence wasi.Whence) (wasi.FileSize, wasi.Errno) {
+	// Note: FDSeekRight implies FDTellRight. FDTellRight also includes the
+	// right to invoke FDSeek in such a way that the file offset remains
+	// unaltered.
 	f, errno := p.lookupFD(fd, rights)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
@@ -585,6 +589,8 @@ func (p *Provider) PathOpen(fd wasi.FD, lookupFlags wasi.LookupFlags, path strin
 	oflags := unix.O_CLOEXEC
 	if openFlags.Has(wasi.OpenDirectory) {
 		oflags |= unix.O_DIRECTORY
+		// Directories cannot have FDSeekRight (and possibly other rights).
+		// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/directory_seek.rs
 		rightsBase &^= wasi.FDSeekRight
 	}
 	if openFlags.Has(wasi.OpenCreate) {
