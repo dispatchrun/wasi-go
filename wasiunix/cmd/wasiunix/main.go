@@ -128,10 +128,12 @@ func run(args []string) error {
 			RightsBase:       wasi.AllRights,
 			RightsInheriting: wasi.AllRights,
 		}
-		if err := syscall.SetNonblock(stdio.fd, true); err != nil {
-			return err
+		if nonBlockingStdio {
+			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
+				return err
+			}
+			stat.Flags |= wasi.NonBlock
 		}
-		stat.Flags |= wasi.NonBlock
 		provider.Preopen(stdio.fd, stdio.path, stat)
 	}
 
