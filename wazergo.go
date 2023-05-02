@@ -113,11 +113,10 @@ func (c SubscriptionClock) Format(w io.Writer) {
 		}
 	}
 
-	fmt.Fprintf(w, `{ID:%s,Timeout:%s,Precision:%s,Flags:%s}`,
+	fmt.Fprintf(w, `{ID:%s,Timeout:%s,Precision:%s}`,
 		c.ID,
 		formatTimestamp(c.Timeout),
 		formatTimestamp(c.Precision),
-		c.Flags,
 	)
 }
 
