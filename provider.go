@@ -128,12 +128,12 @@ type Provider interface {
 	// FDReadDir reads directory entries from a directory.
 	//
 	// The implementation must append entries to the provided buffer and then
-	// return it.
+	// return it. The eof flag should be set if there are no more entries.
 	//
 	// The implementation must ensure that no more than maxBytes worth of
 	// entries are written to the buffer, where entry size is equal to
 	// unsafe.Sizeof(DirEntry{}) + DirEntry.NameLength.
-	FDReadDir(fd FD, buffer []DirEntryName, maxBytes int, cookie DirCookie) ([]DirEntryName, Errno)
+	FDReadDir(fd FD, buffer []DirEntryName, maxBytes int, cookie DirCookie) (entries []DirEntryName, eof bool, errno Errno)
 
 	// FDRenumber atomically replaces a file descriptor by renumbering another
 	// file descriptor. Due to the strong focus on thread safety, this
