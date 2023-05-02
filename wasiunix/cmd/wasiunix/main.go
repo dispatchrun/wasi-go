@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"time"
-	_ "unsafe" // for go:linktime
 
 	"github.com/stealthrocket/wasi"
 	"github.com/stealthrocket/wasi/imports/wasi_snapshot_preview1"
@@ -111,6 +111,7 @@ func run(args []string) error {
 		RealtimePrecision:  time.Microsecond,
 		Monotonic:          monotonic,
 		MonotonicPrecision: time.Nanosecond,
+		Yield:              yield,
 		Rand:               rand.Reader,
 		Exit:               exit,
 	}
@@ -170,6 +171,11 @@ func realtime(context.Context) (uint64, error) {
 
 func monotonic(context.Context) (uint64, error) {
 	return uint64(time.Since(epoch)), nil
+}
+
+func yield(ctx context.Context) error {
+	runtime.Gosched()
+	return nil
 }
 
 func exit(ctx context.Context, exitCode int) error {
