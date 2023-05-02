@@ -11,7 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/stealthrocket/wasi"
-	"github.com/stealthrocket/wasi/wasiunix/internal/descriptor"
+	"github.com/stealthrocket/wasi/internal/descriptor"
 	"golang.org/x/sys/unix"
 )
 
