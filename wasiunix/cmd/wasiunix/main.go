@@ -115,16 +115,16 @@ func run(args []string) error {
 		RightsBase:       wasi.AllRights,
 		RightsInheriting: wasi.AllRights,
 	}
-	provider.RegisterFD(syscall.Stdin, "/dev/stdin", stdioStat)
-	provider.RegisterFD(syscall.Stdout, "/dev/stdout", stdioStat)
-	provider.RegisterFD(syscall.Stderr, "/dev/stderr", stdioStat)
+	provider.Preopen(syscall.Stdin, "/dev/stdin", stdioStat)
+	provider.Preopen(syscall.Stdout, "/dev/stdout", stdioStat)
+	provider.Preopen(syscall.Stderr, "/dev/stderr", stdioStat)
 
 	for _, dir := range dirs {
 		fd, err := syscall.Open(dir, syscall.O_DIRECTORY, 0)
 		if err != nil {
 			return err
 		}
-		provider.RegisterFD(fd, dir, wasi.FDStat{
+		provider.Preopen(fd, dir, wasi.FDStat{
 			FileType:         wasi.DirectoryType,
 			RightsBase:       wasi.AllRights,
 			RightsInheriting: wasi.AllRights,

@@ -209,8 +209,12 @@ type Provider interface {
 
 	// PathReadLink reads the contents of a symbolic link.
 	//
+	// The implementation must read the path into the specified buffer and then
+	// return it. If the buffer is not large enough to hold the contents of the
+	// symbolic link, the implementation must return ERANGE.
+	//
 	// Note: This is similar to readlinkat in POSIX.
-	PathReadLink(FD, string) (string, Errno)
+	PathReadLink(fd FD, path string, buffer []byte) ([]byte, Errno)
 
 	// PathRemoveDirectory removes a directory.
 	//

@@ -62,11 +62,26 @@ type fdinfo struct {
 	// FD is the underlying OS file descriptor.
 	FD int
 
+	// Preopen is true if the file was pre-opened.
+	Preopen bool
+
 	// FDStat is cached information about the file descriptor.
 	FDStat wasi.FDStat
 
 	// DirEntries are cached directory entries.
 	DirEntries []os.DirEntry
+}
+
+// Preopen adds an open file to the list of pre-opens.
+func (p *Provider) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
+	fdstat.RightsBase &= wasi.AllRights
+	fdstat.RightsInheriting &= wasi.AllRights
+	p.fds.Insert(&fdinfo{
+		FD:      hostfd,
+		Preopen: true,
+		Path:    path,
+		FDStat:  fdstat,
+	})
 }
 
 func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
@@ -85,7 +100,9 @@ func (p *Provider) lookupPreopenFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	// TODO: check that it's a preopen
+	if !f.Preopen {
+		return nil, wasi.EPERM
+	}
 	if f.FDStat.FileType != wasi.DirectoryType {
 		return nil, wasi.ENOTDIR
 	}
@@ -103,17 +120,6 @@ func (p *Provider) lookupSocketFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo,
 	default:
 		return nil, wasi.ENOTSOCK
 	}
-}
-
-// RegisterFD registers an open file.
-func (p *Provider) RegisterFD(hostfd int, path string, fdstat wasi.FDStat) wasi.FD {
-	fdstat.RightsBase &= wasi.AllRights
-	fdstat.RightsInheriting &= wasi.AllRights
-	return p.fds.Insert(&fdinfo{
-		Path:   path,
-		FD:     hostfd,
-		FDStat: fdstat,
-	})
 }
 
 func (p *Provider) ArgsGet() ([]string, wasi.Errno) {
@@ -175,11 +181,12 @@ func (p *Provider) FDAllocate(fd wasi.FD, offset wasi.FileSize, length wasi.File
 }
 
 func (p *Provider) FDClose(fd wasi.FD) wasi.Errno {
-	// TODO: don't allow closing of preopens
 	f, errno := p.lookupFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
+	// Note: closing pre-opens are allowed, according to
+	// github.com/WebAssembly/wasi-testsuite/blob/1b1d4a57/tests/rust/src/bin/close_preopen.rs
 	p.fds.Delete(fd)
 	err := unix.Close(f.FD)
 	return makeErrno(err)
@@ -330,7 +337,6 @@ func (p *Provider) FDPreStatGet(fd wasi.FD) (wasi.PreStat, wasi.Errno) {
 	if errno != wasi.ESUCCESS {
 		return wasi.PreStat{}, errno
 	}
-	// TODO: error if the file is not a preopen
 	stat := wasi.PreStat{
 		Type: wasi.PreOpenDir,
 		PreStatDir: wasi.PreStatDir{
@@ -636,26 +642,31 @@ func (p *Provider) PathOpen(fd wasi.FD, lookupFlags wasi.LookupFlags, path strin
 		return -1, makeErrno(err)
 	}
 
-	guestfd := p.RegisterFD(hostfd, filepath.Join(d.Path, path), wasi.FDStat{
-		FileType:         fileType,
-		Flags:            fdFlags,
-		RightsBase:       rightsBase,
-		RightsInheriting: rightsInheriting,
+	guestfd := p.fds.Insert(&fdinfo{
+		FD:   hostfd,
+		Path: filepath.Join(d.Path, path),
+		FDStat: wasi.FDStat{
+			FileType:         fileType,
+			Flags:            fdFlags,
+			RightsBase:       rightsBase,
+			RightsInheriting: rightsInheriting,
+		},
 	})
 	return guestfd, wasi.ESUCCESS
 }
 
-func (p *Provider) PathReadLink(fd wasi.FD, path string) (string, wasi.Errno) {
+func (p *Provider) PathReadLink(fd wasi.FD, path string, buffer []byte) ([]byte, wasi.Errno) {
 	d, errno := p.lookupFD(fd, wasi.PathReadLinkRight)
 	if errno != wasi.ESUCCESS {
-		return "", errno
+		return buffer, errno
 	}
-	var buf [1024]byte // TODO: receive buffer as argument, return length
-	n, err := unix.Readlinkat(d.FD, path, buf[:])
+	n, err := unix.Readlinkat(d.FD, path, buffer)
 	if err != nil {
-		return "", makeErrno(err)
+		return buffer, makeErrno(err)
+	} else if n == len(buffer) {
+		return buffer, wasi.ERANGE
 	}
-	return string(buf[:n]), wasi.ESUCCESS
+	return buffer[:n], wasi.ESUCCESS
 }
 
 func (p *Provider) PathRemoveDirectory(fd wasi.FD, path string) wasi.Errno {
@@ -833,11 +844,14 @@ func (p *Provider) SockAccept(fd wasi.FD, flags wasi.FDFlags) (wasi.FD, wasi.Err
 		unix.Close(connfd)
 		return -1, makeErrno(err)
 	}
-	guestfd := p.RegisterFD(connfd, "", wasi.FDStat{
-		FileType:         wasi.SocketStreamType,
-		Flags:            flags,
-		RightsBase:       socket.FDStat.RightsInheriting,
-		RightsInheriting: socket.FDStat.RightsInheriting,
+	guestfd := p.fds.Insert(&fdinfo{
+		FD: connfd,
+		FDStat: wasi.FDStat{
+			FileType:         wasi.SocketStreamType,
+			Flags:            flags,
+			RightsBase:       socket.FDStat.RightsInheriting,
+			RightsInheriting: socket.FDStat.RightsInheriting,
+		},
 	})
 	return guestfd, wasi.ESUCCESS
 }
