@@ -102,21 +102,21 @@ func (c SubscriptionFDReadWrite) Format(w io.Writer) {
 }
 
 func (c SubscriptionClock) Format(w io.Writer) {
-	var formatTimestamp func(Timestamp) string
+	var formatTimeout func(Timestamp) string
 
 	switch c.Flags {
 	case Abstime:
-		formatTimestamp = Timestamp.String
+		formatTimeout = Timestamp.String
 	default:
-		formatTimestamp = func(t Timestamp) string {
+		formatTimeout = func(t Timestamp) string {
 			return t.Duration().String()
 		}
 	}
 
 	fmt.Fprintf(w, `{ID:%s,Timeout:%s,Precision:%s}`,
 		c.ID,
-		formatTimestamp(c.Timeout),
-		formatTimestamp(c.Precision),
+		formatTimeout(c.Timeout),
+		c.Precision.Duration().String(),
 	)
 }
 

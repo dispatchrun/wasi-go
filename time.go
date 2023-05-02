@@ -13,7 +13,7 @@ func (t Timestamp) Duration() time.Duration {
 }
 
 func (t Timestamp) Time() time.Time {
-	return time.Unix(0, int64(t))
+	return time.Unix(0, int64(t)).UTC()
 }
 
 func (t Timestamp) String() string {
