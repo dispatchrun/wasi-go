@@ -1,4 +1,4 @@
-package wasip1
+package wasi
 
 import (
 	"encoding/binary"

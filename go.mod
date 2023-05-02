@@ -1,3 +1,3 @@
-module github.com/stealthrocket/wasip1
+module github.com/stealthrocket/wasi
 
 go 1.20

@@ -1,4 +1,4 @@
-package wasip1
+package wasi
 
 // Provider provides an implementation of WASI preview 1.
 //
