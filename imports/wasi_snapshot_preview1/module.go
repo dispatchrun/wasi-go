@@ -1,4 +1,4 @@
-package wasizero
+package wasi_snapshot_preview1
 
 import (
 	"context"
