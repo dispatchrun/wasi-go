@@ -105,7 +105,7 @@ type Module struct {
 }
 
 func (m *Module) ArgsGet(ctx context.Context, argv Pointer[Uint32], buf Pointer[Uint8]) Errno {
-	args, errno := m.WASI.ArgsGet()
+	args, errno := m.WASI.ArgsGet(ctx)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -113,7 +113,7 @@ func (m *Module) ArgsGet(ctx context.Context, argv Pointer[Uint32], buf Pointer[
 }
 
 func (m *Module) ArgsSizesGet(ctx context.Context, argc, bufLen Pointer[Int32]) Errno {
-	args, errno := m.WASI.ArgsGet()
+	args, errno := m.WASI.ArgsGet(ctx)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -121,7 +121,7 @@ func (m *Module) ArgsSizesGet(ctx context.Context, argc, bufLen Pointer[Int32]) 
 }
 
 func (m *Module) EnvironGet(ctx context.Context, envv Pointer[Uint32], buf Pointer[Uint8]) Errno {
-	env, errno := m.WASI.EnvironGet()
+	env, errno := m.WASI.EnvironGet(ctx)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -129,7 +129,7 @@ func (m *Module) EnvironGet(ctx context.Context, envv Pointer[Uint32], buf Point
 }
 
 func (m *Module) EnvironSizesGet(ctx context.Context, envc, bufLen Pointer[Int32]) Errno {
-	env, errno := m.WASI.EnvironGet()
+	env, errno := m.WASI.EnvironGet(ctx)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -164,7 +164,7 @@ func (m *Module) countArgs(args []string, argc, bufLen Pointer[Int32]) Errno {
 }
 
 func (m *Module) ClockResGet(ctx context.Context, clockID Int32, precision Pointer[Uint64]) Errno {
-	result, errno := m.WASI.ClockResGet(wasi.ClockID(clockID))
+	result, errno := m.WASI.ClockResGet(ctx, wasi.ClockID(clockID))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -173,7 +173,7 @@ func (m *Module) ClockResGet(ctx context.Context, clockID Int32, precision Point
 }
 
 func (m *Module) ClockTimeGet(ctx context.Context, clockID Int32, precision Uint64, timestamp Pointer[Uint64]) Errno {
-	result, errno := m.WASI.ClockTimeGet(wasi.ClockID(clockID), wasi.Timestamp(precision))
+	result, errno := m.WASI.ClockTimeGet(ctx, wasi.ClockID(clockID), wasi.Timestamp(precision))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -182,23 +182,23 @@ func (m *Module) ClockTimeGet(ctx context.Context, clockID Int32, precision Uint
 }
 
 func (m *Module) FDAdvise(ctx context.Context, fd Int32, offset, length Uint64, advice Int32) Errno {
-	return Errno(m.WASI.FDAdvise(wasi.FD(fd), wasi.FileSize(offset), wasi.FileSize(length), wasi.Advice(advice)))
+	return Errno(m.WASI.FDAdvise(ctx, wasi.FD(fd), wasi.FileSize(offset), wasi.FileSize(length), wasi.Advice(advice)))
 }
 
 func (m *Module) FDAllocate(ctx context.Context, fd Int32, offset, length Uint64) Errno {
-	return Errno(m.WASI.FDAllocate(wasi.FD(fd), wasi.FileSize(offset), wasi.FileSize(length)))
+	return Errno(m.WASI.FDAllocate(ctx, wasi.FD(fd), wasi.FileSize(offset), wasi.FileSize(length)))
 }
 
 func (m *Module) FDClose(ctx context.Context, fd Int32) Errno {
-	return Errno(m.WASI.FDClose(wasi.FD(fd)))
+	return Errno(m.WASI.FDClose(ctx, wasi.FD(fd)))
 }
 
 func (m *Module) FDDataSync(ctx context.Context, fd Int32) Errno {
-	return Errno(m.WASI.FDDataSync(wasi.FD(fd)))
+	return Errno(m.WASI.FDDataSync(ctx, wasi.FD(fd)))
 }
 
 func (m *Module) FDStatGet(ctx context.Context, fd Int32, stat Pointer[wasi.FDStat]) Errno {
-	result, errno := m.WASI.FDStatGet(wasi.FD(fd))
+	result, errno := m.WASI.FDStatGet(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -207,15 +207,15 @@ func (m *Module) FDStatGet(ctx context.Context, fd Int32, stat Pointer[wasi.FDSt
 }
 
 func (m *Module) FDStatSetFlags(ctx context.Context, fd Int32, flags Uint32) Errno {
-	return Errno(m.WASI.FDStatSetFlags(wasi.FD(fd), wasi.FDFlags(flags)))
+	return Errno(m.WASI.FDStatSetFlags(ctx, wasi.FD(fd), wasi.FDFlags(flags)))
 }
 
 func (m *Module) FDStatSetRights(ctx context.Context, fd Int32, rightsBase, rightsInheriting Uint64) Errno {
-	return Errno(m.WASI.FDStatSetRights(wasi.FD(fd), wasi.Rights(rightsBase), wasi.Rights(rightsInheriting)))
+	return Errno(m.WASI.FDStatSetRights(ctx, wasi.FD(fd), wasi.Rights(rightsBase), wasi.Rights(rightsInheriting)))
 }
 
 func (m *Module) FDFileStatGet(ctx context.Context, fd Int32, stat Pointer[wasi.FileStat]) Errno {
-	result, errno := m.WASI.FDFileStatGet(wasi.FD(fd))
+	result, errno := m.WASI.FDFileStatGet(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -224,15 +224,15 @@ func (m *Module) FDFileStatGet(ctx context.Context, fd Int32, stat Pointer[wasi.
 }
 
 func (m *Module) FDFileStatSetSize(ctx context.Context, fd Int32, size Uint64) Errno {
-	return Errno(m.WASI.FDFileStatSetSize(wasi.FD(fd), wasi.FileSize(size)))
+	return Errno(m.WASI.FDFileStatSetSize(ctx, wasi.FD(fd), wasi.FileSize(size)))
 }
 
 func (m *Module) FDFileStatSetTimes(ctx context.Context, fd Int32, accessTime, modifyTime Uint64, flags Int32) Errno {
-	return Errno(m.WASI.FDFileStatSetTimes(wasi.FD(fd), wasi.Timestamp(accessTime), wasi.Timestamp(modifyTime), wasi.FSTFlags(flags)))
+	return Errno(m.WASI.FDFileStatSetTimes(ctx, wasi.FD(fd), wasi.Timestamp(accessTime), wasi.Timestamp(modifyTime), wasi.FSTFlags(flags)))
 }
 
 func (m *Module) FDPread(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], offset Uint64, nread Pointer[Int32]) Errno {
-	result, errno := m.WASI.FDPread(wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.FileSize(offset))
+	result, errno := m.WASI.FDPread(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.FileSize(offset))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -241,7 +241,7 @@ func (m *Module) FDPread(ctx context.Context, fd Int32, iovecs List[wasi.IOVec],
 }
 
 func (m *Module) FDPreStatGet(ctx context.Context, fd Int32, prestat Pointer[wasi.PreStat]) Errno {
-	result, errno := m.WASI.FDPreStatGet(wasi.FD(fd))
+	result, errno := m.WASI.FDPreStatGet(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -250,7 +250,7 @@ func (m *Module) FDPreStatGet(ctx context.Context, fd Int32, prestat Pointer[was
 }
 
 func (m *Module) FDPreStatDirName(ctx context.Context, fd Int32, dirName Bytes) Errno {
-	result, errno := m.WASI.FDPreStatDirName(wasi.FD(fd))
+	result, errno := m.WASI.FDPreStatDirName(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -262,7 +262,7 @@ func (m *Module) FDPreStatDirName(ctx context.Context, fd Int32, dirName Bytes) 
 }
 
 func (m *Module) FDPwrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], offset Uint64, nwritten Pointer[Int32]) Errno {
-	result, errno := m.WASI.FDPwrite(wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.FileSize(offset))
+	result, errno := m.WASI.FDPwrite(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.FileSize(offset))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -271,7 +271,7 @@ func (m *Module) FDPwrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec]
 }
 
 func (m *Module) FDRead(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], nread Pointer[Int32]) Errno {
-	result, errno := m.WASI.FDRead(wasi.FD(fd), iovecs.Append(m.iovecs[:0]))
+	result, errno := m.WASI.FDRead(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -281,7 +281,7 @@ func (m *Module) FDRead(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], 
 
 func (m *Module) FDReadDir(ctx context.Context, fd Int32, buf Bytes, cookie Uint64, nwritten Pointer[Int32]) Errno {
 	var errno wasi.Errno
-	m.dirent, errno = m.WASI.FDReadDir(wasi.FD(fd), m.dirent[:0], len(buf), wasi.DirCookie(cookie))
+	m.dirent, errno = m.WASI.FDReadDir(ctx, wasi.FD(fd), m.dirent[:0], len(buf), wasi.DirCookie(cookie))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -303,11 +303,11 @@ func (m *Module) FDReadDir(ctx context.Context, fd Int32, buf Bytes, cookie Uint
 }
 
 func (m *Module) FDRenumber(ctx context.Context, from, to Int32) Errno {
-	return Errno(m.WASI.FDRenumber(wasi.FD(from), wasi.FD(to)))
+	return Errno(m.WASI.FDRenumber(ctx, wasi.FD(from), wasi.FD(to)))
 }
 
 func (m *Module) FDSeek(ctx context.Context, fd Int32, delta Int64, whence Int32, size Pointer[Uint64]) Errno {
-	result, errno := m.WASI.FDSeek(wasi.FD(fd), wasi.FileDelta(delta), wasi.Whence(whence))
+	result, errno := m.WASI.FDSeek(ctx, wasi.FD(fd), wasi.FileDelta(delta), wasi.Whence(whence))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -316,11 +316,11 @@ func (m *Module) FDSeek(ctx context.Context, fd Int32, delta Int64, whence Int32
 }
 
 func (m *Module) FDSync(ctx context.Context, fd Int32) Errno {
-	return Errno(m.WASI.FDSync(wasi.FD(fd)))
+	return Errno(m.WASI.FDSync(ctx, wasi.FD(fd)))
 }
 
 func (m *Module) FDTell(ctx context.Context, fd Int32, size Pointer[Uint64]) Errno {
-	result, errno := m.WASI.FDTell(wasi.FD(fd))
+	result, errno := m.WASI.FDTell(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -329,7 +329,7 @@ func (m *Module) FDTell(ctx context.Context, fd Int32, size Pointer[Uint64]) Err
 }
 
 func (m *Module) FDWrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], nwritten Pointer[Int32]) Errno {
-	result, errno := m.WASI.FDWrite(wasi.FD(fd), iovecs.Append(m.iovecs[:0]))
+	result, errno := m.WASI.FDWrite(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -338,11 +338,11 @@ func (m *Module) FDWrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec],
 }
 
 func (m *Module) PathCreateDirectory(ctx context.Context, fd Int32, path String) Errno {
-	return Errno(m.WASI.PathCreateDirectory(wasi.FD(fd), string(path)))
+	return Errno(m.WASI.PathCreateDirectory(ctx, wasi.FD(fd), string(path)))
 }
 
 func (m *Module) PathFileStatGet(ctx context.Context, fd Int32, flags Int32, path String, stat Pointer[wasi.FileStat]) Errno {
-	result, errno := m.WASI.PathFileStatGet(wasi.FD(fd), wasi.LookupFlags(flags), string(path))
+	result, errno := m.WASI.PathFileStatGet(ctx, wasi.FD(fd), wasi.LookupFlags(flags), string(path))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -351,15 +351,15 @@ func (m *Module) PathFileStatGet(ctx context.Context, fd Int32, flags Int32, pat
 }
 
 func (m *Module) PathFileStatSetTimes(ctx context.Context, fd Int32, lookupFlags Int32, path String, accessTime, modifyTime Uint64, fstFlags Int32) Errno {
-	return Errno(m.WASI.PathFileStatSetTimes(wasi.FD(fd), wasi.LookupFlags(lookupFlags), string(path), wasi.Timestamp(accessTime), wasi.Timestamp(modifyTime), wasi.FSTFlags(fstFlags)))
+	return Errno(m.WASI.PathFileStatSetTimes(ctx, wasi.FD(fd), wasi.LookupFlags(lookupFlags), string(path), wasi.Timestamp(accessTime), wasi.Timestamp(modifyTime), wasi.FSTFlags(fstFlags)))
 }
 
 func (m *Module) PathLink(ctx context.Context, oldFD Int32, oldFlags Int32, oldPath Bytes, newFD Int32, newPath Bytes) Errno {
-	return Errno(m.WASI.PathLink(wasi.FD(oldFD), wasi.LookupFlags(oldFlags), string(oldPath), wasi.FD(newFD), string(newPath)))
+	return Errno(m.WASI.PathLink(ctx, wasi.FD(oldFD), wasi.LookupFlags(oldFlags), string(oldPath), wasi.FD(newFD), string(newPath)))
 }
 
 func (m *Module) PathOpen(ctx context.Context, fd Int32, dirFlags Int32, path String, openFlags Int32, rightsBase, rightsInheriting Uint64, fdFlags Int32, openfd Pointer[Int32]) Errno {
-	result, errno := m.WASI.PathOpen(wasi.FD(fd), wasi.LookupFlags(dirFlags), string(path), wasi.OpenFlags(openFlags), wasi.Rights(rightsBase), wasi.Rights(rightsInheriting), wasi.FDFlags(fdFlags))
+	result, errno := m.WASI.PathOpen(ctx, wasi.FD(fd), wasi.LookupFlags(dirFlags), string(path), wasi.OpenFlags(openFlags), wasi.Rights(rightsBase), wasi.Rights(rightsInheriting), wasi.FDFlags(fdFlags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -368,7 +368,7 @@ func (m *Module) PathOpen(ctx context.Context, fd Int32, dirFlags Int32, path St
 }
 
 func (m *Module) PathReadLink(ctx context.Context, fd Int32, path String, buf Bytes, nwritten Pointer[Int32]) Errno {
-	result, errno := m.WASI.PathReadLink(wasi.FD(fd), string(path), buf)
+	result, errno := m.WASI.PathReadLink(ctx, wasi.FD(fd), string(path), buf)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -377,19 +377,19 @@ func (m *Module) PathReadLink(ctx context.Context, fd Int32, path String, buf By
 }
 
 func (m *Module) PathRemoveDirectory(ctx context.Context, fd Int32, path String) Errno {
-	return Errno(m.WASI.PathRemoveDirectory(wasi.FD(fd), string(path)))
+	return Errno(m.WASI.PathRemoveDirectory(ctx, wasi.FD(fd), string(path)))
 }
 
 func (m *Module) PathRename(ctx context.Context, oldFD Int32, oldPath String, newFD Int32, newPath String) Errno {
-	return Errno(m.WASI.PathRename(wasi.FD(oldFD), string(oldPath), wasi.FD(newFD), string(newPath)))
+	return Errno(m.WASI.PathRename(ctx, wasi.FD(oldFD), string(oldPath), wasi.FD(newFD), string(newPath)))
 }
 
 func (m *Module) PathSymlink(ctx context.Context, oldPath String, fd Int32, newPath String) Errno {
-	return Errno(m.WASI.PathSymlink(string(oldPath), wasi.FD(fd), string(newPath)))
+	return Errno(m.WASI.PathSymlink(ctx, string(oldPath), wasi.FD(fd), string(newPath)))
 }
 
 func (m *Module) PathUnlinkFile(ctx context.Context, fd Int32, path String) Errno {
-	return Errno(m.WASI.PathUnlinkFile(wasi.FD(fd), string(path)))
+	return Errno(m.WASI.PathUnlinkFile(ctx, wasi.FD(fd), string(path)))
 }
 
 func (m *Module) PollOneOff(ctx context.Context, subscriptionsPtr Pointer[wasi.Subscription], eventsPtr Pointer[wasi.Event], nSubscriptions Int32, n Pointer[Int32]) Errno {
@@ -399,7 +399,7 @@ func (m *Module) PollOneOff(ctx context.Context, subscriptionsPtr Pointer[wasi.S
 	subscriptions := subscriptionsPtr.UnsafeSlice(int(nSubscriptions))
 	events := eventsPtr.UnsafeSlice(int(nSubscriptions))
 	var errno wasi.Errno
-	events, errno = m.WASI.PollOneOff(subscriptions, events[:0])
+	events, errno = m.WASI.PollOneOff(ctx, subscriptions, events[:0])
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -409,7 +409,7 @@ func (m *Module) PollOneOff(ctx context.Context, subscriptionsPtr Pointer[wasi.S
 
 func (m *Module) ProcExit(ctx context.Context, mod api.Module, exitCode Int32) {
 	// Give the provider a chance to exit.
-	m.WASI.ProcExit(wasi.ExitCode(exitCode))
+	m.WASI.ProcExit(ctx, wasi.ExitCode(exitCode))
 
 	// Ensure other callers see the exit code.
 	_ = mod.CloseWithExitCode(ctx, uint32(exitCode))
@@ -421,19 +421,19 @@ func (m *Module) ProcExit(ctx context.Context, mod api.Module, exitCode Int32) {
 }
 
 func (m *Module) ProcRaise(ctx context.Context, signal Int32) Errno {
-	return Errno(m.WASI.ProcRaise(wasi.Signal(signal)))
+	return Errno(m.WASI.ProcRaise(ctx, wasi.Signal(signal)))
 }
 
 func (m *Module) SchedYield(ctx context.Context) Errno {
-	return Errno(m.WASI.SchedYield())
+	return Errno(m.WASI.SchedYield(ctx))
 }
 
 func (m *Module) RandomGet(ctx context.Context, buf Bytes) Errno {
-	return Errno(m.WASI.RandomGet(buf))
+	return Errno(m.WASI.RandomGet(ctx, buf))
 }
 
 func (m *Module) SockAccept(ctx context.Context, fd Int32, flags Int32, connfd Pointer[Int32]) Errno {
-	result, errno := m.WASI.SockAccept(wasi.FD(fd), wasi.FDFlags(flags))
+	result, errno := m.WASI.SockAccept(ctx, wasi.FD(fd), wasi.FDFlags(flags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -442,7 +442,7 @@ func (m *Module) SockAccept(ctx context.Context, fd Int32, flags Int32, connfd P
 }
 
 func (m *Module) SockRecv(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], iflags Int32, nread Pointer[Int32], oflags Pointer[Int32]) Errno {
-	size, roflags, errno := m.WASI.SockRecv(wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.RIFlags(iflags))
+	size, roflags, errno := m.WASI.SockRecv(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.RIFlags(iflags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -452,7 +452,7 @@ func (m *Module) SockRecv(ctx context.Context, fd Int32, iovecs List[wasi.IOVec]
 }
 
 func (m *Module) SockSend(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], flags Int32, nwritten Pointer[Int32]) Errno {
-	size, errno := m.WASI.SockSend(wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.SIFlags(flags))
+	size, errno := m.WASI.SockSend(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.SIFlags(flags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -461,11 +461,11 @@ func (m *Module) SockSend(ctx context.Context, fd Int32, iovecs List[wasi.IOVec]
 }
 
 func (m *Module) SockShutdown(ctx context.Context, fd Int32, flags Int32) Errno {
-	return Errno(m.WASI.SockShutdown(wasi.FD(fd), wasi.SDFlags(flags)))
+	return Errno(m.WASI.SockShutdown(ctx, wasi.FD(fd), wasi.SDFlags(flags)))
 }
 
 func (m *Module) Close(ctx context.Context) error {
-	return m.WASI.Close()
+	return m.WASI.Close(ctx)
 }
 
 // procExit is a bit different; it doesn't have a return result,
