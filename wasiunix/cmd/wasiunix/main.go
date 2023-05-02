@@ -21,16 +21,18 @@ import (
 const Version = "devel"
 
 var (
-	envs    strings
-	dirs    strings
-	version bool
-	help    bool
-	h       bool
+	envs             strings
+	dirs             strings
+	nonBlockingStdio bool
+	version          bool
+	help             bool
+	h                bool
 )
 
 func main() {
 	flag.Var(&envs, "env", "Environment variables to pass to the WASM module.")
 	flag.Var(&dirs, "dir", "Directories to pre-open.")
+	flag.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "Enable non-blocking stdio.")
 	flag.BoolVar(&version, "version", false, "Print the version and exit.")
 	flag.BoolVar(&help, "help", false, "Print usage information.")
 	flag.BoolVar(&h, "h", false, "Print usage information.")
@@ -69,6 +71,9 @@ OPTIONS:
 
    --env <NAME=VAL>
       Pass an environment variable to the module
+
+  --non-blocking-stdio
+      Enable non-blocking stdio
 
    --version
       Print the version and exit
@@ -110,14 +115,25 @@ func run(args []string) error {
 		Exit:               os.Exit,
 	}
 
-	stdioStat := wasi.FDStat{
-		FileType:         wasi.CharacterDeviceType,
-		RightsBase:       wasi.AllRights,
-		RightsInheriting: wasi.AllRights,
+	for _, stdio := range []struct {
+		fd   int
+		path string
+	}{
+		{syscall.Stdin, "/dev/stdin"},
+		{syscall.Stdout, "/dev/stdout"},
+		{syscall.Stderr, "/dev/stderr"},
+	} {
+		stat := wasi.FDStat{
+			FileType:         wasi.CharacterDeviceType,
+			RightsBase:       wasi.AllRights,
+			RightsInheriting: wasi.AllRights,
+		}
+		if err := syscall.SetNonblock(stdio.fd, true); err != nil {
+			return err
+		}
+		stat.Flags |= wasi.NonBlock
+		provider.Preopen(stdio.fd, stdio.path, stat)
 	}
-	provider.Preopen(syscall.Stdin, "/dev/stdin", stdioStat)
-	provider.Preopen(syscall.Stdout, "/dev/stdout", stdioStat)
-	provider.Preopen(syscall.Stderr, "/dev/stderr", stdioStat)
 
 	for _, dir := range dirs {
 		fd, err := syscall.Open(dir, syscall.O_DIRECTORY, 0)
