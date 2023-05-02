@@ -1,0 +1,4 @@
+[submodule "wasiunix/test/wasi-testsuite"]
+	path = wasiunix/test/wasi-testsuite
+	url = git@github.com:WebAssembly/wasi-testsuite.git
+	branch = prod/testsuite-base
