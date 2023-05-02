@@ -1,5 +1,5 @@
-github.com/stealthrocket/wazergo v0.14.1-0.20230502004224-fb4bd11906a7 h1:yDg0jX0VJeZZNeiBt7XrB1YvjBTBkpAgE3msFjRpMLk=
-github.com/stealthrocket/wazergo v0.14.1-0.20230502004224-fb4bd11906a7/go.mod h1:riI0hxw4ndZA5e6z7PesHg2BtTftcZaMxRcoiGGipTs=
+github.com/stealthrocket/wazergo v0.15.1-0.20230502070216-7c25fddb26d8 h1:yf/BGaIFk93INEcg1Z3hD+viYr0owwgICc0zqfE28KM=
+github.com/stealthrocket/wazergo v0.15.1-0.20230502070216-7c25fddb26d8/go.mod h1:riI0hxw4ndZA5e6z7PesHg2BtTftcZaMxRcoiGGipTs=
 github.com/tetratelabs/wazero v1.1.0 h1:EByoAhC+QcYpwSZJSs/aV0uokxPwBgKxfiokSUwAknQ=
 github.com/tetratelabs/wazero v1.1.0/go.mod h1:wYx2gNRg8/WihJfSDxA1TIL8H+GkfLYm+bIfbblu9VQ=
 golang.org/x/sys v0.7.0 h1:3jlCCIQZPdOYu1h8BkNvLz8Kgwtae2cagcG/VamtZRU=

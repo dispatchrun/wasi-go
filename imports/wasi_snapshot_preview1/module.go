@@ -2,15 +2,12 @@ package wasi_snapshot_preview1
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
-	"io"
 	"unsafe"
 
 	"github.com/stealthrocket/wasi"
 	"github.com/stealthrocket/wazergo"
 	. "github.com/stealthrocket/wazergo/types"
-	"github.com/stealthrocket/wazergo/wasm"
 	"github.com/tetratelabs/wazero/api"
 )
 
@@ -167,20 +164,20 @@ func (m *Module) countArgs(args []string, argc, bufLen Pointer[Int32]) Errno {
 }
 
 func (m *Module) ClockResGet(ctx context.Context, clockID Int32, precision Pointer[Uint64]) Errno {
-	value, errno := m.WASI.ClockResGet(wasi.ClockID(clockID))
+	result, errno := m.WASI.ClockResGet(wasi.ClockID(clockID))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	precision.Store(Uint64(value))
+	precision.Store(Uint64(result))
 	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) ClockTimeGet(ctx context.Context, clockID Int32, precision Uint64, timestamp Pointer[Uint64]) Errno {
-	value, errno := m.WASI.ClockTimeGet(wasi.ClockID(clockID), wasi.Timestamp(precision))
+	result, errno := m.WASI.ClockTimeGet(wasi.ClockID(clockID), wasi.Timestamp(precision))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	timestamp.Store(Uint64(value))
+	timestamp.Store(Uint64(result))
 	return Errno(wasi.ESUCCESS)
 }
 
@@ -200,12 +197,12 @@ func (m *Module) FDDataSync(ctx context.Context, fd Int32) Errno {
 	return Errno(m.WASI.FDDataSync(wasi.FD(fd)))
 }
 
-func (m *Module) FDStatGet(ctx context.Context, fd Int32, stat Pointer[FDStat]) Errno {
-	value, errno := m.WASI.FDStatGet(wasi.FD(fd))
+func (m *Module) FDStatGet(ctx context.Context, fd Int32, stat Pointer[wasi.FDStat]) Errno {
+	result, errno := m.WASI.FDStatGet(wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	stat.Store(FDStat{value})
+	stat.Store(result)
 	return Errno(wasi.ESUCCESS)
 }
 
@@ -217,12 +214,12 @@ func (m *Module) FDStatSetRights(ctx context.Context, fd Int32, rightsBase, righ
 	return Errno(m.WASI.FDStatSetRights(wasi.FD(fd), wasi.Rights(rightsBase), wasi.Rights(rightsInheriting)))
 }
 
-func (m *Module) FDFileStatGet(ctx context.Context, fd Int32, stat Pointer[FileStat]) Errno {
-	value, errno := m.WASI.FDFileStatGet(wasi.FD(fd))
+func (m *Module) FDFileStatGet(ctx context.Context, fd Int32, stat Pointer[wasi.FileStat]) Errno {
+	result, errno := m.WASI.FDFileStatGet(wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	stat.Store(FileStat{value})
+	stat.Store(result)
 	return Errno(wasi.ESUCCESS)
 }
 
@@ -234,66 +231,51 @@ func (m *Module) FDFileStatSetTimes(ctx context.Context, fd Int32, accessTime, m
 	return Errno(m.WASI.FDFileStatSetTimes(wasi.FD(fd), wasi.Timestamp(accessTime), wasi.Timestamp(modifyTime), wasi.FSTFlags(flags)))
 }
 
-func (m *Module) FDPread(ctx context.Context, fd Int32, iovecs List[IOVec], offset Uint64, nread Pointer[Int32]) Errno {
-	memory := nread.Memory()
-	data, ok := m.getIOVecs(memory, iovecs)
-	if !ok {
-		return Errno(wasi.EFAULT)
-	}
-	value, errno := m.WASI.FDPread(wasi.FD(fd), data, wasi.FileSize(offset))
+func (m *Module) FDPread(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], offset Uint64, nread Pointer[Int32]) Errno {
+	result, errno := m.WASI.FDPread(wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.FileSize(offset))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	nread.Store(Int32(value))
+	nread.Store(Int32(result))
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) FDPreStatGet(ctx context.Context, fd Int32, prestat Pointer[PreStat]) Errno {
-	value, errno := m.WASI.FDPreStatGet(wasi.FD(fd))
+func (m *Module) FDPreStatGet(ctx context.Context, fd Int32, prestat Pointer[wasi.PreStat]) Errno {
+	result, errno := m.WASI.FDPreStatGet(wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	prestat.Store(PreStat{value})
+	prestat.Store(result)
 	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) FDPreStatDirName(ctx context.Context, fd Int32, dirName Bytes) Errno {
-	value, errno := m.WASI.FDPreStatDirName(wasi.FD(fd))
+	result, errno := m.WASI.FDPreStatDirName(wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	if len(value) != len(dirName) {
+	if len(result) != len(dirName) {
 		return Errno(wasi.EINVAL)
 	}
-	copy(dirName, value)
+	copy(dirName, result)
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) FDPwrite(ctx context.Context, fd Int32, iovecs List[IOVec], offset Uint64, nwritten Pointer[Int32]) Errno {
-	memory := nwritten.Memory()
-	data, ok := m.getIOVecs(memory, iovecs)
-	if !ok {
-		return Errno(wasi.EFAULT)
-	}
-	value, errno := m.WASI.FDPwrite(wasi.FD(fd), data, wasi.FileSize(offset))
+func (m *Module) FDPwrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], offset Uint64, nwritten Pointer[Int32]) Errno {
+	result, errno := m.WASI.FDPwrite(wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.FileSize(offset))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	nwritten.Store(Int32(value))
+	nwritten.Store(Int32(result))
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) FDRead(ctx context.Context, fd Int32, iovecs List[IOVec], nread Pointer[Int32]) Errno {
-	memory := nread.Memory()
-	data, ok := m.getIOVecs(memory, iovecs)
-	if !ok {
-		return Errno(wasi.EFAULT)
-	}
-	value, errno := m.WASI.FDRead(wasi.FD(fd), data)
+func (m *Module) FDRead(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], nread Pointer[Int32]) Errno {
+	result, errno := m.WASI.FDRead(wasi.FD(fd), iovecs.Append(m.iovecs[:0]))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	nread.Store(Int32(value))
+	nread.Store(Int32(result))
 	return Errno(wasi.ESUCCESS)
 }
 
@@ -325,11 +307,11 @@ func (m *Module) FDRenumber(ctx context.Context, from, to Int32) Errno {
 }
 
 func (m *Module) FDSeek(ctx context.Context, fd Int32, delta Int64, whence Int32, size Pointer[Uint64]) Errno {
-	value, errno := m.WASI.FDSeek(wasi.FD(fd), wasi.FileDelta(delta), wasi.Whence(whence))
+	result, errno := m.WASI.FDSeek(wasi.FD(fd), wasi.FileDelta(delta), wasi.Whence(whence))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	size.Store(Uint64(value))
+	size.Store(Uint64(result))
 	return Errno(wasi.ESUCCESS)
 }
 
@@ -338,25 +320,20 @@ func (m *Module) FDSync(ctx context.Context, fd Int32) Errno {
 }
 
 func (m *Module) FDTell(ctx context.Context, fd Int32, size Pointer[Uint64]) Errno {
-	value, errno := m.WASI.FDTell(wasi.FD(fd))
+	result, errno := m.WASI.FDTell(wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	size.Store(Uint64(value))
+	size.Store(Uint64(result))
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) FDWrite(ctx context.Context, fd Int32, iovecs List[IOVec], nwritten Pointer[Int32]) Errno {
-	memory := nwritten.Memory()
-	data, ok := m.getIOVecs(memory, iovecs)
-	if !ok {
-		return Errno(wasi.EFAULT)
-	}
-	value, errno := m.WASI.FDWrite(wasi.FD(fd), data)
+func (m *Module) FDWrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], nwritten Pointer[Int32]) Errno {
+	result, errno := m.WASI.FDWrite(wasi.FD(fd), iovecs.Append(m.iovecs[:0]))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	nwritten.Store(Int32(value))
+	nwritten.Store(Int32(result))
 	return Errno(wasi.ESUCCESS)
 }
 
@@ -364,12 +341,12 @@ func (m *Module) PathCreateDirectory(ctx context.Context, fd Int32, path String)
 	return Errno(m.WASI.PathCreateDirectory(wasi.FD(fd), string(path)))
 }
 
-func (m *Module) PathFileStatGet(ctx context.Context, fd Int32, flags Int32, path String, stat Pointer[FileStat]) Errno {
-	value, errno := m.WASI.PathFileStatGet(wasi.FD(fd), wasi.LookupFlags(flags), string(path))
+func (m *Module) PathFileStatGet(ctx context.Context, fd Int32, flags Int32, path String, stat Pointer[wasi.FileStat]) Errno {
+	result, errno := m.WASI.PathFileStatGet(wasi.FD(fd), wasi.LookupFlags(flags), string(path))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	stat.Store(FileStat{value})
+	stat.Store(result)
 	return Errno(wasi.ESUCCESS)
 }
 
@@ -382,20 +359,20 @@ func (m *Module) PathLink(ctx context.Context, oldFD Int32, oldFlags Int32, oldP
 }
 
 func (m *Module) PathOpen(ctx context.Context, fd Int32, dirFlags Int32, path String, openFlags Int32, rightsBase, rightsInheriting Uint64, fdFlags Int32, openfd Pointer[Int32]) Errno {
-	value, errno := m.WASI.PathOpen(wasi.FD(fd), wasi.LookupFlags(dirFlags), string(path), wasi.OpenFlags(openFlags), wasi.Rights(rightsBase), wasi.Rights(rightsInheriting), wasi.FDFlags(fdFlags))
+	result, errno := m.WASI.PathOpen(wasi.FD(fd), wasi.LookupFlags(dirFlags), string(path), wasi.OpenFlags(openFlags), wasi.Rights(rightsBase), wasi.Rights(rightsInheriting), wasi.FDFlags(fdFlags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	openfd.Store(Int32(value))
+	openfd.Store(Int32(result))
 	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) PathReadLink(ctx context.Context, fd Int32, path String, buf Bytes, nwritten Pointer[Int32]) Errno {
-	value, errno := m.WASI.PathReadLink(wasi.FD(fd), string(path), buf)
+	result, errno := m.WASI.PathReadLink(wasi.FD(fd), string(path), buf)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	nwritten.Store(Int32(len(value)))
+	nwritten.Store(Int32(len(result)))
 	return Errno(wasi.ESUCCESS)
 }
 
@@ -415,25 +392,12 @@ func (m *Module) PathUnlinkFile(ctx context.Context, fd Int32, path String) Errn
 	return Errno(m.WASI.PathUnlinkFile(wasi.FD(fd), string(path)))
 }
 
-func (m *Module) PollOneOff(ctx context.Context, subscriptionsPtr Pointer[Subscription], eventsPtr Pointer[Event], nSubscriptions Int32, n Pointer[Int32]) Errno {
+func (m *Module) PollOneOff(ctx context.Context, subscriptionsPtr Pointer[wasi.Subscription], eventsPtr Pointer[wasi.Event], nSubscriptions Int32, n Pointer[Int32]) Errno {
 	if nSubscriptions <= 0 {
 		return Errno(wasi.EINVAL)
 	}
-	memory := n.Memory()
-	const sizeofSubscription = int(unsafe.Sizeof(wasi.Subscription{}))
-	const sizeofEvent = int(unsafe.Sizeof(wasi.Event{}))
-	count := int(nSubscriptions)
-	b, ok := memory.Read(subscriptionsPtr.Offset(), uint32(count*sizeofSubscription))
-	if !ok {
-		return Errno(wasi.EFAULT)
-	}
-	subscriptions := unsafe.Slice((*wasi.Subscription)(unsafe.Pointer(&b[0])), count)
-	b, ok = memory.Read(eventsPtr.Offset(), uint32(count*sizeofEvent))
-	if !ok {
-		return Errno(wasi.EFAULT)
-	}
-	events := unsafe.Slice((*wasi.Event)(unsafe.Pointer(&b[0])), count)
-
+	subscriptions := subscriptionsPtr.UnsafeSlice(int(nSubscriptions))
+	events := eventsPtr.UnsafeSlice(int(nSubscriptions))
 	var errno wasi.Errno
 	events, errno = m.WASI.PollOneOff(subscriptions, events[:0])
 	if errno != wasi.ESUCCESS {
@@ -469,21 +433,16 @@ func (m *Module) RandomGet(ctx context.Context, buf Bytes) Errno {
 }
 
 func (m *Module) SockAccept(ctx context.Context, fd Int32, flags Int32, connfd Pointer[Int32]) Errno {
-	value, errno := m.WASI.SockAccept(wasi.FD(fd), wasi.FDFlags(flags))
+	result, errno := m.WASI.SockAccept(wasi.FD(fd), wasi.FDFlags(flags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	connfd.Store(Int32(value))
+	connfd.Store(Int32(result))
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) SockRecv(ctx context.Context, fd Int32, iovecs List[IOVec], iflags Int32, nread Pointer[Int32], oflags Pointer[Int32]) Errno {
-	memory := nread.Memory()
-	data, ok := m.getIOVecs(memory, iovecs)
-	if !ok {
-		return Errno(wasi.EFAULT)
-	}
-	size, roflags, errno := m.WASI.SockRecv(wasi.FD(fd), data, wasi.RIFlags(iflags))
+func (m *Module) SockRecv(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], iflags Int32, nread Pointer[Int32], oflags Pointer[Int32]) Errno {
+	size, roflags, errno := m.WASI.SockRecv(wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.RIFlags(iflags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -492,13 +451,8 @@ func (m *Module) SockRecv(ctx context.Context, fd Int32, iovecs List[IOVec], ifl
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) SockSend(ctx context.Context, fd Int32, iovecs List[IOVec], flags Int32, nwritten Pointer[Int32]) Errno {
-	memory := nwritten.Memory()
-	data, ok := m.getIOVecs(memory, iovecs)
-	if !ok {
-		return Errno(wasi.EFAULT)
-	}
-	size, errno := m.WASI.SockSend(wasi.FD(fd), data, wasi.SIFlags(flags))
+func (m *Module) SockSend(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], flags Int32, nwritten Pointer[Int32]) Errno {
+	size, errno := m.WASI.SockSend(wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.SIFlags(flags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -514,133 +468,7 @@ func (m *Module) Close(ctx context.Context) error {
 	return m.WASI.Close()
 }
 
-func (m *Module) getIOVecs(memory api.Memory, iovecs List[IOVec]) ([]wasi.IOVec, bool) {
-	// TODO: can we remove the need for this conversion?
-	count := iovecs.Len()
-	m.iovecs = m.iovecs[:0]
-	for i := 0; i < count; i++ {
-		m.iovecs = append(m.iovecs, wasi.IOVec(iovecs.Index(i).Load()))
-	}
-	return m.iovecs, true
-}
-
-type FDStat struct{ wasi.FDStat }
-
-func (FDStat) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	panic("not implemented")
-}
-
-func (FDStat) LoadObject(memory api.Memory, object []byte) (f FDStat) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&f)), f.ObjectSize()), object)
-	return
-}
-
-func (f FDStat) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&f)), f.ObjectSize()))
-}
-
-func (FDStat) ObjectSize() int {
-	return int(unsafe.Sizeof(FDStat{}))
-}
-
-type FileStat struct{ wasi.FileStat }
-
-func (FileStat) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	panic("not implemented")
-}
-
-func (FileStat) LoadObject(memory api.Memory, object []byte) (f FileStat) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&f)), f.ObjectSize()), object)
-	return
-}
-
-func (f FileStat) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&f)), f.ObjectSize()))
-}
-
-func (FileStat) ObjectSize() int {
-	return int(unsafe.Sizeof(FileStat{}))
-}
-
-type PreStat struct{ wasi.PreStat }
-
-func (PreStat) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	panic("not implemented")
-}
-
-func (PreStat) LoadObject(memory api.Memory, object []byte) (p PreStat) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&p)), p.ObjectSize()), object)
-	return
-}
-
-func (p PreStat) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&p)), p.ObjectSize()))
-}
-
-func (PreStat) ObjectSize() int {
-	return int(unsafe.Sizeof(PreStat{}))
-}
-
-// https://github.com/WebAssembly/WASI/blob/main/phases/snapshot/docs.md#-iovec-record
-type IOVec []byte
-
-func (arg IOVec) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	Bytes(arg.LoadObject(memory, object)).Format(w)
-}
-
-func (arg IOVec) LoadObject(memory api.Memory, object []byte) IOVec {
-	offset := binary.LittleEndian.Uint32(object[:4])
-	length := binary.LittleEndian.Uint32(object[4:])
-	return wasm.Read(memory, offset, length)
-}
-
-func (arg IOVec) StoreObject(memory api.Memory, object []byte) {
-	panic("NOT IMPLEMENTED")
-}
-
-func (arg IOVec) ObjectSize() int {
-	return 8
-}
-
-type Subscription struct{ wasi.Subscription }
-
-func (Subscription) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	panic("not implemented")
-}
-
-func (Subscription) LoadObject(memory api.Memory, object []byte) (s Subscription) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&s)), s.ObjectSize()), object)
-	return
-}
-
-func (s Subscription) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&s)), s.ObjectSize()))
-}
-
-func (Subscription) ObjectSize() int {
-	return int(unsafe.Sizeof(Subscription{}))
-}
-
-type Event struct{ wasi.Event }
-
-func (Event) FormatObject(w io.Writer, memory api.Memory, object []byte) {
-	panic("not implemented")
-}
-
-func (Event) LoadObject(memory api.Memory, object []byte) (e Event) {
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(&e)), e.ObjectSize()), object)
-	return
-}
-
-func (e Event) StoreObject(memory api.Memory, object []byte) {
-	copy(object, unsafe.Slice((*byte)(unsafe.Pointer(&e)), e.ObjectSize()))
-}
-
-func (Event) ObjectSize() int {
-	return int(unsafe.Sizeof(Event{}))
-}
-
-// procExit is a bit different; it doesn't have a return value,
+// procExit is a bit different; it doesn't have a return result,
 // and needs access to api.Module.
 func procExitShape[T any, P Param[P]](fn func(T, context.Context, api.Module, P)) wazergo.Function[T] {
 	var arg P
