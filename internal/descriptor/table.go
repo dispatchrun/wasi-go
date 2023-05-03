@@ -94,6 +94,7 @@ func (t *Table[Descriptor, Object]) Assign(desc Descriptor, object Object) (prev
 	if (t.masks[index] & (1 << shift)) != 0 {
 		prev, replaced = t.table[desc], true
 	}
+	t.masks[index] |= 1 << shift
 	t.table[desc] = object
 	return
 }
