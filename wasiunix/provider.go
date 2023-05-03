@@ -737,13 +737,13 @@ func (p *Provider) PathUnlinkFile(ctx context.Context, fd wasi.FD, path string) 
 	return makeErrno(err)
 }
 
-func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscription, events []wasi.Event) ([]wasi.Event, wasi.Errno) {
-	if len(subscriptions) == 0 {
-		return events, wasi.EINVAL
+func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscription, events []wasi.Event) (int, wasi.Errno) {
+	if len(subscriptions) == 0 || len(events) < len(subscriptions) {
+		return 0, wasi.EINVAL
 	}
 	wakefd, err := p.init()
 	if err != nil {
-		return events, makeErrno(err)
+		return 0, makeErrno(err)
 	}
 	epoch := time.Duration(0)
 	timeout := time.Duration(-1)
@@ -753,6 +753,11 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 		Events: unix.POLLIN | unix.POLLERR | unix.POLLHUP,
 	})
 
+	numEvents := 0
+	for i := range events {
+		events[i] = wasi.Event{}
+	}
+
 	for i := range subscriptions {
 		s := &subscriptions[i]
 
@@ -760,8 +765,9 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 		case wasi.FDReadEvent, wasi.FDWriteEvent:
 			f, errno := p.lookupFD(s.GetFDReadWrite().FD, wasi.PollFDReadWriteRight)
 			if errno != wasi.ESUCCESS {
-				// TODO: set the error on the event instead of aborting the call
-				return events, errno
+				events[i] = errorEvent(s, errno)
+				numEvents++
+				continue
 			}
 			var pollevent int16 = unix.POLLIN
 			if s.EventType == wasi.FDWriteEvent {
@@ -774,12 +780,10 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 
 		case wasi.ClockEvent:
 			c := s.GetClock()
-			if c.ID != wasi.Monotonic {
-				// TODO: fail the event, not the call
-				return events, wasi.ENOSYS // not implemented
-			}
-			if p.Monotonic == nil {
-				return events, wasi.ENOSYS
+			if c.ID != wasi.Monotonic || p.Monotonic == nil {
+				events[i] = errorEvent(s, wasi.ENOSYS)
+				numEvents++
+				continue
 			}
 			if epoch == 0 {
 				// Only capture the current time if the program requested a
@@ -788,7 +792,7 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 				// monotonic clock configured.
 				now, err := p.Monotonic(ctx)
 				if err != nil {
-					return events, makeErrno(err)
+					return 0, makeErrno(err)
 				}
 				epoch = time.Duration(now)
 			}
@@ -809,35 +813,45 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 	}
 
 	var timeoutMillis int
-	if timeout < 0 {
-		timeoutMillis = -1
-	} else {
-		timeoutMillis = int(timeout.Milliseconds())
+	// We set the timeout to zero when we already produced events due to
+	// invalid subscriptions; this is useful to still make progress on I/O
+	// completion.
+	if numEvents == 0 {
+		if timeout < 0 {
+			timeoutMillis = -1
+		} else {
+			timeoutMillis = int(timeout.Milliseconds())
+		}
 	}
 
 	n, err := unix.Poll(p.pollfds, timeoutMillis)
 	if err != nil {
-		return events, makeErrno(err)
+		return 0, makeErrno(err)
 	}
 
 	if n > 0 && p.pollfds[0].Revents != 0 {
 		// If the wake fd was notified it means the provider was shut down,
 		// we report this by cancelling all subscriptions.
-		for _, s := range subscriptions {
-			events = append(events, wasi.Event{
-				UserData:  s.UserData,
-				EventType: s.EventType,
+		//
+		// Technically we might be erasing events that had already gathered
+		// errors in the first loop prior to the call to unix.Poll; this is
+		// not a concern since at this time the program would likely be
+		// terminating and should not be bothered with handling other errors.
+		for i := range subscriptions {
+			events[i] = wasi.Event{
+				UserData:  subscriptions[i].UserData,
+				EventType: subscriptions[i].EventType,
 				Errno:     wasi.ECANCELED,
-			})
+			}
 		}
-		return events, wasi.ESUCCESS
+		return len(subscriptions), wasi.ESUCCESS
 	}
 
 	var now time.Duration
 	if timeout >= 0 {
 		t, err := p.Monotonic(ctx)
 		if err != nil {
-			return events, makeErrno(err)
+			return 0, makeErrno(err)
 		}
 		now = time.Duration(t)
 	}
@@ -845,42 +859,76 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 	j := 1
 	for i := range subscriptions {
 		s := &subscriptions[i]
-		e := wasi.Event{UserData: s.UserData, EventType: s.EventType}
+		e := wasi.Event{UserData: s.UserData, EventType: s.EventType + 1}
 
-		if e.EventType == wasi.ClockEvent {
+		if events[i].EventType != 0 {
+			continue
+		}
+
+		switch s.EventType {
+		case wasi.ClockEvent:
 			c := s.GetClock()
 			t := c.Timeout.Duration()
 			if !c.Flags.Has(wasi.Abstime) {
 				t += epoch
 			}
 			if t >= now {
-				events = append(events, e)
+				events[i] = e
 			}
-			continue
-		}
 
-		pf := &p.pollfds[j]
-		j++
-		if pf.Revents == 0 {
-			continue
-		}
+		case wasi.FDReadEvent, wasi.FDWriteEvent:
+			pf := &p.pollfds[j]
+			j++
+			if pf.Revents == 0 {
+				continue
+			}
 
-		// TODO: review cases where Revents contains many flags
-		if e.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
-			e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
+			// TODO: review cases where Revents contains many flags
+			if e.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
+				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
+			}
+			if e.EventType == wasi.FDWriteEvent && (pf.Revents&unix.POLLOUT) != 0 {
+				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
+			}
+			if (pf.Revents & unix.POLLERR) != 0 {
+				e.Errno = wasi.ECANCELED // we don't know what error, just pass something
+			}
+			if (pf.Revents & unix.POLLHUP) != 0 {
+				e.FDReadWrite.Flags |= wasi.Hangup
+			}
+			events[i] = e
 		}
-		if e.EventType == wasi.FDWriteEvent && (pf.Revents&unix.POLLOUT) != 0 {
-			e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
-		}
-		if (pf.Revents & unix.POLLERR) != 0 {
-			e.Errno = wasi.ECANCELED // we don't know what error, just pass something
-		}
-		if (pf.Revents & unix.POLLHUP) != 0 {
-			e.FDReadWrite.Flags |= wasi.Hangup
-		}
-		events = append(events, e)
 	}
-	return events, wasi.ESUCCESS
+
+	// A 1:1 correspondance between the subscription and events arrays is used
+	// to track the completion of events, including the completion of invalid
+	// subscriptions, clock events, and I/O notifications coming from poll(2).
+	//
+	// We use zero as the marker on events for subscriptions that have not been
+	// fulfilled, but because the zero event type is used to represent clock
+	// subscriptions, we mark completed events with the event type + 1.
+	//
+	// The event type is finally restored to its correct value in the loop below
+	// when we pack all completed events at the front of the output buffer.
+	n = 0
+
+	for _, e := range events[:len(subscriptions)] {
+		if e.EventType != 0 {
+			e.EventType--
+			events[n] = e
+			n++
+		}
+	}
+
+	return n, wasi.ESUCCESS
+}
+
+func errorEvent(s *wasi.Subscription, err wasi.Errno) wasi.Event {
+	return wasi.Event{
+		UserData:  s.UserData,
+		EventType: s.EventType + 1,
+		Errno:     err,
+	}
 }
 
 func (p *Provider) ProcExit(ctx context.Context, code wasi.ExitCode) wasi.Errno {

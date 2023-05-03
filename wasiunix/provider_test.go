@@ -11,44 +11,135 @@ import (
 	"github.com/stealthrocket/wasi/wasiunix"
 )
 
-func TestProviderShutdown(t *testing.T) {
+func TestProviderPollAndShutdown(t *testing.T) {
+	testProvider(func(ctx context.Context, p *wasiunix.Provider) {
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			if err := p.Shutdown(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}()
+
+		// This call should block forever, unless async shutdown works, which is
+		// what we are testing here.
+		subscriptions := []wasi.Subscription{
+			subscribeFDRead(0),
+			subscribeFDRead(1),
+		}
+		events := make([]wasi.Event, len(subscriptions))
+
+		_, errno := p.PollOneOff(ctx, subscriptions, events)
+		if errno != wasi.ESUCCESS {
+			t.Fatal(errno)
+		}
+
+		if !reflect.DeepEqual(subscriptions, []wasi.Subscription{
+			subscribeFDRead(0),
+			subscribeFDRead(1),
+		}) {
+			t.Error("poll_oneoff: altered subscriptions")
+		}
+
+		if !reflect.DeepEqual(events, []wasi.Event{
+			{UserData: 0, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
+			{UserData: 1, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
+		}) {
+			t.Errorf("poll_oneoff: wrong events: %+v", events)
+		}
+	})
+}
+
+func TestProviderPollBadFileDescriptor(t *testing.T) {
+	testProvider(func(ctx context.Context, p *wasiunix.Provider) {
+		subscriptions := []wasi.Subscription{
+			subscribeFDRead(0),
+			// Subscribe to a file descriptor which is not registered in the
+			// provider. This must not fail the poll_oneoff call and instead
+			// report an error on the
+			subscribeFDRead(42),
+		}
+		events := make([]wasi.Event, len(subscriptions))
+
+		n, err := p.PollOneOff(ctx, subscriptions, events)
+		if err != wasi.ESUCCESS {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(subscriptions, []wasi.Subscription{
+			subscribeFDRead(0),
+			subscribeFDRead(42),
+		}) {
+			t.Error("poll_oneoff: altered subscriptions")
+		}
+
+		if n != 1 {
+			t.Errorf("poll_oneoff: wrong number of events: %d", n)
+		} else if !reflect.DeepEqual(events[0], wasi.Event{
+			UserData:  42,
+			EventType: wasi.FDReadEvent,
+			Errno:     wasi.EBADF,
+		}) {
+			t.Errorf("poll_oneoff: wrong event (0): %+v", events[0])
+		}
+	})
+}
+
+func TestProviderPollMissingMonotonicClock(t *testing.T) {
+	testProvider(func(ctx context.Context, p *wasiunix.Provider) {
+		p.Monotonic = nil
+
+		subscriptions := []wasi.Subscription{
+			subscribeFDRead(0),
+			subscribeTimeout(1 * time.Second),
+		}
+		events := make([]wasi.Event, len(subscriptions))
+
+		n, err := p.PollOneOff(ctx, subscriptions, events)
+		if err != wasi.ESUCCESS {
+			t.Fatal(err)
+		}
+
+		if !reflect.DeepEqual(subscriptions, []wasi.Subscription{
+			subscribeFDRead(0),
+			subscribeTimeout(1 * time.Second),
+		}) {
+			t.Error("poll_oneoff: altered subscriptions")
+		}
+
+		if n != 1 {
+			t.Errorf("poll_oneoff: wrong number of events: %d", n)
+		} else if !reflect.DeepEqual(events[0], wasi.Event{
+			UserData:  42,
+			EventType: wasi.ClockEvent,
+			Errno:     wasi.ENOSYS,
+		}) {
+			t.Errorf("poll_oneoff: wrong event (0): %+v", events[0])
+		}
+	})
+}
+
+func testProvider(f func(context.Context, *wasiunix.Provider)) {
 	ctx := context.Background()
+
+	p := newProvider()
+	defer p.Close(ctx)
 
 	r, w, err := os.Pipe()
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
-
-	p := wasiunix.Provider{
-		Realtime:  realtime,
-		Monotonic: monotonic,
-	}
-	defer p.Close(ctx)
 	p.Preopen(int(r.Fd()), "fd0", wasi.FDStat{RightsBase: wasi.AllRights})
 	p.Preopen(int(w.Fd()), "fd1", wasi.FDStat{RightsBase: wasi.AllRights})
 
-	go func() {
-		time.Sleep(100 * time.Millisecond)
-		if err := p.Shutdown(ctx); err != nil {
-			t.Fatal(err)
-		}
-	}()
+	f(ctx, p)
+}
 
-	// This call should block forever, unless async shutdown works, which is
-	// what we are testing here.
-	subscriptions := []wasi.Subscription{
-		subscribeFDRead(0),
-		subscribeFDRead(1),
-	}
-	events, errno := p.PollOneOff(ctx, subscriptions, nil)
-	if errno != wasi.ESUCCESS {
-		t.Fatal(errno)
-	}
-	if !reflect.DeepEqual(events, []wasi.Event{
-		{UserData: 0, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
-		{UserData: 1, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
-	}) {
-		t.Errorf("wrong events: %+v", events)
+func newProvider() *wasiunix.Provider {
+	return &wasiunix.Provider{
+		Realtime:           realtime,
+		RealtimePrecision:  time.Microsecond,
+		Monotonic:          monotonic,
+		MonotonicPrecision: time.Nanosecond,
 	}
 }
 
@@ -75,5 +166,16 @@ func subscribeFDWrite(fd wasi.FD) wasi.Subscription {
 		wasi.UserData(fd),
 		wasi.FDWriteEvent,
 		wasi.SubscriptionFDReadWrite{FD: fd},
+	)
+}
+
+func subscribeTimeout(timeout time.Duration) wasi.Subscription {
+	return wasi.MakeSubscriptionClock(
+		wasi.UserData(42),
+		wasi.SubscriptionClock{
+			ID:        wasi.Monotonic,
+			Timeout:   wasi.Timestamp(timeout),
+			Precision: wasi.Timestamp(time.Nanosecond),
+		},
 	)
 }

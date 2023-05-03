@@ -392,18 +392,18 @@ func (m *Module) PathUnlinkFile(ctx context.Context, fd Int32, path String) Errn
 	return Errno(m.WASI.PathUnlinkFile(ctx, wasi.FD(fd), string(path)))
 }
 
-func (m *Module) PollOneOff(ctx context.Context, subscriptionsPtr Pointer[wasi.Subscription], eventsPtr Pointer[wasi.Event], nSubscriptions Int32, n Pointer[Int32]) Errno {
+func (m *Module) PollOneOff(ctx context.Context, in Pointer[wasi.Subscription], out Pointer[wasi.Event], nSubscriptions Int32, nEvents Pointer[Int32]) Errno {
 	if nSubscriptions <= 0 {
 		return Errno(wasi.EINVAL)
 	}
-	subscriptions := subscriptionsPtr.UnsafeSlice(int(nSubscriptions))
-	events := eventsPtr.UnsafeSlice(int(nSubscriptions))
-	var errno wasi.Errno
-	events, errno = m.WASI.PollOneOff(ctx, subscriptions, events[:0])
+	n, errno := m.WASI.PollOneOff(ctx,
+		in.UnsafeSlice(int(nSubscriptions)),
+		out.UnsafeSlice(int(nSubscriptions)),
+	)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	n.Store(Int32(len(events)))
+	nEvents.Store(Int32(n))
 	return Errno(wasi.ESUCCESS)
 }
 
