@@ -246,10 +246,9 @@ type Provider interface {
 	//
 	// If len(subscriptions) == 0, EINVAL is returned.
 	//
-	// The function appends events to the provided []Event buffer. If there
-	// is not enough space (len(subscriptions) > cap(events)) a new
-	// buffer will be created and returned.
-	PollOneOff(ctx context.Context, subscriptions []Subscription, events []Event) ([]Event, Errno)
+	// The function writes events to the provided []Event buffer, expecting
+	// len(events)>=len(subscriptions).
+	PollOneOff(ctx context.Context, subscriptions []Subscription, events []Event) (int, Errno)
 
 	// ProcExit terminates the process normally.
 	//
