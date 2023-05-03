@@ -99,15 +99,24 @@ func (t *Table[Descriptor, Object]) Assign(desc Descriptor, object Object) (prev
 	return
 }
 
-// Lookup returns the object associated with the given descriptor,
-// which may be nil.
-func (t *Table[Descriptor, Object]) Lookup(desc Descriptor) (object Object, found bool) {
+// Access returns a pointer to the object associated with the given
+// descriptor, which may be nil if it was not found in the table.
+func (t *Table[Descriptor, Object]) Access(desc Descriptor) *Object {
 	if i := int(desc); i >= 0 && i < len(t.table) {
 		index := uint(desc) / 64
 		shift := uint(desc) % 64
 		if (t.masks[index] & (1 << shift)) != 0 {
-			object, found = t.table[i], true
+			return &t.table[i]
 		}
+	}
+	return nil
+}
+
+// Lookup returns the object associated with the given descriptor.
+func (t *Table[Descriptor, Object]) Lookup(desc Descriptor) (object Object, found bool) {
+	ptr := t.Access(desc)
+	if ptr != nil {
+		object, found = *ptr, true
 	}
 	return
 }
