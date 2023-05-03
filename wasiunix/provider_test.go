@@ -3,13 +3,92 @@ package wasiunix_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stealthrocket/wasi"
+	"github.com/stealthrocket/wasi/testwasi"
 	"github.com/stealthrocket/wasi/wasiunix"
+	"golang.org/x/sys/unix"
 )
+
+func TestWASIP1(t *testing.T) {
+	files, _ := filepath.Glob("../testdata/*/*.wasm")
+
+	testwasi.TestWASIP1(t, files,
+		func(config testwasi.TestConfig) (wasi.Provider, func(), error) {
+			epoch := config.Now()
+
+			provider := &wasiunix.Provider{
+				Args:    config.Args,
+				Environ: config.Environ,
+				Monotonic: func(context.Context) (uint64, error) {
+					return uint64(config.Now().Sub(epoch)), nil
+				},
+				MonotonicPrecision: time.Nanosecond,
+				Realtime: func(context.Context) (uint64, error) {
+					return uint64(config.Now().UnixNano()), nil
+				},
+				RealtimePrecision: time.Microsecond,
+				Rand:              config.Rand,
+			}
+
+			stdin, err := dup(int(config.Stdin.Fd()))
+			if err != nil {
+				return nil, nil, err
+			}
+
+			stdout, err := dup(int(config.Stdout.Fd()))
+			if err != nil {
+				return nil, nil, err
+			}
+
+			stderr, err := dup(int(config.Stderr.Fd()))
+			if err != nil {
+				return nil, nil, err
+			}
+
+			root, err := dup(int(config.RootFS.Fd()))
+			if err != nil {
+				return nil, nil, err
+			}
+
+			provider.Preopen(stdin, "/dev/stdin", wasi.FDStat{
+				FileType:   wasi.CharacterDeviceType,
+				RightsBase: wasi.AllRights,
+			})
+
+			provider.Preopen(stdout, "/dev/stdout", wasi.FDStat{
+				FileType:   wasi.CharacterDeviceType,
+				RightsBase: wasi.AllRights,
+			})
+
+			provider.Preopen(stderr, "/dev/stderr", wasi.FDStat{
+				FileType:   wasi.CharacterDeviceType,
+				RightsBase: wasi.AllRights,
+			})
+
+			provider.Preopen(root, "/", wasi.FDStat{
+				FileType:         wasi.DirectoryType,
+				RightsBase:       wasi.AllRights,
+				RightsInheriting: wasi.AllRights,
+			})
+
+			return provider, func() { provider.Close(context.Background()) }, nil
+		},
+	)
+}
+
+func dup(fd int) (int, error) {
+	newfd, err := unix.Dup(fd)
+	if err != nil {
+		return -1, err
+	}
+	unix.CloseOnExec(newfd)
+	return newfd, nil
+}
 
 func TestProviderPollAndShutdown(t *testing.T) {
 	testProvider(func(ctx context.Context, p *wasiunix.Provider) {
