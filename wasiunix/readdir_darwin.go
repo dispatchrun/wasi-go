@@ -72,6 +72,7 @@ func (d *dirbuf) readDirEntries(fd int, entries []wasi.DirEntry, cookie wasi.Dir
 		}
 
 		if dirent.ino == 0 {
+			d.offset += int(dirent.reclen)
 			continue
 		}
 
