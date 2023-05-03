@@ -773,6 +773,11 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 			})
 
 		case wasi.ClockEvent:
+			c := s.GetClock()
+			if c.ID != wasi.Monotonic {
+				// TODO: fail the event, not the call
+				return events, wasi.ENOSYS // not implemented
+			}
 			if p.Monotonic == nil {
 				return events, wasi.ENOSYS
 			}
@@ -787,7 +792,6 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 				}
 				epoch = time.Duration(now)
 			}
-			c := s.GetClock()
 			t := c.Timeout.Duration()
 			if c.Flags.Has(wasi.Abstime) {
 				// If the subscription asks for an absolute monotonic time point
@@ -796,8 +800,6 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 				t -= epoch
 			}
 			switch {
-			case c.ID != wasi.Monotonic:
-				return events, wasi.ENOSYS // not implemented
 			case timeout < 0:
 				timeout = t
 			case t < timeout:
