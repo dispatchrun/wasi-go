@@ -411,6 +411,7 @@ func (p *Provider) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno 
 	if replaced {
 		unix.Close(g.fd)
 	}
+	p.fds.Delete(from)
 	return wasi.ESUCCESS
 }
 
