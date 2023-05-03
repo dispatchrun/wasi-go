@@ -232,7 +232,8 @@ func (m *Module) FDFileStatSetTimes(ctx context.Context, fd Int32, accessTime, m
 }
 
 func (m *Module) FDPread(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], offset Uint64, nread Pointer[Int32]) Errno {
-	result, errno := m.WASI.FDPread(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.FileSize(offset))
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	result, errno := m.WASI.FDPread(ctx, wasi.FD(fd), m.iovecs, wasi.FileSize(offset))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -262,7 +263,8 @@ func (m *Module) FDPreStatDirName(ctx context.Context, fd Int32, dirName Bytes) 
 }
 
 func (m *Module) FDPwrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], offset Uint64, nwritten Pointer[Int32]) Errno {
-	result, errno := m.WASI.FDPwrite(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.FileSize(offset))
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	result, errno := m.WASI.FDPwrite(ctx, wasi.FD(fd), m.iovecs, wasi.FileSize(offset))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -271,7 +273,8 @@ func (m *Module) FDPwrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec]
 }
 
 func (m *Module) FDRead(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], nread Pointer[Int32]) Errno {
-	result, errno := m.WASI.FDRead(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]))
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	result, errno := m.WASI.FDRead(ctx, wasi.FD(fd), m.iovecs)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -329,7 +332,8 @@ func (m *Module) FDTell(ctx context.Context, fd Int32, size Pointer[Uint64]) Err
 }
 
 func (m *Module) FDWrite(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], nwritten Pointer[Int32]) Errno {
-	result, errno := m.WASI.FDWrite(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]))
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	result, errno := m.WASI.FDWrite(ctx, wasi.FD(fd), m.iovecs)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -442,7 +446,8 @@ func (m *Module) SockAccept(ctx context.Context, fd Int32, flags Int32, connfd P
 }
 
 func (m *Module) SockRecv(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], iflags Int32, nread Pointer[Int32], oflags Pointer[Int32]) Errno {
-	size, roflags, errno := m.WASI.SockRecv(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.RIFlags(iflags))
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	size, roflags, errno := m.WASI.SockRecv(ctx, wasi.FD(fd), m.iovecs, wasi.RIFlags(iflags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -452,7 +457,8 @@ func (m *Module) SockRecv(ctx context.Context, fd Int32, iovecs List[wasi.IOVec]
 }
 
 func (m *Module) SockSend(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], flags Int32, nwritten Pointer[Int32]) Errno {
-	size, errno := m.WASI.SockSend(ctx, wasi.FD(fd), iovecs.Append(m.iovecs[:0]), wasi.SIFlags(flags))
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	size, errno := m.WASI.SockSend(ctx, wasi.FD(fd), m.iovecs, wasi.SIFlags(flags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
