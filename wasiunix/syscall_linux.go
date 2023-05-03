@@ -10,8 +10,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func pipe(fds []int) error {
-	return unix.Pipe2(fds, unix.O_CLOEXEC|unix.O_NONBLOCK)
+func accept(socket, flags int) (int, unix.Sockaddr, error) {
+	return unix.Accept4(socket, flags|unix.O_CLOEXEC)
+}
+
+func pipe(fds []int, flags int) error {
+	return unix.Pipe2(fds, flags|unix.O_CLOEXEC)
 }
 
 func futimens(fd int, ts *[2]unix.Timespec) error {
