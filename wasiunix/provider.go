@@ -919,13 +919,12 @@ func (p *Provider) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlag
 	if (flags & ^wasi.NonBlock) != 0 {
 		return -1, wasi.EINVAL
 	}
-	// TODO: use accept4 on linux to set O_CLOEXEC and O_NONBLOCK
-	connfd, _, err := unix.Accept(socket.fd)
-	if err != nil {
-		return -1, makeErrno(err)
+	connflags := 0
+	if (flags & wasi.NonBlock) != 0 {
+		connflags |= unix.O_NONBLOCK
 	}
-	if err := unix.SetNonblock(connfd, flags.Has(wasi.NonBlock)); err != nil {
-		unix.Close(connfd)
+	connfd, _, err := accept(socket.fd, connflags)
+	if err != nil {
 		return -1, makeErrno(err)
 	}
 	guestfd := p.fds.Insert(&fdinfo{
@@ -1016,7 +1015,7 @@ func (p *Provider) init() (int, error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	if p.shutfds[0] == 0 && p.shutfds[1] == 0 {
-		if err := pipe(p.shutfds[:]); err != nil {
+		if err := pipe(p.shutfds[:], unix.O_NONBLOCK); err != nil {
 			return -1, err
 		}
 	}

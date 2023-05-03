@@ -11,17 +11,46 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func pipe(fds []int) error {
+func accept(socket, flags int) (int, unix.Sockaddr, error) {
+	conn, addr, err := acceptCloseOnExec(socket)
+	if err != nil {
+		return -1, addr, err
+	}
+	if (flags & unix.O_NONBLOCK) != 0 {
+		if err := unix.SetNonblock(conn, true); err != nil {
+			unix.Close(conn)
+			return -1, addr, err
+		}
+	}
+	return conn, addr, nil
+}
+
+func acceptCloseOnExec(socket int) (int, unix.Sockaddr, error) {
+	syscall.ForkLock.Lock()
+	defer syscall.ForkLock.Unlock()
+	// This must only be called on non-blocking sockets or we may prevent
+	// other goroutines from spawning processes.
+	conn, addr, err := unix.Accept(socket)
+	if err != nil {
+		return -1, addr, err
+	}
+	unix.CloseOnExec(conn)
+	return conn, addr, nil
+}
+
+func pipe(fds []int, flags int) error {
 	if err := pipeCloseOnExec(fds); err != nil {
 		return err
 	}
-	if err := unix.SetNonblock(fds[1], true); err != nil {
-		closePipe(fds)
-		return err
-	}
-	if err := unix.SetNonblock(fds[0], true); err != nil {
-		closePipe(fds)
-		return err
+	if (flags & unix.O_NONBLOCK) != 0 {
+		if err := unix.SetNonblock(fds[1], true); err != nil {
+			closePipe(fds)
+			return err
+		}
+		if err := unix.SetNonblock(fds[0], true); err != nil {
+			closePipe(fds)
+			return err
+		}
 	}
 	return nil
 }
