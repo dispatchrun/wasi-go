@@ -883,7 +883,6 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 				continue
 			}
 
-			// TODO: review cases where Revents contains many flags
 			if e.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
 				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
 			}
