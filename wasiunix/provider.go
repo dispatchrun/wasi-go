@@ -51,38 +51,44 @@ type Provider struct {
 	// Rand is the source for RandomGet.
 	Rand io.Reader
 
-	fds descriptor.Table[wasi.FD, *fdinfo]
-
+	fds     descriptor.Table[wasi.FD, *fdinfo]
+	firstFD wasi.FD
 	pollfds []unix.PollFd
 }
 
 type fdinfo struct {
-	// Path is the path of the file.
-	Path string
+	// path is the path of the file.
+	path string
 
-	// FD is the underlying OS file descriptor.
-	FD int
+	// fd is the underlying OS file descriptor.
+	fd int
 
-	// Preopen is true if the file was pre-opened.
-	Preopen bool
+	// stat is cached information about the file descriptor.
+	stat wasi.FDStat
 
-	// FDStat is cached information about the file descriptor.
-	FDStat wasi.FDStat
-
-	// DirEntries are cached directory entries.
-	DirEntries []os.DirEntry
+	// dirEntries are cached directory entries.
+	dirEntries []os.DirEntry
 }
 
 // Preopen adds an open file to the list of pre-opens.
+//
+// Preopen must be called prior to any other files being opened, and must not
+// be called anymore after more files were opened by the guest.
 func (p *Provider) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
+	if p.fds.Len() > int(p.firstFD) {
+		panic("BUG: cannot add preopens after the guest has created files")
+	}
 	fdstat.RightsBase &= wasi.AllRights
 	fdstat.RightsInheriting &= wasi.AllRights
-	p.fds.Insert(&fdinfo{
-		FD:      hostfd,
-		Preopen: true,
-		Path:    path,
-		FDStat:  fdstat,
+	p.firstFD = 1 + p.fds.Insert(&fdinfo{
+		fd:   hostfd,
+		path: path,
+		stat: fdstat,
 	})
+}
+
+func (p *Provider) isPreopen(fd wasi.FD) bool {
+	return fd >= 0 && fd < p.firstFD
 }
 
 func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
@@ -90,21 +96,21 @@ func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.
 	if !ok {
 		return nil, wasi.EBADF
 	}
-	if !f.FDStat.RightsBase.Has(rights) {
+	if !f.stat.RightsBase.Has(rights) {
 		return nil, wasi.ENOTCAPABLE
 	}
 	return f, wasi.ESUCCESS
 }
 
 func (p *Provider) lookupPreopenFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
+	if !p.isPreopen(guestfd) {
+		return nil, wasi.EBADF
+	}
 	f, errno := p.lookupFD(guestfd, rights)
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	if !f.Preopen {
-		return nil, wasi.EPERM
-	}
-	if f.FDStat.FileType != wasi.DirectoryType {
+	if f.stat.FileType != wasi.DirectoryType {
 		return nil, wasi.ENOTDIR
 	}
 	return f, wasi.ESUCCESS
@@ -115,7 +121,7 @@ func (p *Provider) lookupSocketFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo,
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	switch f.FDStat.FileType {
+	switch f.stat.FileType {
 	case wasi.SocketStreamType, wasi.SocketDGramType:
 		return f, wasi.ESUCCESS
 	default:
@@ -170,7 +176,7 @@ func (p *Provider) FDAdvise(ctx context.Context, fd wasi.FD, offset wasi.FileSiz
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := fdadvise(f.FD, int64(offset), int64(length), advice)
+	err := fdadvise(f.fd, int64(offset), int64(length), advice)
 	return makeErrno(err)
 }
 
@@ -179,11 +185,14 @@ func (p *Provider) FDAllocate(ctx context.Context, fd wasi.FD, offset wasi.FileS
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := fallocate(f.FD, int64(offset), int64(length))
+	err := fallocate(f.fd, int64(offset), int64(length))
 	return makeErrno(err)
 }
 
 func (p *Provider) FDClose(ctx context.Context, fd wasi.FD) wasi.Errno {
+	if p.isPreopen(fd) {
+		return wasi.ENOTSUP
+	}
 	f, errno := p.lookupFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
@@ -191,7 +200,7 @@ func (p *Provider) FDClose(ctx context.Context, fd wasi.FD) wasi.Errno {
 	// Note: closing pre-opens is allowed.
 	// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/close_preopen.rs
 	p.fds.Delete(fd)
-	err := unix.Close(f.FD)
+	err := unix.Close(f.fd)
 	return makeErrno(err)
 }
 
@@ -200,7 +209,7 @@ func (p *Provider) FDDataSync(ctx context.Context, fd wasi.FD) wasi.Errno {
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := fdatasync(f.FD)
+	err := fdatasync(f.fd)
 	return makeErrno(err)
 }
 
@@ -209,7 +218,7 @@ func (p *Provider) FDStatGet(ctx context.Context, fd wasi.FD) (wasi.FDStat, wasi
 	if errno != wasi.ESUCCESS {
 		return wasi.FDStat{}, errno
 	}
-	return f.FDStat, wasi.ESUCCESS
+	return f.stat, wasi.ESUCCESS
 }
 
 func (p *Provider) FDStatSetFlags(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) wasi.Errno {
@@ -217,14 +226,14 @@ func (p *Provider) FDStatSetFlags(ctx context.Context, fd wasi.FD, flags wasi.FD
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	changes := flags ^ f.FDStat.Flags
+	changes := flags ^ f.stat.Flags
 	if changes == 0 {
 		return wasi.ESUCCESS
 	}
 	if changes.Has(wasi.Sync | wasi.DSync | wasi.RSync) {
 		return wasi.ENOSYS // TODO: support changing {Sync,DSync,Rsync}
 	}
-	fl, err := unix.FcntlInt(uintptr(f.FD), unix.F_GETFL, 0)
+	fl, err := unix.FcntlInt(uintptr(f.fd), unix.F_GETFL, 0)
 	if err != nil {
 		return makeErrno(err)
 	}
@@ -238,10 +247,10 @@ func (p *Provider) FDStatSetFlags(ctx context.Context, fd wasi.FD, flags wasi.FD
 	} else {
 		fl &^= unix.O_NONBLOCK
 	}
-	if _, err := unix.FcntlInt(uintptr(f.FD), unix.F_SETFL, fl); err != nil {
+	if _, err := unix.FcntlInt(uintptr(f.fd), unix.F_SETFL, fl); err != nil {
 		return makeErrno(err)
 	}
-	f.FDStat.Flags ^= changes
+	f.stat.Flags ^= changes
 	return wasi.ESUCCESS
 }
 
@@ -253,14 +262,14 @@ func (p *Provider) FDStatSetRights(ctx context.Context, fd wasi.FD, rightsBase, 
 	// Rights can only be preserved or removed, not added.
 	rightsBase &= wasi.AllRights
 	rightsInheriting &= wasi.AllRights
-	if (rightsBase &^ f.FDStat.RightsBase) != 0 {
+	if (rightsBase &^ f.stat.RightsBase) != 0 {
 		return wasi.ENOTCAPABLE
 	}
-	if (rightsInheriting &^ f.FDStat.RightsInheriting) != 0 {
+	if (rightsInheriting &^ f.stat.RightsInheriting) != 0 {
 		return wasi.ENOTCAPABLE
 	}
-	f.FDStat.RightsBase &= rightsBase
-	f.FDStat.RightsInheriting &= rightsInheriting
+	f.stat.RightsBase &= rightsBase
+	f.stat.RightsInheriting &= rightsInheriting
 	return wasi.ESUCCESS
 }
 
@@ -270,11 +279,11 @@ func (p *Provider) FDFileStatGet(ctx context.Context, fd wasi.FD) (wasi.FileStat
 		return wasi.FileStat{}, errno
 	}
 	var sysStat unix.Stat_t
-	if err := unix.Fstat(f.FD, &sysStat); err != nil {
+	if err := unix.Fstat(f.fd, &sysStat); err != nil {
 		return wasi.FileStat{}, makeErrno(err)
 	}
 	stat := makeFileStat(&sysStat)
-	switch f.FD {
+	switch f.fd {
 	case syscall.Stdin, syscall.Stdout, syscall.Stderr:
 		// Override stdio size/times.
 		// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/fd_filestat_get.rs
@@ -291,7 +300,7 @@ func (p *Provider) FDFileStatSetSize(ctx context.Context, fd wasi.FD, size wasi.
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := unix.Ftruncate(f.FD, int64(size))
+	err := unix.Ftruncate(f.fd, int64(size))
 	return makeErrno(err)
 }
 
@@ -301,7 +310,7 @@ func (p *Provider) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTim
 		return errno
 	}
 	var sysStat unix.Stat_t
-	if err := unix.Fstat(f.FD, &sysStat); err != nil {
+	if err := unix.Fstat(f.fd, &sysStat); err != nil {
 		return makeErrno(err)
 	}
 	ts := [2]unix.Timespec{sysStat.Atim, sysStat.Mtim}
@@ -326,7 +335,7 @@ func (p *Provider) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTim
 	if flags.Has(wasi.ModifyTime) || flags.Has(wasi.ModifyTimeNow) {
 		ts[1] = unix.NsecToTimespec(int64(modifyTime))
 	}
-	err := futimens(f.FD, &ts)
+	err := futimens(f.fd, &ts)
 	return makeErrno(err)
 }
 
@@ -335,7 +344,7 @@ func (p *Provider) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec,
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
-	n, err := preadv(f.FD, makeIOVecs(iovecs), int64(offset))
+	n, err := preadv(f.fd, makeIOVecs(iovecs), int64(offset))
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -347,7 +356,7 @@ func (p *Provider) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, 
 	stat := wasi.PreStat{
 		Type: wasi.PreOpenDir,
 		PreStatDir: wasi.PreStatDir{
-			NameLength: wasi.Size(len(f.Path)),
+			NameLength: wasi.Size(len(f.path)),
 		},
 	}
 	return stat, wasi.ESUCCESS
@@ -358,7 +367,7 @@ func (p *Provider) FDPreStatDirName(ctx context.Context, fd wasi.FD) (string, wa
 	if errno != wasi.ESUCCESS {
 		return "", errno
 	}
-	return f.Path, wasi.ESUCCESS
+	return f.path, wasi.ESUCCESS
 }
 
 func (p *Provider) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
@@ -366,7 +375,7 @@ func (p *Provider) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
-	n, err := pwritev(f.FD, makeIOVecs(iovecs), int64(offset))
+	n, err := pwritev(f.fd, makeIOVecs(iovecs), int64(offset))
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -375,7 +384,7 @@ func (p *Provider) FDRead(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) 
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
-	n, err := readv(f.FD, makeIOVecs(iovecs))
+	n, err := readv(f.fd, makeIOVecs(iovecs))
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -389,17 +398,17 @@ func (p *Provider) FDReadDir(ctx context.Context, fd wasi.FD, buffer []wasi.DirE
 	// This is all very tricky to get right, so let's cheat for now
 	// and use os.ReadDir.
 	if cookie == 0 {
-		entries, err := os.ReadDir(f.Path)
+		entries, err := os.ReadDir(f.path)
 		if err != nil {
 			return buffer, makeErrno(err)
 		}
-		f.DirEntries = entries
+		f.dirEntries = entries
 		// Add . and .. entries, since they're stripped by os.ReadDir
-		if info, err := os.Stat(f.Path); err == nil {
-			f.DirEntries = append(f.DirEntries, &statDirEntry{".", info})
+		if info, err := os.Stat(f.path); err == nil {
+			f.dirEntries = append(f.dirEntries, &statDirEntry{".", info})
 		}
-		if info, err := os.Stat(filepath.Join(f.Path, "..")); err == nil {
-			f.DirEntries = append(f.DirEntries, &statDirEntry{"..", info})
+		if info, err := os.Stat(filepath.Join(f.path, "..")); err == nil {
+			f.dirEntries = append(f.dirEntries, &statDirEntry{"..", info})
 		}
 	}
 	if cookie > math.MaxInt {
@@ -407,8 +416,8 @@ func (p *Provider) FDReadDir(ctx context.Context, fd wasi.FD, buffer []wasi.DirE
 	}
 	var n int
 	pos := int(cookie)
-	for ; pos < len(f.DirEntries) && n < bufferSizeBytes; pos++ {
-		e := f.DirEntries[pos]
+	for ; pos < len(f.dirEntries) && n < bufferSizeBytes; pos++ {
+		e := f.dirEntries[pos]
 		name := e.Name()
 		info, err := e.Info()
 		if err != nil {
@@ -430,6 +439,9 @@ func (p *Provider) FDReadDir(ctx context.Context, fd wasi.FD, buffer []wasi.DirE
 }
 
 func (p *Provider) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno {
+	if p.isPreopen(from) || p.isPreopen(to) {
+		return wasi.ENOTSUP
+	}
 	f, errno := p.lookupFD(from, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
@@ -437,7 +449,7 @@ func (p *Provider) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno 
 	// TODO: limit max file descriptor number
 	f, replaced := p.fds.Assign(to, f)
 	if replaced {
-		unix.Close(f.FD)
+		unix.Close(f.fd)
 	}
 	return wasi.ENOSYS
 }
@@ -447,7 +459,7 @@ func (p *Provider) FDSync(ctx context.Context, fd wasi.FD) wasi.Errno {
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := fsync(f.FD)
+	err := fsync(f.fd)
 	return makeErrno(err)
 }
 
@@ -478,7 +490,7 @@ func (p *Provider) fdseek(fd wasi.FD, rights wasi.Rights, delta wasi.FileDelta, 
 	default:
 		return 0, wasi.EINVAL
 	}
-	off, err := lseek(f.FD, int64(delta), sysWhence)
+	off, err := lseek(f.fd, int64(delta), sysWhence)
 	return wasi.FileSize(off), makeErrno(err)
 }
 
@@ -487,7 +499,7 @@ func (p *Provider) FDWrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
-	n, err := writev(f.FD, makeIOVecs(iovecs))
+	n, err := writev(f.fd, makeIOVecs(iovecs))
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -496,7 +508,7 @@ func (p *Provider) PathCreateDirectory(ctx context.Context, fd wasi.FD, path str
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := unix.Mkdirat(d.FD, path, 0755)
+	err := unix.Mkdirat(d.fd, path, 0755)
 	return makeErrno(err)
 }
 
@@ -510,7 +522,7 @@ func (p *Provider) PathFileStatGet(ctx context.Context, fd wasi.FD, flags wasi.L
 	if !flags.Has(wasi.SymlinkFollow) {
 		sysFlags |= unix.AT_SYMLINK_NOFOLLOW
 	}
-	err := unix.Fstatat(d.FD, path, &sysStat, sysFlags)
+	err := unix.Fstatat(d.fd, path, &sysStat, sysFlags)
 	return makeFileStat(&sysStat), makeErrno(err)
 }
 
@@ -537,7 +549,7 @@ func (p *Provider) PathFileStatSetTimes(ctx context.Context, fd wasi.FD, lookupF
 	changeModifyTime := fstFlags.Has(wasi.ModifyTime) || fstFlags.Has(wasi.ModifyTimeNow)
 	if !changeAccessTime || !changeModifyTime {
 		var stat unix.Stat_t
-		err := unix.Fstatat(d.FD, path, &stat, sysFlags)
+		err := unix.Fstatat(d.fd, path, &stat, sysFlags)
 		if err != nil {
 			return makeErrno(err)
 		}
@@ -550,7 +562,7 @@ func (p *Provider) PathFileStatSetTimes(ctx context.Context, fd wasi.FD, lookupF
 	if changeModifyTime {
 		ts[1] = unix.NsecToTimespec(int64(modifyTime))
 	}
-	err := unix.UtimesNanoAt(d.FD, path, ts[:], sysFlags)
+	err := unix.UtimesNanoAt(d.fd, path, ts[:], sysFlags)
 	return makeErrno(err)
 }
 
@@ -567,7 +579,7 @@ func (p *Provider) PathLink(ctx context.Context, fd wasi.FD, flags wasi.LookupFl
 	if flags.Has(wasi.SymlinkFollow) {
 		sysFlags |= unix.AT_SYMLINK_FOLLOW
 	}
-	err := unix.Linkat(oldDir.FD, oldPath, newDir.FD, newPath, sysFlags)
+	err := unix.Linkat(oldDir.fd, oldPath, newDir.fd, newPath, sysFlags)
 	return makeErrno(err)
 }
 
@@ -584,13 +596,13 @@ func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Lo
 	// Rights can only be preserved or removed, not added.
 	rightsBase &= wasi.AllRights
 	rightsInheriting &= wasi.AllRights
-	if (rightsBase &^ d.FDStat.RightsInheriting) != 0 {
+	if (rightsBase &^ d.stat.RightsInheriting) != 0 {
 		return -1, wasi.ENOTCAPABLE
-	} else if (rightsInheriting &^ d.FDStat.RightsInheriting) != 0 {
+	} else if (rightsInheriting &^ d.stat.RightsInheriting) != 0 {
 		return -1, wasi.ENOTCAPABLE
 	}
-	rightsBase &= d.FDStat.RightsInheriting
-	rightsInheriting &= d.FDStat.RightsInheriting
+	rightsBase &= d.stat.RightsInheriting
+	rightsInheriting &= d.stat.RightsInheriting
 
 	oflags := unix.O_CLOEXEC
 	if openFlags.Has(wasi.OpenDirectory) {
@@ -600,7 +612,7 @@ func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Lo
 		rightsBase &^= wasi.FDSeekRight
 	}
 	if openFlags.Has(wasi.OpenCreate) {
-		if !d.FDStat.RightsBase.Has(wasi.PathCreateFileRight) {
+		if !d.stat.RightsBase.Has(wasi.PathCreateFileRight) {
 			return -1, wasi.ENOTCAPABLE
 		}
 		oflags |= unix.O_CREAT
@@ -609,7 +621,7 @@ func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Lo
 		oflags |= unix.O_EXCL
 	}
 	if openFlags.Has(wasi.OpenTruncate) {
-		if !d.FDStat.RightsBase.Has(wasi.PathFileStatSetSizeRight) {
+		if !d.stat.RightsBase.Has(wasi.PathFileStatSetSizeRight) {
 			return -1, wasi.ENOTCAPABLE
 		}
 		oflags |= unix.O_TRUNC
@@ -649,15 +661,15 @@ func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Lo
 		fileType = wasi.DirectoryType
 		mode = 0
 	}
-	hostfd, err := unix.Openat(d.FD, path, oflags, mode)
+	hostfd, err := unix.Openat(d.fd, path, oflags, mode)
 	if err != nil {
 		return -1, makeErrno(err)
 	}
 
 	guestfd := p.fds.Insert(&fdinfo{
-		FD:   hostfd,
-		Path: filepath.Join(d.Path, path),
-		FDStat: wasi.FDStat{
+		fd:   hostfd,
+		path: filepath.Join(d.path, path),
+		stat: wasi.FDStat{
 			FileType:         fileType,
 			Flags:            fdFlags,
 			RightsBase:       rightsBase,
@@ -672,7 +684,7 @@ func (p *Provider) PathReadLink(ctx context.Context, fd wasi.FD, path string, bu
 	if errno != wasi.ESUCCESS {
 		return buffer, errno
 	}
-	n, err := unix.Readlinkat(d.FD, path, buffer)
+	n, err := unix.Readlinkat(d.fd, path, buffer)
 	if err != nil {
 		return buffer, makeErrno(err)
 	} else if n == len(buffer) {
@@ -686,7 +698,7 @@ func (p *Provider) PathRemoveDirectory(ctx context.Context, fd wasi.FD, path str
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := unix.Unlinkat(d.FD, path, unix.AT_REMOVEDIR)
+	err := unix.Unlinkat(d.fd, path, unix.AT_REMOVEDIR)
 	return makeErrno(err)
 }
 
@@ -699,7 +711,7 @@ func (p *Provider) PathRename(ctx context.Context, fd wasi.FD, oldPath string, n
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := unix.Renameat(oldDir.FD, oldPath, newDir.FD, newPath)
+	err := unix.Renameat(oldDir.fd, oldPath, newDir.fd, newPath)
 	return makeErrno(err)
 }
 
@@ -708,7 +720,7 @@ func (p *Provider) PathSymlink(ctx context.Context, oldPath string, fd wasi.FD, 
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := unix.Symlinkat(oldPath, d.FD, newPath)
+	err := unix.Symlinkat(oldPath, d.fd, newPath)
 	return makeErrno(err)
 }
 
@@ -717,7 +729,7 @@ func (p *Provider) PathUnlinkFile(ctx context.Context, fd wasi.FD, path string) 
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := unix.Unlinkat(d.FD, path, 0)
+	err := unix.Unlinkat(d.fd, path, 0)
 	return makeErrno(err)
 }
 
@@ -742,7 +754,7 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 				pollevent = unix.POLLOUT
 			}
 			p.pollfds = append(p.pollfds, unix.PollFd{
-				Fd:     int32(f.FD),
+				Fd:     int32(f.fd),
 				Events: pollevent,
 			})
 		case wasi.ClockEvent:
@@ -855,7 +867,7 @@ func (p *Provider) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlag
 		return -1, wasi.EINVAL
 	}
 	// TODO: use accept4 on linux to set O_CLOEXEC and O_NONBLOCK
-	connfd, _, err := unix.Accept(socket.FD)
+	connfd, _, err := unix.Accept(socket.fd)
 	if err != nil {
 		return -1, makeErrno(err)
 	}
@@ -864,12 +876,12 @@ func (p *Provider) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlag
 		return -1, makeErrno(err)
 	}
 	guestfd := p.fds.Insert(&fdinfo{
-		FD: connfd,
-		FDStat: wasi.FDStat{
+		fd: connfd,
+		stat: wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            flags,
-			RightsBase:       socket.FDStat.RightsInheriting,
-			RightsInheriting: socket.FDStat.RightsInheriting,
+			RightsBase:       socket.stat.RightsInheriting,
+			RightsInheriting: socket.stat.RightsInheriting,
 		},
 	})
 	return guestfd, wasi.ESUCCESS
@@ -909,13 +921,13 @@ func (p *Provider) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFl
 	default:
 		return wasi.EINVAL
 	}
-	err := unix.Shutdown(socket.FD, sysHow)
+	err := unix.Shutdown(socket.fd, sysHow)
 	return makeErrno(err)
 }
 
 func (p *Provider) Close(ctx context.Context) error {
-	p.fds.Range(func(_ wasi.FD, f *fdinfo) bool {
-		unix.Close(f.FD)
+	p.fds.Range(func(fd wasi.FD, f *fdinfo) bool {
+		unix.Close(f.fd)
 		return true
 	})
 	p.fds.Reset()
