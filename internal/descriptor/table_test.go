@@ -126,3 +126,12 @@ func BenchmarkTableLookup(b *testing.B) {
 		b.Error("wrong file returned by lookup")
 	}
 }
+
+func TestTableAssign(t *testing.T) {
+	table := new(descriptor.Table[fd, struct{}])
+	table.Assign(42, struct{}{})
+
+	if _, ok := table.Lookup(42); !ok {
+		t.Error("missing assigned table entry")
+	}
+}
