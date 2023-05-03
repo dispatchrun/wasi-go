@@ -3,7 +3,6 @@ package testwasi
 import (
 	"context"
 	"crypto/rand"
-	_ "embed"
 	"io"
 	"os"
 	"path/filepath"

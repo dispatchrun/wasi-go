@@ -33,7 +33,8 @@ clean:
 
 wasi-libc: testdata/.wasi-libc
 
-testdata/c/%.wasm: testdata/c/%.c wasi-libc
+testdata/c/%.c: wasi-libc
+testdata/c/%.wasm: testdata/c/%.c
 	clang $< -o $@ $(CFLAGS) -target wasm32-unknown-wasi --sysroot testdata/.wasi-libc -Wl,--allow-undefined
 
 testdata/go/%.wasm: testdata/go/%.go
