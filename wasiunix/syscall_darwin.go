@@ -11,6 +11,38 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func pipe(fds []int) error {
+	if err := pipeCloseOnExec(fds); err != nil {
+		return err
+	}
+	if err := unix.SetNonblock(fds[1], true); err != nil {
+		closePipe(fds)
+		return err
+	}
+	if err := unix.SetNonblock(fds[0], true); err != nil {
+		closePipe(fds)
+		return err
+	}
+	return nil
+}
+
+func pipeCloseOnExec(fds []int) error {
+	syscall.ForkLock.Lock()
+	defer syscall.ForkLock.Unlock()
+
+	if err := unix.Pipe(fds); err != nil {
+		return err
+	}
+	unix.CloseOnExec(fds[0])
+	unix.CloseOnExec(fds[1])
+	return nil
+}
+
+func closePipe(fds []int) {
+	unix.Close(fds[1])
+	unix.Close(fds[0])
+}
+
 const (
 	__UTIME_NOW  = -1
 	__UTIME_OMIT = -2
