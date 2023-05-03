@@ -3,14 +3,12 @@ package wasiunix
 import (
 	"context"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/stealthrocket/wasi"
 	"github.com/stealthrocket/wasi/internal/descriptor"
@@ -74,8 +72,9 @@ type fdinfo struct {
 	// stat is cached information about the file descriptor.
 	stat wasi.FDStat
 
-	// dirEntries are cached directory entries.
-	dirEntries []os.DirEntry
+	// dir is lazily allocated when FDReadDir is called, it maintains the state
+	// of the directory iterator.
+	dir *dirbuf
 }
 
 // Preopen adds an open file to the list of pre-opens.
@@ -392,54 +391,19 @@ func (p *Provider) FDRead(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) 
 	return wasi.Size(n), makeErrno(err)
 }
 
-func (p *Provider) FDReadDir(ctx context.Context, fd wasi.FD, buffer []wasi.DirEntryName, bufferSizeBytes int, cookie wasi.DirCookie) ([]wasi.DirEntryName, wasi.Errno) {
+func (p *Provider) FDReadDir(ctx context.Context, fd wasi.FD, entries []wasi.DirEntry, cookie wasi.DirCookie, bufferSizeBytes int) (int, wasi.Errno) {
 	f, errno := p.lookupFD(fd, wasi.FDReadDirRight)
 	if errno != wasi.ESUCCESS {
-		return nil, errno
+		return 0, errno
 	}
-
-	// TODO: use a readdir iterator
-	// This is all very tricky to get right, so let's cheat for now
-	// and use os.ReadDir.
-	if cookie == 0 {
-		entries, err := os.ReadDir(f.path)
-		if err != nil {
-			return buffer, makeErrno(err)
-		}
-		f.dirEntries = entries
-		// Add . and .. entries, since they're stripped by os.ReadDir
-		if info, err := os.Stat(f.path); err == nil {
-			f.dirEntries = append(f.dirEntries, &statDirEntry{".", info})
-		}
-		if info, err := os.Stat(filepath.Join(f.path, "..")); err == nil {
-			f.dirEntries = append(f.dirEntries, &statDirEntry{"..", info})
-		}
+	if len(entries) == 0 {
+		return 0, wasi.EINVAL
 	}
-	if cookie > math.MaxInt {
-		return buffer, wasi.EINVAL
+	if f.dir == nil {
+		f.dir = new(dirbuf)
 	}
-	var n int
-	pos := int(cookie)
-	for ; pos < len(f.dirEntries) && n < bufferSizeBytes; pos++ {
-		e := f.dirEntries[pos]
-		name := e.Name()
-		info, err := e.Info()
-		if err != nil {
-			return buffer, makeErrno(err)
-		}
-		s := info.Sys().(*syscall.Stat_t)
-		buffer = append(buffer, wasi.DirEntryName{
-			Entry: wasi.DirEntry{
-				Type:       makeFileType(uint32(s.Mode)),
-				INode:      wasi.INode(s.Ino),
-				NameLength: wasi.DirNameLength(len(name)),
-				Next:       wasi.DirCookie(pos + 1),
-			},
-			Name: name,
-		})
-		n += int(unsafe.Sizeof(wasi.DirEntry{})) + len(name)
-	}
-	return buffer, wasi.ESUCCESS
+	n, err := f.dir.readDirEntries(f.fd, entries, cookie, bufferSizeBytes)
+	return n, makeErrno(err)
 }
 
 func (p *Provider) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno {

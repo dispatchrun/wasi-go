@@ -498,16 +498,6 @@ func TestFile(t *testing.T) {
 	assertEqual(t, AllRights.String(), "AllRights")
 	assertEqual(t, Rights(math.MaxUint32).String(), "AllRights")
 
-	assertEqual(t, unsafe.Sizeof(DirEntry{}), 24)
-	assertEqual(t, unsafe.Sizeof(DirEntry{}.Next), 8)
-	assertEqual(t, unsafe.Offsetof(DirEntry{}.Next), 0)
-	assertEqual(t, unsafe.Sizeof(DirEntry{}.INode), 8)
-	assertEqual(t, unsafe.Offsetof(DirEntry{}.INode), 8)
-	assertEqual(t, unsafe.Sizeof(DirEntry{}.NameLength), 4)
-	assertEqual(t, unsafe.Offsetof(DirEntry{}.NameLength), 16)
-	assertEqual(t, unsafe.Sizeof(DirEntry{}.Type), 1)
-	assertEqual(t, unsafe.Offsetof(DirEntry{}.Type), 20)
-
 	assertEqual(t, unsafe.Sizeof(DirCookie(0)), 8)
 	assertEqual(t, unsafe.Sizeof(DirNameLength(0)), 4)
 

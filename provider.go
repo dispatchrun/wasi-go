@@ -129,17 +129,13 @@ type Provider interface {
 
 	// FDReadDir reads directory entries from a directory.
 	//
-	// The implementation must append entries to the provided entries slice and
-	// then return it.
+	// The implementation must write entries to the provided entries buffer,
+	// and return the number of entries written.
 	//
 	// The implementation must ensure that the entries fit into a buffer
 	// with the specified size (bufferSizeBytes). It's ok if the final entry
 	// only partially fits into such a buffer.
-	//
-	// The implementation must ensure that no more than maxBytes worth of
-	// entries are written to the buffer, where entry size is equal to
-	// unsafe.Sizeof(DirEntry{}) + DirEntry.NameLength.
-	FDReadDir(ctx context.Context, fd FD, entries []DirEntryName, bufferSizeBytes int, cookie DirCookie) ([]DirEntryName, Errno)
+	FDReadDir(ctx context.Context, fd FD, entries []DirEntry, cookie DirCookie, bufferSizeBytes int) (int, Errno)
 
 	// FDRenumber atomically replaces a file descriptor by renumbering another
 	// file descriptor. Due to the strong focus on thread safety, this

@@ -217,6 +217,10 @@ type FDStat struct {
 	RightsInheriting Rights
 }
 
+// SizeOfDirent is the size in bytes of directory entries when serialized to the
+// output buffer of fd_readdir.
+const SizeOfDirent = 24
+
 // DirEntry is a directory entry.
 type DirEntry struct {
 	// Next is the offset of the next directory entry stored in this directory.
@@ -226,20 +230,13 @@ type DirEntry struct {
 	// entry.
 	INode INode
 
-	// NameLength is the length of the name of the directory entry.
-	NameLength DirNameLength
-
 	// Type is the type of the file referred to by this directory entry.
 	Type FileType
-}
 
-// DirEntryName is a directory entry along with a name.
-type DirEntryName struct {
-	// Entry is the directory entry.
-	Entry DirEntry
-
-	// Name of the entry. The length must equal Entry.NameLength.
-	Name string
+	// Name of the directory entry. When the directory entry is retrieved by a
+	// call to FDReadDir, the name may point to an internal buffer and therefore
+	// remains valid only until the next call to FDReadDir.
+	Name []byte
 }
 
 // DirCookie is a reference to the offset of a directory entry.
