@@ -11,7 +11,7 @@ import (
 )
 
 func accept(socket, flags int) (int, unix.Sockaddr, error) {
-	return unix.Accep4(socket, flags|unix.O_CLOEXEC)
+	return unix.Accept4(socket, flags|unix.O_CLOEXEC)
 }
 
 func pipe(fds []int, flags int) error {
