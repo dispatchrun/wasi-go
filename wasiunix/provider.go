@@ -51,7 +51,7 @@ type Provider struct {
 	Rand io.Reader
 
 	fds      descriptor.Table[wasi.FD, *fdinfo]
-	preopens descriptor.Table[wasi.FD, struct{}]
+	preopens descriptor.Table[wasi.FD, string]
 	pollfds  []unix.PollFd
 
 	// shutfds are a pair of file descriptors allocated to the read and write
@@ -63,9 +63,6 @@ type Provider struct {
 }
 
 type fdinfo struct {
-	// path is the path of the file.
-	path string
-
 	// fd is the underlying OS file descriptor.
 	fd int
 
@@ -84,10 +81,9 @@ func (p *Provider) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
 	p.preopens.Assign(
 		p.fds.Insert(&fdinfo{
 			fd:   hostfd,
-			path: path,
 			stat: fdstat,
 		}),
-		struct{}{},
+		path,
 	)
 }
 
@@ -107,18 +103,19 @@ func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.
 	return f, wasi.ESUCCESS
 }
 
-func (p *Provider) lookupPreopenFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
-	if !p.isPreopen(guestfd) {
-		return nil, wasi.EBADF
+func (p *Provider) lookupPreopenPath(guestfd wasi.FD, rights wasi.Rights) (string, wasi.Errno) {
+	path, ok := p.preopens.Lookup(guestfd)
+	if !ok {
+		return "", wasi.EBADF
 	}
 	f, errno := p.lookupFD(guestfd, rights)
 	if errno != wasi.ESUCCESS {
-		return nil, errno
+		return "", errno
 	}
 	if f.stat.FileType != wasi.DirectoryType {
-		return nil, wasi.ENOTDIR
+		return "", wasi.ENOTDIR
 	}
-	return f, wasi.ESUCCESS
+	return path, wasi.ESUCCESS
 }
 
 func (p *Provider) lookupSocketFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
@@ -352,25 +349,21 @@ func (p *Provider) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec,
 }
 
 func (p *Provider) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, wasi.Errno) {
-	f, errno := p.lookupPreopenFD(fd, 0)
+	path, errno := p.lookupPreopenPath(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return wasi.PreStat{}, errno
 	}
 	stat := wasi.PreStat{
 		Type: wasi.PreOpenDir,
 		PreStatDir: wasi.PreStatDir{
-			NameLength: wasi.Size(len(f.path)),
+			NameLength: wasi.Size(len(path)),
 		},
 	}
 	return stat, wasi.ESUCCESS
 }
 
 func (p *Provider) FDPreStatDirName(ctx context.Context, fd wasi.FD) (string, wasi.Errno) {
-	f, errno := p.lookupPreopenFD(fd, 0)
-	if errno != wasi.ESUCCESS {
-		return "", errno
-	}
-	return f.path, wasi.ESUCCESS
+	return p.lookupPreopenPath(fd, 0)
 }
 
 func (p *Provider) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
@@ -635,8 +628,7 @@ func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Lo
 	}
 
 	guestfd := p.fds.Insert(&fdinfo{
-		fd:   hostfd,
-		path: filepath.Join(d.path, path),
+		fd: hostfd,
 		stat: wasi.FDStat{
 			FileType:         fileType,
 			Flags:            fdFlags,
