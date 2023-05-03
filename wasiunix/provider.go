@@ -51,9 +51,9 @@ type Provider struct {
 	// Rand is the source for RandomGet.
 	Rand io.Reader
 
-	fds     descriptor.Table[wasi.FD, *fdinfo]
-	firstFD wasi.FD
-	pollfds []unix.PollFd
+	fds      descriptor.Table[wasi.FD, *fdinfo]
+	preopens descriptor.Table[wasi.FD, struct{}]
+	pollfds  []unix.PollFd
 }
 
 type fdinfo struct {
@@ -71,24 +71,22 @@ type fdinfo struct {
 }
 
 // Preopen adds an open file to the list of pre-opens.
-//
-// Preopen must be called prior to any other files being opened, and must not
-// be called anymore after more files were opened by the guest.
 func (p *Provider) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
-	if p.fds.Len() > int(p.firstFD) {
-		panic("BUG: cannot add preopens after the guest has created files")
-	}
 	fdstat.RightsBase &= wasi.AllRights
 	fdstat.RightsInheriting &= wasi.AllRights
-	p.firstFD = 1 + p.fds.Insert(&fdinfo{
-		fd:   hostfd,
-		path: path,
-		stat: fdstat,
-	})
+	p.preopens.Assign(
+		p.fds.Insert(&fdinfo{
+			fd:   hostfd,
+			path: path,
+			stat: fdstat,
+		}),
+		struct{}{},
+	)
 }
 
 func (p *Provider) isPreopen(fd wasi.FD) bool {
-	return fd >= 0 && fd < p.firstFD
+	_, ok := p.preopens.Lookup(fd)
+	return ok
 }
 
 func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
@@ -190,16 +188,14 @@ func (p *Provider) FDAllocate(ctx context.Context, fd wasi.FD, offset wasi.FileS
 }
 
 func (p *Provider) FDClose(ctx context.Context, fd wasi.FD) wasi.Errno {
-	if p.isPreopen(fd) {
-		return wasi.ENOTSUP
-	}
 	f, errno := p.lookupFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
+	p.fds.Delete(fd)
 	// Note: closing pre-opens is allowed.
 	// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/close_preopen.rs
-	p.fds.Delete(fd)
+	p.preopens.Delete(fd)
 	err := unix.Close(f.fd)
 	return makeErrno(err)
 }
@@ -931,6 +927,7 @@ func (p *Provider) Close(ctx context.Context) error {
 		return true
 	})
 	p.fds.Reset()
+	p.preopens.Reset()
 	return nil
 }
 
