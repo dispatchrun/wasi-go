@@ -461,7 +461,7 @@ func TestFile(t *testing.T) {
 		assertEqual(t, AllRights.Has(1<<i), true)
 	}
 	for i := 30; i < 64; i++ {
-		assertEqual(t, AllRights.Has(1<<30), false)
+		assertEqual(t, AllRights.Has(1<<i), false)
 	}
 	assertEqual(t, FDDataSyncRight.String(), "FDDataSyncRight")
 	assertEqual(t, FDReadRight.String(), "FDReadRight")
