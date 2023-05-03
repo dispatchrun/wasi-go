@@ -103,12 +103,12 @@ func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.
 	return f, wasi.ESUCCESS
 }
 
-func (p *Provider) lookupPreopenPath(guestfd wasi.FD, rights wasi.Rights) (string, wasi.Errno) {
+func (p *Provider) lookupPreopenPath(guestfd wasi.FD) (string, wasi.Errno) {
 	path, ok := p.preopens.Lookup(guestfd)
 	if !ok {
 		return "", wasi.EBADF
 	}
-	f, errno := p.lookupFD(guestfd, rights)
+	f, errno := p.lookupFD(guestfd, 0)
 	if errno != wasi.ESUCCESS {
 		return "", errno
 	}
@@ -349,7 +349,7 @@ func (p *Provider) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec,
 }
 
 func (p *Provider) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, wasi.Errno) {
-	path, errno := p.lookupPreopenPath(fd, 0)
+	path, errno := p.lookupPreopenPath(fd)
 	if errno != wasi.ESUCCESS {
 		return wasi.PreStat{}, errno
 	}
@@ -363,7 +363,7 @@ func (p *Provider) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, 
 }
 
 func (p *Provider) FDPreStatDirName(ctx context.Context, fd wasi.FD) (string, wasi.Errno) {
-	return p.lookupPreopenPath(fd, 0)
+	return p.lookupPreopenPath(fd)
 }
 
 func (p *Provider) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
