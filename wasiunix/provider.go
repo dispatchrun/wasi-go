@@ -455,7 +455,7 @@ func (p *Provider) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno 
 	if replaced {
 		unix.Close(f.fd)
 	}
-	return wasi.ENOSYS
+	return wasi.ESUCCESS
 }
 
 func (p *Provider) FDSync(ctx context.Context, fd wasi.FD) wasi.Errno {
