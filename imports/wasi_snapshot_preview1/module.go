@@ -9,6 +9,7 @@ import (
 	"github.com/stealthrocket/wazergo"
 	. "github.com/stealthrocket/wazergo/types"
 	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/sys"
 )
 
 const moduleName = "wasi_snapshot_preview1"
@@ -421,7 +422,7 @@ func (m *Module) ProcExit(ctx context.Context, mod api.Module, exitCode Int32) {
 	// Prevent any code from executing after this function. For example, LLVM
 	// inserts unreachable instructions after calls to exit.
 	// See: https://github.com/emscripten-core/emscripten/issues/12322
-	panic(fmt.Errorf("module exited with code %d", exitCode))
+	panic(sys.NewExitError(uint32(exitCode)))
 }
 
 func (m *Module) ProcRaise(ctx context.Context, signal Int32) Errno {
