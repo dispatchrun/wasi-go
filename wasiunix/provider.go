@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -54,6 +55,13 @@ type Provider struct {
 	fds      descriptor.Table[wasi.FD, *fdinfo]
 	preopens descriptor.Table[wasi.FD, struct{}]
 	pollfds  []unix.PollFd
+
+	// shutfds are a pair of file descriptors allocated to the read and write
+	// ends of a pipe. They are used to asynchronously interrupting calls to
+	// poll(2) by closing the write end of the pipe, causing the read end to
+	// become reading for reading and any polling on the fd to return.
+	mutex   sync.Mutex
+	shutfds [2]int
 }
 
 type fdinfo struct {
@@ -733,8 +741,18 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 	if len(subscriptions) == 0 {
 		return events, wasi.EINVAL
 	}
+	wakefd, err := p.init()
+	if err != nil {
+		return events, makeErrno(err)
+	}
+	epoch := time.Duration(0)
 	timeout := time.Duration(-1)
 	p.pollfds = p.pollfds[:0]
+	p.pollfds = append(p.pollfds, unix.PollFd{
+		Fd:     int32(wakefd),
+		Events: unix.POLLIN | unix.POLLERR | unix.POLLHUP,
+	})
+
 	for i := range subscriptions {
 		s := &subscriptions[i]
 
@@ -753,31 +771,39 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 				Fd:     int32(f.fd),
 				Events: pollevent,
 			})
+
 		case wasi.ClockEvent:
+			if p.Monotonic == nil {
+				return events, wasi.ENOSYS
+			}
+			if epoch == 0 {
+				// Only capture the current time if the program requested a
+				// clock subscription; it allows programs that never ask for
+				// a timeout to run with a provider which does not have a
+				// monotonic clock configured.
+				now, err := p.Monotonic(ctx)
+				if err != nil {
+					return events, makeErrno(err)
+				}
+				epoch = time.Duration(now)
+			}
 			c := s.GetClock()
+			t := c.Timeout.Duration()
+			if c.Flags.Has(wasi.Abstime) {
+				// If the subscription asks for an absolute monotonic time point
+				// we can honnor it by computing its relative delta to the poll
+				// epoch.
+				t -= epoch
+			}
 			switch {
-			case c.ID != wasi.Monotonic || c.Flags.Has(wasi.Abstime):
+			case c.ID != wasi.Monotonic:
 				return events, wasi.ENOSYS // not implemented
 			case timeout < 0:
-				timeout = time.Duration(c.Timeout)
-			case timeout >= 0 && time.Duration(c.Timeout) < timeout:
-				timeout = time.Duration(c.Timeout)
+				timeout = t
+			case t < timeout:
+				timeout = t
 			}
 		}
-	}
-
-	if len(p.pollfds) == 0 {
-		// Just sleep if there's no FD events to poll.
-		if timeout >= 0 {
-			t := time.NewTimer(timeout)
-			defer t.Stop()
-			select {
-			case <-t.C:
-			case <-ctx.Done():
-				return events, makeErrno(ctx.Err())
-			}
-		}
-		return events, wasi.ESUCCESS
 	}
 
 	var timeoutMillis int
@@ -786,30 +812,62 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 	} else {
 		timeoutMillis = int(timeout.Milliseconds())
 	}
-	// TODO: allow ctx to unblock when canceled
+
 	n, err := unix.Poll(p.pollfds, timeoutMillis)
 	if err != nil {
 		return events, makeErrno(err)
 	}
 
-	j := 0
+	if n > 0 && p.pollfds[0].Revents != 0 {
+		// If the wake fd was notified it means the provider was shut down,
+		// we report this by cancelling all subscriptions.
+		for _, s := range subscriptions {
+			events = append(events, wasi.Event{
+				UserData:  s.UserData,
+				EventType: s.EventType,
+				Errno:     wasi.ECANCELED,
+			})
+		}
+		return events, wasi.ESUCCESS
+	}
+
+	var now time.Duration
+	if timeout >= 0 {
+		t, err := p.Monotonic(ctx)
+		if err != nil {
+			return events, makeErrno(err)
+		}
+		now = time.Duration(t)
+	}
+
+	j := 1
 	for i := range subscriptions {
 		s := &subscriptions[i]
-		if s.EventType == wasi.ClockEvent {
+		e := wasi.Event{UserData: s.UserData, EventType: s.EventType}
+
+		if e.EventType == wasi.ClockEvent {
+			c := s.GetClock()
+			t := c.Timeout.Duration()
+			if !c.Flags.Has(wasi.Abstime) {
+				t += epoch
+			}
+			if t >= now {
+				events = append(events, e)
+			}
 			continue
 		}
+
 		pf := &p.pollfds[j]
 		j++
 		if pf.Revents == 0 {
 			continue
 		}
-		e := wasi.Event{UserData: s.UserData, EventType: s.EventType}
 
 		// TODO: review cases where Revents contains many flags
-		if s.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
+		if e.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
 			e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
 		}
-		if s.EventType == wasi.FDWriteEvent && (pf.Revents&unix.POLLOUT) != 0 {
+		if e.EventType == wasi.FDWriteEvent && (pf.Revents&unix.POLLOUT) != 0 {
 			e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
 		}
 		if (pf.Revents & unix.POLLERR) != 0 {
@@ -819,9 +877,6 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 			e.FDReadWrite.Flags |= wasi.Hangup
 		}
 		events = append(events, e)
-	}
-	if n != len(events) {
-		panic("unexpected unix.Poll result")
 	}
 	return events, wasi.ESUCCESS
 }
@@ -928,7 +983,50 @@ func (p *Provider) Close(ctx context.Context) error {
 	})
 	p.fds.Reset()
 	p.preopens.Reset()
+
+	p.mutex.Lock()
+	fd0 := p.shutfds[0]
+	fd1 := p.shutfds[1]
+	p.shutfds[0] = -1
+	p.shutfds[1] = -1
+	p.mutex.Unlock()
+
+	if fd0 != 0 || fd1 != 0 { // true if the provider was initialized
+		unix.Close(fd0)
+		unix.Close(fd1)
+	}
 	return nil
+}
+
+// Shutdown may be called to asynchronously cancel all blocking operations on
+// the provider, causing calls such as PollOneOff to unblock and return an
+// error indicating that the system is shutting down.
+func (p *Provider) Shutdown(ctx context.Context) error {
+	_, err := p.init()
+	if err != nil {
+		return err
+	}
+	p.shutdown()
+	return nil
+}
+
+func (p *Provider) init() (int, error) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	if p.shutfds[0] == 0 && p.shutfds[1] == 0 {
+		if err := pipe(p.shutfds[:]); err != nil {
+			return -1, err
+		}
+	}
+	return p.shutfds[0], nil
+}
+
+func (p *Provider) shutdown() {
+	p.mutex.Lock()
+	fd := p.shutfds[1]
+	p.shutfds[1] = -1
+	p.mutex.Unlock()
+	unix.Close(fd)
 }
 
 type statDirEntry struct {

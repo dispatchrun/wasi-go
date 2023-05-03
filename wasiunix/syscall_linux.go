@@ -10,6 +10,10 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+func pipe(fds []int) error {
+	return unix.Pipe2(fds, unix.O_CLOEXEC|unix.O_NONBLOCK)
+}
+
 func futimens(fd int, ts *[2]unix.Timespec) error {
 	// https://github.com/bminor/glibc/blob/master/sysdeps/unix/sysv/linux/futimens.c
 	_, _, err := unix.Syscall6(
