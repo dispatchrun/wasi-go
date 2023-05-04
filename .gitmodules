@@ -1,6 +1,7 @@
 [submodule "wasi-testsuite"]
 	path = testdata/.wasi-testsuite
 	url = https://github.com/WebAssembly/wasi-testsuite
+	branch = prod/testsuite-base
 [submodule "wasi-libc"]
 	path = testdata/.wasi-libc
 	url = https://github.com/WebAssembly/wasi-libc

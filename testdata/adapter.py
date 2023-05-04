@@ -4,7 +4,7 @@ import sys
 import os
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
-WASIRUN = os.path.join(dir_path, "wasirun")
+WASIRUN = os.path.join(dir_path, "..", "wasirun")
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--version", action="store_true")

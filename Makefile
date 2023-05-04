@@ -63,8 +63,10 @@ wasi-testsuite: testdata/.wasi-testsuite wasirun
 		-t testdata/.wasi-testsuite/tests/assemblyscript/testsuite \
 		   testdata/.wasi-testsuite/tests/c/testsuite \
 		   testdata/.wasi-testsuite/tests/rust/testsuite \
-		-r wasirun
+		-r testdata/adapter.py
 
 .gitmodules:
-	git submodule add --name wasi-libc      -- 'https://github.com/WebAssembly/wasi-libc'      testdata/.wasi-libc
-	git submodule add --name wasi-testsuite -- "https://github.com/WebAssembly/wasi-testsuite" testdata/.wasi-testsuite
+	git submodule add --name wasi-libc -- \
+		'https://github.com/WebAssembly/wasi-libc' testdata/.wasi-libc
+	git submodule add --name wasi-testsuite -b prod/testsuite-base -- \
+		"https://github.com/WebAssembly/wasi-testsuite" testdata/.wasi-testsuite
