@@ -2,8 +2,8 @@ package wasi_snapshot_preview1
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
-	"unsafe"
 
 	"github.com/stealthrocket/wasi"
 	"github.com/stealthrocket/wazergo"
@@ -102,7 +102,7 @@ type Module struct {
 	WASI wasi.Provider
 
 	iovecs []wasi.IOVec
-	dirent []wasi.DirEntryName
+	dirent []wasi.DirEntry
 }
 
 func (m *Module) ArgsGet(ctx context.Context, argv Pointer[Uint32], buf Pointer[Uint8]) Errno {
@@ -284,25 +284,35 @@ func (m *Module) FDRead(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], 
 }
 
 func (m *Module) FDReadDir(ctx context.Context, fd Int32, buf Bytes, cookie Uint64, nwritten Pointer[Int32]) Errno {
-	var errno wasi.Errno
-	m.dirent, errno = m.WASI.FDReadDir(ctx, wasi.FD(fd), m.dirent[:0], len(buf), wasi.DirCookie(cookie))
-	if errno != wasi.ESUCCESS {
-		return Errno(errno)
+	if len(m.dirent) == 0 {
+		m.dirent = make([]wasi.DirEntry, 1024)
 	}
-	const sizeofDirEnt = int(unsafe.Sizeof(wasi.DirEntry{}))
-	var n int
-	for i := range m.dirent {
-		e := &m.dirent[i]
-		n += copy(buf[n:], unsafe.Slice((*byte)(unsafe.Pointer(&e.Entry)), sizeofDirEnt))
-		if n == len(buf) {
+
+	var dirent [wasi.SizeOfDirent]byte
+	var numBytes int
+
+	for numBytes < len(buf) {
+		n, errno := m.WASI.FDReadDir(ctx, wasi.FD(fd), m.dirent, wasi.DirCookie(cookie), len(buf)-numBytes)
+		if errno != wasi.ESUCCESS {
+			return Errno(errno)
+		}
+		if n == 0 {
 			break
 		}
-		n += copy(buf[n:], e.Name)
-		if n == len(buf) {
-			break
+		for _, d := range m.dirent[:n] {
+			binary.LittleEndian.PutUint64(dirent[0:], uint64(d.Next))
+			binary.LittleEndian.PutUint64(dirent[8:], uint64(d.INode))
+			binary.LittleEndian.PutUint32(dirent[16:], uint32(len(d.Name)))
+			binary.LittleEndian.PutUint32(dirent[20:], uint32(d.Type))
+
+			numBytes += copy(buf[numBytes:], dirent[:])
+			numBytes += copy(buf[numBytes:], d.Name)
+
+			cookie = Uint64(d.Next)
 		}
 	}
-	nwritten.Store(Int32(n))
+
+	nwritten.Store(Int32(numBytes))
 	return Errno(wasi.ESUCCESS)
 }
 

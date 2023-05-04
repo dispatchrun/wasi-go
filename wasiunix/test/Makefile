@@ -5,7 +5,11 @@ test: wasiunix submodules
 		   wasi-testsuite/tests/rust/testsuite \
 		-r adapter.py
 
-wasiunix: ../cmd/wasiunix/main.go
+wasi.src.go = $(wildcard ../../*.go)
+wasiunix.src.go = $(wildcard ../*.go)
+wasi_snapshot_preview1.src.go = $(wildcard ../../imports/wasi_snapshot_preview1/*.go)
+
+wasiunix: ../cmd/wasiunix/main.go $(wasi.src.go) $(wasiunix.src.go) $(wasi_snapshot_preview1.src.go)
 	go build -o $@ $<
 
 .PHONY: submodules
