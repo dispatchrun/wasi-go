@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	listenRights = wasi.SockAcceptRight | wasi.PollFDReadWriteRight | wasi.FDStatSetFlagsRight
+	listenRights = wasi.SockAcceptRight | wasi.PollFDReadWriteRight | wasi.FDFileStatGetRight | wasi.FDStatSetFlagsRight
 	connRights   = wasi.FDReadRight | wasi.FDWriteRight | wasi.PollFDReadWriteRight | wasi.SockShutdownRight | wasi.FDFileStatGetRight | wasi.FDStatSetFlagsRight
 )
 
