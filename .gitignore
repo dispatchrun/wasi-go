@@ -4,6 +4,7 @@
 *.dll
 *.so
 *.dylib
+wasirun
 
 # Test binary, built with `go test -c`
 *.test
@@ -17,5 +18,5 @@
 # Emacs
 *~
 
-# Test data and dependencies
-testdata/.wasi-libc/
+# Dependencies
+testdata/.sysroot/

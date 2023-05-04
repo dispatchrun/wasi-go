@@ -1,6 +1,11 @@
-.PHONY: clean test testdata wasi-libc
+.PHONY: all clean test testdata wasi-libc wasi-testsuite
 
-CFLAGS = -Wall -Os
+wasi-go.src = \
+	$(wildcard *.go) \
+	$(wildcard */*.go) \
+	$(wildcard */*/*.go)
+
+wasirun.src = $(wasi-go.src)
 
 testdata.c.src = $(wildcard testdata/c/*.c)
 testdata.c.wasm = $(testdata.c.src:.c=.wasm)
@@ -16,26 +21,31 @@ testdata.files = \
 	$(testdata.go.wasm) \
 	$(testdata.tinygo.wasm)
 
+all: test wasi-testsuite
+
+clean:
+	rm -f $(testdata.files)
+
 test: testdata
 	go test ./...
 
 testdata: $(testdata.files)
 
-testdata/.deps:
-	mkdir testdata/.deps
+testdata/.sysroot:
+	mkdir -p testdata/.sysroot
 
 testdata/.wasi-libc: .gitmodules
-	git submodule update -- testdata/.deps/wasi-libc
-	cd testdata/.deps/wasi-libc && make -j4 install INSTALL_DIR=../../.wasi-libc
+	git submodule update --init --recursive -- testdata/.wasi-libc
 
-clean:
-	rm -f $(testdata.files)
+testdata/.wasi-testsuite: .gitmodules
+	git submodule update --init --recursive -- testdata/.wasi-testsuite
 
-wasi-libc: testdata/.wasi-libc
+testdata/.sysroot/lib/wasm32-wasi/libc.a: testdata/.wasi-libc
+	make -j4 -C testdata/.wasi-libc install INSTALL_DIR=../.sysroot
 
 testdata/c/%.c: wasi-libc
 testdata/c/%.wasm: testdata/c/%.c
-	clang $< -o $@ $(CFLAGS) -target wasm32-unknown-wasi --sysroot testdata/.wasi-libc -Wl,--allow-undefined
+	clang $< -o $@ -Wall -Os -target wasm32-unknown-wasi --sysroot testdata/.sysroot
 
 testdata/go/%.wasm: testdata/go/%.go
 	GOARCH=wasm GOOS=wasip1 gotip build -o $@ $<
@@ -43,5 +53,18 @@ testdata/go/%.wasm: testdata/go/%.go
 testdata/tinygo/%.wasm: testdata/tinygo/%.go
 	tinygo build -target=wasi -o $@ $<
 
-.gitmodules: testdata/.deps
-	git submodule add 'https://github.com/WebAssembly/wasi-libc' testdata/.deps/wasi-libc
+wasirun:
+	go build -o wasirun ./cmd/wasirun
+
+wasi-libc: testdata/.sysroot/lib/wasm32-wasi/libc.a
+
+wasi-testsuite: testdata/.wasi-testsuite wasirun
+	python3 testdata/.wasi-testsuite/test-runner/wasi_test_runner.py \
+		-t testdata/.wasi-testsuite/tests/assemblyscript/testsuite \
+		   testdata/.wasi-testsuite/tests/c/testsuite \
+		   testdata/.wasi-testsuite/tests/rust/testsuite \
+		-r wasirun
+
+.gitmodules:
+	git submodule add --name wasi-libc      -- 'https://github.com/WebAssembly/wasi-libc'      testdata/.wasi-libc
+	git submodule add --name wasi-testsuite -- "https://github.com/WebAssembly/wasi-testsuite" testdata/.wasi-testsuite
