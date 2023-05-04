@@ -21,8 +21,9 @@ import (
 const Version = "devel"
 
 var (
-	envs             strings
-	dirs             strings
+	envs             stringList
+	dirs             stringList
+	listens          stringList
 	nonBlockingStdio bool
 	version          bool
 	help             bool
@@ -32,6 +33,7 @@ var (
 func main() {
 	flag.Var(&envs, "env", "Environment variables to pass to the WASM module.")
 	flag.Var(&dirs, "dir", "Directories to pre-open.")
+	flag.Var(&listens, "listen", "Addresses of listener sockets to pre-open.")
 	flag.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "Enable non-blocking stdio.")
 	flag.BoolVar(&version, "version", false, "Print the version and exit.")
 	flag.BoolVar(&help, "help", false, "Print usage information.")
@@ -39,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	if version {
-		fmt.Println("wasiunix", Version)
+		fmt.Println("wasirun", Version)
 		os.Exit(0)
 	} else if h || help {
 		showUsage()
@@ -53,10 +55,10 @@ func main() {
 }
 
 func showUsage() {
-	fmt.Printf(`wasiunix - Run a WebAssembly module
+	fmt.Printf(`wasirun - Run a WebAssembly module
 
 USAGE:
-   wasiunix [OPTIONS]... <MODULE> [--] [ARGS]...
+   wasirun [OPTIONS]... <MODULE> [--] [ARGS]...
 
 ARGS:
    <MODULE>
@@ -68,6 +70,9 @@ ARGS:
 OPTIONS:
    --dir <DIR>
       Grant access to the specified host directory		
+
+   --listen <ADDR>
+      Grant access to a socket listening on the specified address.
 
    --env <NAME=VAL>
       Pass an environment variable to the module
@@ -85,7 +90,7 @@ OPTIONS:
 
 func run(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: wasiunix [OPTIONS]... <MODULE> [--] [ARGS]...")
+		return fmt.Errorf("usage: wasirun [OPTIONS]... <MODULE> [--] [ARGS]...")
 	}
 
 	wasmFile := args[0]
@@ -116,6 +121,7 @@ func run(args []string) error {
 		Exit:               exit,
 	}
 
+	// Preopen stdio.
 	for _, stdio := range []struct {
 		fd   int
 		path string
@@ -138,6 +144,7 @@ func run(args []string) error {
 		system.Preopen(stdio.fd, stdio.path, stat)
 	}
 
+	// Preopen directories.
 	for _, dir := range dirs {
 		fd, err := syscall.Open(dir, syscall.O_DIRECTORY, 0)
 		if err != nil {
@@ -147,6 +154,20 @@ func run(args []string) error {
 			FileType:         wasi.DirectoryType,
 			RightsBase:       wasi.AllRights,
 			RightsInheriting: wasi.AllRights,
+		})
+	}
+
+	// Preopen sockets.
+	for _, addr := range listens {
+		fd, err := listen(addr)
+		if err != nil {
+			return err
+		}
+		system.Preopen(fd, addr, wasi.FDStat{
+			FileType:         wasi.SocketStreamType,
+			Flags:            wasi.NonBlock,
+			RightsBase:       listenRights,
+			RightsInheriting: connRights,
 		})
 	}
 
@@ -183,13 +204,13 @@ func exit(ctx context.Context, exitCode int) error {
 	return nil
 }
 
-type strings []string
+type stringList []string
 
-func (s strings) String() string {
+func (s stringList) String() string {
 	return fmt.Sprintf("%v", []string(s))
 }
 
-func (s *strings) Set(value string) error {
+func (s *stringList) Set(value string) error {
 	*s = append(*s, value)
 	return nil
 }
