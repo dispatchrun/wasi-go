@@ -1,4 +1,4 @@
-test: wasiunix submodules
+test: wasirun submodules
 	python3 wasi-testsuite/test-runner/wasi_test_runner.py \
 		-t wasi-testsuite/tests/assemblyscript/testsuite \
 		   wasi-testsuite/tests/c/testsuite \
@@ -7,10 +7,11 @@ test: wasiunix submodules
 
 wasi.src.go = $(wildcard ../../*.go)
 wasiunix.src.go = $(wildcard ../*.go)
+wasirun.src.go = $(wildcard ../../cmd/wasirun/*.go)
 wasi_snapshot_preview1.src.go = $(wildcard ../../imports/wasi_snapshot_preview1/*.go)
 
-wasiunix: ../cmd/wasiunix/main.go $(wasi.src.go) $(wasiunix.src.go) $(wasi_snapshot_preview1.src.go)
-	go build -o $@ $<
+wasirun: $(wasirun.src.go) $(wasi.src.go) $(wasiunix.src.go) $(wasi_snapshot_preview1.src.go)
+	go build -o $@ $(wasirun.src.go)
 
 .PHONY: submodules
 submodules:
