@@ -1,6 +1,4 @@
-//go:build linux
-
-package wasiunix
+package unix
 
 import (
 	"fmt"

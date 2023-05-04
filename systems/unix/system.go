@@ -1,4 +1,4 @@
-package wasiunix
+package unix
 
 import (
 	"context"

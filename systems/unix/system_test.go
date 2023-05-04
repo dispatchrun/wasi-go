@@ -1,4 +1,4 @@
-package wasiunix_test
+package unix_test
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/stealthrocket/wasi-go"
+	"github.com/stealthrocket/wasi-go/systems/unix"
 	"github.com/stealthrocket/wasi-go/testwasi"
-	"github.com/stealthrocket/wasi-go/wasiunix"
-	"golang.org/x/sys/unix"
+	sysunix "golang.org/x/sys/unix"
 )
 
 func TestWASIP1(t *testing.T) {
@@ -21,7 +21,7 @@ func TestWASIP1(t *testing.T) {
 		func(config testwasi.TestConfig) (wasi.System, func(), error) {
 			epoch := config.Now()
 
-			s := &wasiunix.System{
+			s := &unix.System{
 				Args:    config.Args,
 				Environ: config.Environ,
 				Monotonic: func(context.Context) (uint64, error) {
@@ -82,16 +82,16 @@ func TestWASIP1(t *testing.T) {
 }
 
 func dup(fd int) (int, error) {
-	newfd, err := unix.Dup(fd)
+	newfd, err := sysunix.Dup(fd)
 	if err != nil {
 		return -1, err
 	}
-	unix.CloseOnExec(newfd)
+	sysunix.CloseOnExec(newfd)
 	return newfd, nil
 }
 
 func TestSystemPollAndShutdown(t *testing.T) {
-	testSystem(func(ctx context.Context, p *wasiunix.System) {
+	testSystem(func(ctx context.Context, p *unix.System) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			if err := p.Shutdown(ctx); err != nil {
@@ -129,7 +129,7 @@ func TestSystemPollAndShutdown(t *testing.T) {
 }
 
 func TestSystemPollBadFileDescriptor(t *testing.T) {
-	testSystem(func(ctx context.Context, p *wasiunix.System) {
+	testSystem(func(ctx context.Context, p *unix.System) {
 		subscriptions := []wasi.Subscription{
 			subscribeFDRead(0),
 			// Subscribe to a file descriptor which is not registered in the
@@ -164,7 +164,7 @@ func TestSystemPollBadFileDescriptor(t *testing.T) {
 }
 
 func TestSystemPollMissingMonotonicClock(t *testing.T) {
-	testSystem(func(ctx context.Context, p *wasiunix.System) {
+	testSystem(func(ctx context.Context, p *unix.System) {
 		p.Monotonic = nil
 
 		subscriptions := []wasi.Subscription{
@@ -197,7 +197,7 @@ func TestSystemPollMissingMonotonicClock(t *testing.T) {
 	})
 }
 
-func testSystem(f func(context.Context, *wasiunix.System)) {
+func testSystem(f func(context.Context, *unix.System)) {
 	ctx := context.Background()
 
 	p := newSystem()
@@ -213,8 +213,8 @@ func testSystem(f func(context.Context, *wasiunix.System)) {
 	f(ctx, p)
 }
 
-func newSystem() *wasiunix.System {
-	return &wasiunix.System{
+func newSystem() *unix.System {
+	return &unix.System{
 		Realtime:           realtime,
 		RealtimePrecision:  time.Microsecond,
 		Monotonic:          monotonic,
