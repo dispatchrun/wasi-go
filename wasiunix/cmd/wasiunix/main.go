@@ -104,7 +104,7 @@ func run(args []string) error {
 	runtime := wazero.NewRuntime(ctx)
 	defer runtime.Close(ctx)
 
-	provider := &wasiunix.Provider{
+	system := &wasiunix.System{
 		Args:               append([]string{wasmName}, args...),
 		Environ:            envs,
 		Realtime:           realtime,
@@ -135,7 +135,7 @@ func run(args []string) error {
 			}
 			stat.Flags |= wasi.NonBlock
 		}
-		provider.Preopen(stdio.fd, stdio.path, stat)
+		system.Preopen(stdio.fd, stdio.path, stat)
 	}
 
 	for _, dir := range dirs {
@@ -143,7 +143,7 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		provider.Preopen(fd, dir, wasi.FDStat{
+		system.Preopen(fd, dir, wasi.FDStat{
 			FileType:         wasi.DirectoryType,
 			RightsBase:       wasi.AllRights,
 			RightsInheriting: wasi.AllRights,
@@ -152,7 +152,7 @@ func run(args []string) error {
 
 	module := wazergo.MustInstantiate(ctx, runtime,
 		wasi_snapshot_preview1.HostModule,
-		wasi_snapshot_preview1.WithWASI(provider),
+		wasi_snapshot_preview1.WithWASI(system),
 	)
 	ctx = wazergo.WithModuleInstance(ctx, module)
 

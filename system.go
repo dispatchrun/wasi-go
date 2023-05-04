@@ -2,13 +2,13 @@ package wasi
 
 import "context"
 
-// Provider provides an implementation of WASI preview 1.
+// System is the WebAssembly System Interface (WASI).
 //
 // The functions here are higher-level than those found in the spec.
 // This is so that implementations don't have to concern themselves with
 // serialization details. For example, {args_get,args_sizes_get} can
 // both be implemented elsewhere using the higher-level ArgsGet.
-type Provider interface {
+type System interface {
 	// ArgsGet reads command-line argument data.
 	ArgsGet(ctx context.Context) ([]string, Errno)
 
@@ -299,6 +299,6 @@ type Provider interface {
 	// Note: This is similar to shutdown in POSIX.
 	SockShutdown(ctx context.Context, fd FD, flags SDFlags) Errno
 
-	// Close closes the Provider.
+	// Close closes the System.
 	Close(ctx context.Context) error
 }

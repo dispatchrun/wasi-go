@@ -15,12 +15,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Provider is a WASI preview 1 implementation for Unix systems.
+// System is a WASI preview 1 implementation for Unix.
 //
-// It implements the wasi.Provider interface.
+// It implements the wasi.System interface.
 //
-// The provider is not safe for concurrent use.
-type Provider struct {
+// An instance of System is not safe for concurrent use.
+type System struct {
 	// Args are the environment variables accessible via ArgsGet.
 	Args []string
 
@@ -75,11 +75,11 @@ type fdinfo struct {
 }
 
 // Preopen adds an open file to the list of pre-opens.
-func (p *Provider) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
+func (s *System) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
 	fdstat.RightsBase &= wasi.AllRights
 	fdstat.RightsInheriting &= wasi.AllRights
-	p.preopens.Assign(
-		p.fds.Insert(fdinfo{
+	s.preopens.Assign(
+		s.fds.Insert(fdinfo{
 			fd:   hostfd,
 			stat: fdstat,
 		}),
@@ -87,12 +87,12 @@ func (p *Provider) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
 	)
 }
 
-func (p *Provider) isPreopen(fd wasi.FD) bool {
-	return p.preopens.Access(fd) != nil
+func (s *System) isPreopen(fd wasi.FD) bool {
+	return s.preopens.Access(fd) != nil
 }
 
-func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
-	f := p.fds.Access(guestfd)
+func (s *System) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
+	f := s.fds.Access(guestfd)
 	if f == nil {
 		return nil, wasi.EBADF
 	}
@@ -102,12 +102,12 @@ func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.
 	return f, wasi.ESUCCESS
 }
 
-func (p *Provider) lookupPreopenPath(guestfd wasi.FD) (string, wasi.Errno) {
-	path, ok := p.preopens.Lookup(guestfd)
+func (s *System) lookupPreopenPath(guestfd wasi.FD) (string, wasi.Errno) {
+	path, ok := s.preopens.Lookup(guestfd)
 	if !ok {
 		return "", wasi.EBADF
 	}
-	f, errno := p.lookupFD(guestfd, 0)
+	f, errno := s.lookupFD(guestfd, 0)
 	if errno != wasi.ESUCCESS {
 		return "", errno
 	}
@@ -117,8 +117,8 @@ func (p *Provider) lookupPreopenPath(guestfd wasi.FD) (string, wasi.Errno) {
 	return path, wasi.ESUCCESS
 }
 
-func (p *Provider) lookupSocketFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
-	f, errno := p.lookupFD(guestfd, rights)
+func (s *System) lookupSocketFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
+	f, errno := s.lookupFD(guestfd, rights)
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
@@ -130,20 +130,20 @@ func (p *Provider) lookupSocketFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo,
 	}
 }
 
-func (p *Provider) ArgsGet(ctx context.Context) ([]string, wasi.Errno) {
-	return p.Args, wasi.ESUCCESS
+func (s *System) ArgsGet(ctx context.Context) ([]string, wasi.Errno) {
+	return s.Args, wasi.ESUCCESS
 }
 
-func (p *Provider) EnvironGet(ctx context.Context) ([]string, wasi.Errno) {
-	return p.Environ, wasi.ESUCCESS
+func (s *System) EnvironGet(ctx context.Context) ([]string, wasi.Errno) {
+	return s.Environ, wasi.ESUCCESS
 }
 
-func (p *Provider) ClockResGet(ctx context.Context, id wasi.ClockID) (wasi.Timestamp, wasi.Errno) {
+func (s *System) ClockResGet(ctx context.Context, id wasi.ClockID) (wasi.Timestamp, wasi.Errno) {
 	switch id {
 	case wasi.Realtime:
-		return wasi.Timestamp(p.RealtimePrecision), wasi.ESUCCESS
+		return wasi.Timestamp(s.RealtimePrecision), wasi.ESUCCESS
 	case wasi.Monotonic:
-		return wasi.Timestamp(p.MonotonicPrecision), wasi.ESUCCESS
+		return wasi.Timestamp(s.MonotonicPrecision), wasi.ESUCCESS
 	case wasi.ProcessCPUTimeID, wasi.ThreadCPUTimeID:
 		return 0, wasi.ENOTSUP
 	default:
@@ -151,19 +151,19 @@ func (p *Provider) ClockResGet(ctx context.Context, id wasi.ClockID) (wasi.Times
 	}
 }
 
-func (p *Provider) ClockTimeGet(ctx context.Context, id wasi.ClockID, precision wasi.Timestamp) (wasi.Timestamp, wasi.Errno) {
+func (s *System) ClockTimeGet(ctx context.Context, id wasi.ClockID, precision wasi.Timestamp) (wasi.Timestamp, wasi.Errno) {
 	switch id {
 	case wasi.Realtime:
-		if p.Realtime == nil {
+		if s.Realtime == nil {
 			return 0, wasi.ENOTSUP
 		}
-		t, err := p.Realtime(ctx)
+		t, err := s.Realtime(ctx)
 		return wasi.Timestamp(t), makeErrno(err)
 	case wasi.Monotonic:
-		if p.Monotonic == nil {
+		if s.Monotonic == nil {
 			return 0, wasi.ENOTSUP
 		}
-		t, err := p.Monotonic(ctx)
+		t, err := s.Monotonic(ctx)
 		return wasi.Timestamp(t), makeErrno(err)
 	case wasi.ProcessCPUTimeID, wasi.ThreadCPUTimeID:
 		return 0, wasi.ENOTSUP
@@ -172,8 +172,8 @@ func (p *Provider) ClockTimeGet(ctx context.Context, id wasi.ClockID, precision 
 	}
 }
 
-func (p *Provider) FDAdvise(ctx context.Context, fd wasi.FD, offset wasi.FileSize, length wasi.FileSize, advice wasi.Advice) wasi.Errno {
-	f, errno := p.lookupFD(fd, wasi.FDAdviseRight)
+func (s *System) FDAdvise(ctx context.Context, fd wasi.FD, offset wasi.FileSize, length wasi.FileSize, advice wasi.Advice) wasi.Errno {
+	f, errno := s.lookupFD(fd, wasi.FDAdviseRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -181,8 +181,8 @@ func (p *Provider) FDAdvise(ctx context.Context, fd wasi.FD, offset wasi.FileSiz
 	return makeErrno(err)
 }
 
-func (p *Provider) FDAllocate(ctx context.Context, fd wasi.FD, offset wasi.FileSize, length wasi.FileSize) wasi.Errno {
-	f, errno := p.lookupFD(fd, wasi.FDAllocateRight)
+func (s *System) FDAllocate(ctx context.Context, fd wasi.FD, offset wasi.FileSize, length wasi.FileSize) wasi.Errno {
+	f, errno := s.lookupFD(fd, wasi.FDAllocateRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -190,21 +190,21 @@ func (p *Provider) FDAllocate(ctx context.Context, fd wasi.FD, offset wasi.FileS
 	return makeErrno(err)
 }
 
-func (p *Provider) FDClose(ctx context.Context, fd wasi.FD) wasi.Errno {
-	f, errno := p.lookupFD(fd, 0)
+func (s *System) FDClose(ctx context.Context, fd wasi.FD) wasi.Errno {
+	f, errno := s.lookupFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	p.fds.Delete(fd)
+	s.fds.Delete(fd)
 	// Note: closing pre-opens is allowed.
 	// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/close_preopen.rs
-	p.preopens.Delete(fd)
+	s.preopens.Delete(fd)
 	err := unix.Close(f.fd)
 	return makeErrno(err)
 }
 
-func (p *Provider) FDDataSync(ctx context.Context, fd wasi.FD) wasi.Errno {
-	f, errno := p.lookupFD(fd, wasi.FDDataSyncRight)
+func (s *System) FDDataSync(ctx context.Context, fd wasi.FD) wasi.Errno {
+	f, errno := s.lookupFD(fd, wasi.FDDataSyncRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -212,16 +212,16 @@ func (p *Provider) FDDataSync(ctx context.Context, fd wasi.FD) wasi.Errno {
 	return makeErrno(err)
 }
 
-func (p *Provider) FDStatGet(ctx context.Context, fd wasi.FD) (wasi.FDStat, wasi.Errno) {
-	f, errno := p.lookupFD(fd, 0)
+func (s *System) FDStatGet(ctx context.Context, fd wasi.FD) (wasi.FDStat, wasi.Errno) {
+	f, errno := s.lookupFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return wasi.FDStat{}, errno
 	}
 	return f.stat, wasi.ESUCCESS
 }
 
-func (p *Provider) FDStatSetFlags(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) wasi.Errno {
-	f, errno := p.lookupFD(fd, wasi.FDStatSetFlagsRight)
+func (s *System) FDStatSetFlags(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) wasi.Errno {
+	f, errno := s.lookupFD(fd, wasi.FDStatSetFlagsRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -253,8 +253,8 @@ func (p *Provider) FDStatSetFlags(ctx context.Context, fd wasi.FD, flags wasi.FD
 	return wasi.ESUCCESS
 }
 
-func (p *Provider) FDStatSetRights(ctx context.Context, fd wasi.FD, rightsBase, rightsInheriting wasi.Rights) wasi.Errno {
-	f, errno := p.lookupFD(fd, 0)
+func (s *System) FDStatSetRights(ctx context.Context, fd wasi.FD, rightsBase, rightsInheriting wasi.Rights) wasi.Errno {
+	f, errno := s.lookupFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -272,8 +272,8 @@ func (p *Provider) FDStatSetRights(ctx context.Context, fd wasi.FD, rightsBase, 
 	return wasi.ESUCCESS
 }
 
-func (p *Provider) FDFileStatGet(ctx context.Context, fd wasi.FD) (wasi.FileStat, wasi.Errno) {
-	f, errno := p.lookupFD(fd, wasi.FDFileStatGetRight)
+func (s *System) FDFileStatGet(ctx context.Context, fd wasi.FD) (wasi.FileStat, wasi.Errno) {
+	f, errno := s.lookupFD(fd, wasi.FDFileStatGetRight)
 	if errno != wasi.ESUCCESS {
 		return wasi.FileStat{}, errno
 	}
@@ -294,8 +294,8 @@ func (p *Provider) FDFileStatGet(ctx context.Context, fd wasi.FD) (wasi.FileStat
 	return stat, wasi.ESUCCESS
 }
 
-func (p *Provider) FDFileStatSetSize(ctx context.Context, fd wasi.FD, size wasi.FileSize) wasi.Errno {
-	f, errno := p.lookupFD(fd, wasi.FDFileStatSetSizeRight)
+func (s *System) FDFileStatSetSize(ctx context.Context, fd wasi.FD, size wasi.FileSize) wasi.Errno {
+	f, errno := s.lookupFD(fd, wasi.FDFileStatSetSizeRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -303,8 +303,8 @@ func (p *Provider) FDFileStatSetSize(ctx context.Context, fd wasi.FD, size wasi.
 	return makeErrno(err)
 }
 
-func (p *Provider) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTime, modifyTime wasi.Timestamp, flags wasi.FSTFlags) wasi.Errno {
-	f, errno := p.lookupFD(fd, wasi.FDFileStatSetTimesRight)
+func (s *System) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTime, modifyTime wasi.Timestamp, flags wasi.FSTFlags) wasi.Errno {
+	f, errno := s.lookupFD(fd, wasi.FDFileStatSetTimesRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -314,10 +314,10 @@ func (p *Provider) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTim
 	}
 	ts := [2]unix.Timespec{sysStat.Atim, sysStat.Mtim}
 	if flags.Has(wasi.AccessTimeNow) || flags.Has(wasi.ModifyTimeNow) {
-		if p.Monotonic == nil {
+		if s.Monotonic == nil {
 			return wasi.ENOSYS
 		}
-		now, err := p.Monotonic(ctx)
+		now, err := s.Monotonic(ctx)
 		if err != nil {
 			return makeErrno(err)
 		}
@@ -338,8 +338,8 @@ func (p *Provider) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTim
 	return makeErrno(err)
 }
 
-func (p *Provider) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
-	f, errno := p.lookupFD(fd, wasi.FDReadRight|wasi.FDSeekRight)
+func (s *System) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
+	f, errno := s.lookupFD(fd, wasi.FDReadRight|wasi.FDSeekRight)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
@@ -347,8 +347,8 @@ func (p *Provider) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec,
 	return wasi.Size(n), makeErrno(err)
 }
 
-func (p *Provider) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, wasi.Errno) {
-	path, errno := p.lookupPreopenPath(fd)
+func (s *System) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, wasi.Errno) {
+	path, errno := s.lookupPreopenPath(fd)
 	if errno != wasi.ESUCCESS {
 		return wasi.PreStat{}, errno
 	}
@@ -361,12 +361,12 @@ func (p *Provider) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, 
 	return stat, wasi.ESUCCESS
 }
 
-func (p *Provider) FDPreStatDirName(ctx context.Context, fd wasi.FD) (string, wasi.Errno) {
-	return p.lookupPreopenPath(fd)
+func (s *System) FDPreStatDirName(ctx context.Context, fd wasi.FD) (string, wasi.Errno) {
+	return s.lookupPreopenPath(fd)
 }
 
-func (p *Provider) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
-	f, errno := p.lookupFD(fd, wasi.FDWriteRight|wasi.FDSeekRight)
+func (s *System) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
+	f, errno := s.lookupFD(fd, wasi.FDWriteRight|wasi.FDSeekRight)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
@@ -374,8 +374,8 @@ func (p *Provider) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec
 	return wasi.Size(n), makeErrno(err)
 }
 
-func (p *Provider) FDRead(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) (wasi.Size, wasi.Errno) {
-	f, errno := p.lookupFD(fd, wasi.FDReadRight)
+func (s *System) FDRead(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) (wasi.Size, wasi.Errno) {
+	f, errno := s.lookupFD(fd, wasi.FDReadRight)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
@@ -383,8 +383,8 @@ func (p *Provider) FDRead(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) 
 	return wasi.Size(n), makeErrno(err)
 }
 
-func (p *Provider) FDReadDir(ctx context.Context, fd wasi.FD, entries []wasi.DirEntry, cookie wasi.DirCookie, bufferSizeBytes int) (int, wasi.Errno) {
-	f, errno := p.lookupFD(fd, wasi.FDReadDirRight)
+func (s *System) FDReadDir(ctx context.Context, fd wasi.FD, entries []wasi.DirEntry, cookie wasi.DirCookie, bufferSizeBytes int) (int, wasi.Errno) {
+	f, errno := s.lookupFD(fd, wasi.FDReadDirRight)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
@@ -398,25 +398,25 @@ func (p *Provider) FDReadDir(ctx context.Context, fd wasi.FD, entries []wasi.Dir
 	return n, makeErrno(err)
 }
 
-func (p *Provider) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno {
-	if p.isPreopen(from) || p.isPreopen(to) {
+func (s *System) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno {
+	if s.isPreopen(from) || s.isPreopen(to) {
 		return wasi.ENOTSUP
 	}
-	f, errno := p.lookupFD(from, 0)
+	f, errno := s.lookupFD(from, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
 	// TODO: limit max file descriptor number
-	g, replaced := p.fds.Assign(to, *f)
+	g, replaced := s.fds.Assign(to, *f)
 	if replaced {
 		unix.Close(g.fd)
 	}
-	p.fds.Delete(from)
+	s.fds.Delete(from)
 	return wasi.ESUCCESS
 }
 
-func (p *Provider) FDSync(ctx context.Context, fd wasi.FD) wasi.Errno {
-	f, errno := p.lookupFD(fd, wasi.FDSyncRight)
+func (s *System) FDSync(ctx context.Context, fd wasi.FD) wasi.Errno {
+	f, errno := s.lookupFD(fd, wasi.FDSyncRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -424,19 +424,19 @@ func (p *Provider) FDSync(ctx context.Context, fd wasi.FD) wasi.Errno {
 	return makeErrno(err)
 }
 
-func (p *Provider) FDSeek(ctx context.Context, fd wasi.FD, delta wasi.FileDelta, whence wasi.Whence) (wasi.FileSize, wasi.Errno) {
-	return p.fdseek(fd, wasi.FDSeekRight, delta, whence)
+func (s *System) FDSeek(ctx context.Context, fd wasi.FD, delta wasi.FileDelta, whence wasi.Whence) (wasi.FileSize, wasi.Errno) {
+	return s.fdseek(fd, wasi.FDSeekRight, delta, whence)
 }
 
-func (p *Provider) FDTell(ctx context.Context, fd wasi.FD) (wasi.FileSize, wasi.Errno) {
-	return p.fdseek(fd, wasi.FDTellRight, 0, wasi.SeekCurrent)
+func (s *System) FDTell(ctx context.Context, fd wasi.FD) (wasi.FileSize, wasi.Errno) {
+	return s.fdseek(fd, wasi.FDTellRight, 0, wasi.SeekCurrent)
 }
 
-func (p *Provider) fdseek(fd wasi.FD, rights wasi.Rights, delta wasi.FileDelta, whence wasi.Whence) (wasi.FileSize, wasi.Errno) {
+func (s *System) fdseek(fd wasi.FD, rights wasi.Rights, delta wasi.FileDelta, whence wasi.Whence) (wasi.FileSize, wasi.Errno) {
 	// Note: FDSeekRight implies FDTellRight. FDTellRight also includes the
 	// right to invoke FDSeek in such a way that the file offset remains
 	// unaltered.
-	f, errno := p.lookupFD(fd, rights)
+	f, errno := s.lookupFD(fd, rights)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
@@ -455,8 +455,8 @@ func (p *Provider) fdseek(fd wasi.FD, rights wasi.Rights, delta wasi.FileDelta, 
 	return wasi.FileSize(off), makeErrno(err)
 }
 
-func (p *Provider) FDWrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) (wasi.Size, wasi.Errno) {
-	f, errno := p.lookupFD(fd, wasi.FDWriteRight)
+func (s *System) FDWrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) (wasi.Size, wasi.Errno) {
+	f, errno := s.lookupFD(fd, wasi.FDWriteRight)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
@@ -464,8 +464,8 @@ func (p *Provider) FDWrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec)
 	return wasi.Size(n), makeErrno(err)
 }
 
-func (p *Provider) PathCreateDirectory(ctx context.Context, fd wasi.FD, path string) wasi.Errno {
-	d, errno := p.lookupFD(fd, wasi.PathCreateDirectoryRight)
+func (s *System) PathCreateDirectory(ctx context.Context, fd wasi.FD, path string) wasi.Errno {
+	d, errno := s.lookupFD(fd, wasi.PathCreateDirectoryRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -473,8 +473,8 @@ func (p *Provider) PathCreateDirectory(ctx context.Context, fd wasi.FD, path str
 	return makeErrno(err)
 }
 
-func (p *Provider) PathFileStatGet(ctx context.Context, fd wasi.FD, flags wasi.LookupFlags, path string) (wasi.FileStat, wasi.Errno) {
-	d, errno := p.lookupFD(fd, wasi.PathFileStatGetRight)
+func (s *System) PathFileStatGet(ctx context.Context, fd wasi.FD, flags wasi.LookupFlags, path string) (wasi.FileStat, wasi.Errno) {
+	d, errno := s.lookupFD(fd, wasi.PathFileStatGetRight)
 	if errno != wasi.ESUCCESS {
 		return wasi.FileStat{}, errno
 	}
@@ -487,8 +487,8 @@ func (p *Provider) PathFileStatGet(ctx context.Context, fd wasi.FD, flags wasi.L
 	return makeFileStat(&sysStat), makeErrno(err)
 }
 
-func (p *Provider) PathFileStatSetTimes(ctx context.Context, fd wasi.FD, lookupFlags wasi.LookupFlags, path string, accessTime, modifyTime wasi.Timestamp, fstFlags wasi.FSTFlags) wasi.Errno {
-	d, errno := p.lookupFD(fd, wasi.PathFileStatSetTimesRight)
+func (s *System) PathFileStatSetTimes(ctx context.Context, fd wasi.FD, lookupFlags wasi.LookupFlags, path string, accessTime, modifyTime wasi.Timestamp, fstFlags wasi.FSTFlags) wasi.Errno {
+	d, errno := s.lookupFD(fd, wasi.PathFileStatSetTimesRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -527,12 +527,12 @@ func (p *Provider) PathFileStatSetTimes(ctx context.Context, fd wasi.FD, lookupF
 	return makeErrno(err)
 }
 
-func (p *Provider) PathLink(ctx context.Context, fd wasi.FD, flags wasi.LookupFlags, oldPath string, newFD wasi.FD, newPath string) wasi.Errno {
-	oldDir, errno := p.lookupFD(fd, wasi.PathLinkSourceRight)
+func (s *System) PathLink(ctx context.Context, fd wasi.FD, flags wasi.LookupFlags, oldPath string, newFD wasi.FD, newPath string) wasi.Errno {
+	oldDir, errno := s.lookupFD(fd, wasi.PathLinkSourceRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	newDir, errno := p.lookupFD(newFD, wasi.PathLinkTargetRight)
+	newDir, errno := s.lookupFD(newFD, wasi.PathLinkTargetRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -544,8 +544,8 @@ func (p *Provider) PathLink(ctx context.Context, fd wasi.FD, flags wasi.LookupFl
 	return makeErrno(err)
 }
 
-func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.LookupFlags, path string, openFlags wasi.OpenFlags, rightsBase, rightsInheriting wasi.Rights, fdFlags wasi.FDFlags) (wasi.FD, wasi.Errno) {
-	d, errno := p.lookupFD(fd, wasi.PathOpenRight)
+func (s *System) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.LookupFlags, path string, openFlags wasi.OpenFlags, rightsBase, rightsInheriting wasi.Rights, fdFlags wasi.FDFlags) (wasi.FD, wasi.Errno) {
+	d, errno := s.lookupFD(fd, wasi.PathOpenRight)
 	if errno != wasi.ESUCCESS {
 		return -1, errno
 	}
@@ -627,7 +627,7 @@ func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Lo
 		return -1, makeErrno(err)
 	}
 
-	guestfd := p.fds.Insert(fdinfo{
+	guestfd := s.fds.Insert(fdinfo{
 		fd: hostfd,
 		stat: wasi.FDStat{
 			FileType:         fileType,
@@ -639,8 +639,8 @@ func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Lo
 	return guestfd, wasi.ESUCCESS
 }
 
-func (p *Provider) PathReadLink(ctx context.Context, fd wasi.FD, path string, buffer []byte) ([]byte, wasi.Errno) {
-	d, errno := p.lookupFD(fd, wasi.PathReadLinkRight)
+func (s *System) PathReadLink(ctx context.Context, fd wasi.FD, path string, buffer []byte) ([]byte, wasi.Errno) {
+	d, errno := s.lookupFD(fd, wasi.PathReadLinkRight)
 	if errno != wasi.ESUCCESS {
 		return buffer, errno
 	}
@@ -653,8 +653,8 @@ func (p *Provider) PathReadLink(ctx context.Context, fd wasi.FD, path string, bu
 	return buffer[:n], wasi.ESUCCESS
 }
 
-func (p *Provider) PathRemoveDirectory(ctx context.Context, fd wasi.FD, path string) wasi.Errno {
-	d, errno := p.lookupFD(fd, wasi.PathRemoveDirectoryRight)
+func (s *System) PathRemoveDirectory(ctx context.Context, fd wasi.FD, path string) wasi.Errno {
+	d, errno := s.lookupFD(fd, wasi.PathRemoveDirectoryRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -662,12 +662,12 @@ func (p *Provider) PathRemoveDirectory(ctx context.Context, fd wasi.FD, path str
 	return makeErrno(err)
 }
 
-func (p *Provider) PathRename(ctx context.Context, fd wasi.FD, oldPath string, newFD wasi.FD, newPath string) wasi.Errno {
-	oldDir, errno := p.lookupFD(fd, wasi.PathRenameSourceRight)
+func (s *System) PathRename(ctx context.Context, fd wasi.FD, oldPath string, newFD wasi.FD, newPath string) wasi.Errno {
+	oldDir, errno := s.lookupFD(fd, wasi.PathRenameSourceRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	newDir, errno := p.lookupFD(newFD, wasi.PathRenameTargetRight)
+	newDir, errno := s.lookupFD(newFD, wasi.PathRenameTargetRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -675,8 +675,8 @@ func (p *Provider) PathRename(ctx context.Context, fd wasi.FD, oldPath string, n
 	return makeErrno(err)
 }
 
-func (p *Provider) PathSymlink(ctx context.Context, oldPath string, fd wasi.FD, newPath string) wasi.Errno {
-	d, errno := p.lookupFD(fd, wasi.PathSymlinkRight)
+func (s *System) PathSymlink(ctx context.Context, oldPath string, fd wasi.FD, newPath string) wasi.Errno {
+	d, errno := s.lookupFD(fd, wasi.PathSymlinkRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -684,8 +684,8 @@ func (p *Provider) PathSymlink(ctx context.Context, oldPath string, fd wasi.FD, 
 	return makeErrno(err)
 }
 
-func (p *Provider) PathUnlinkFile(ctx context.Context, fd wasi.FD, path string) wasi.Errno {
-	d, errno := p.lookupFD(fd, wasi.PathUnlinkFileRight)
+func (s *System) PathUnlinkFile(ctx context.Context, fd wasi.FD, path string) wasi.Errno {
+	d, errno := s.lookupFD(fd, wasi.PathUnlinkFileRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -693,18 +693,18 @@ func (p *Provider) PathUnlinkFile(ctx context.Context, fd wasi.FD, path string) 
 	return makeErrno(err)
 }
 
-func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscription, events []wasi.Event) (int, wasi.Errno) {
+func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscription, events []wasi.Event) (int, wasi.Errno) {
 	if len(subscriptions) == 0 || len(events) < len(subscriptions) {
 		return 0, wasi.EINVAL
 	}
-	wakefd, err := p.init()
+	wakefd, err := s.init()
 	if err != nil {
 		return 0, makeErrno(err)
 	}
 	epoch := time.Duration(0)
 	timeout := time.Duration(-1)
-	p.pollfds = p.pollfds[:0]
-	p.pollfds = append(p.pollfds, unix.PollFd{
+	s.pollfds = s.pollfds[:0]
+	s.pollfds = append(s.pollfds, unix.PollFd{
 		Fd:     int32(wakefd),
 		Events: unix.POLLIN | unix.POLLERR | unix.POLLHUP,
 	})
@@ -715,38 +715,38 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 	}
 
 	for i := range subscriptions {
-		s := &subscriptions[i]
+		sub := &subscriptions[i]
 
-		switch s.EventType {
+		switch sub.EventType {
 		case wasi.FDReadEvent, wasi.FDWriteEvent:
-			f, errno := p.lookupFD(s.GetFDReadWrite().FD, wasi.PollFDReadWriteRight)
+			f, errno := s.lookupFD(sub.GetFDReadWrite().FD, wasi.PollFDReadWriteRight)
 			if errno != wasi.ESUCCESS {
-				events[i] = errorEvent(s, errno)
+				events[i] = errorEvent(sub, errno)
 				numEvents++
 				continue
 			}
 			var pollevent int16 = unix.POLLIN
-			if s.EventType == wasi.FDWriteEvent {
+			if sub.EventType == wasi.FDWriteEvent {
 				pollevent = unix.POLLOUT
 			}
-			p.pollfds = append(p.pollfds, unix.PollFd{
+			s.pollfds = append(s.pollfds, unix.PollFd{
 				Fd:     int32(f.fd),
 				Events: pollevent,
 			})
 
 		case wasi.ClockEvent:
-			c := s.GetClock()
-			if c.ID != wasi.Monotonic || p.Monotonic == nil {
-				events[i] = errorEvent(s, wasi.ENOSYS)
+			c := sub.GetClock()
+			if c.ID != wasi.Monotonic || s.Monotonic == nil {
+				events[i] = errorEvent(sub, wasi.ENOSYS)
 				numEvents++
 				continue
 			}
 			if epoch == 0 {
 				// Only capture the current time if the program requested a
 				// clock subscription; it allows programs that never ask for
-				// a timeout to run with a provider which does not have a
+				// a timeout to run with a system which does not have a
 				// monotonic clock configured.
-				now, err := p.Monotonic(ctx)
+				now, err := s.Monotonic(ctx)
 				if err != nil {
 					return 0, makeErrno(err)
 				}
@@ -780,13 +780,13 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 		}
 	}
 
-	n, err := unix.Poll(p.pollfds, timeoutMillis)
+	n, err := unix.Poll(s.pollfds, timeoutMillis)
 	if err != nil {
 		return 0, makeErrno(err)
 	}
 
-	if n > 0 && p.pollfds[0].Revents != 0 {
-		// If the wake fd was notified it means the provider was shut down,
+	if n > 0 && s.pollfds[0].Revents != 0 {
+		// If the wake fd was notified it means the system was shut down,
 		// we report this by cancelling all subscriptions.
 		//
 		// Technically we might be erasing events that had already gathered
@@ -805,7 +805,7 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 
 	var now time.Duration
 	if timeout >= 0 {
-		t, err := p.Monotonic(ctx)
+		t, err := s.Monotonic(ctx)
 		if err != nil {
 			return 0, makeErrno(err)
 		}
@@ -814,16 +814,16 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 
 	j := 1
 	for i := range subscriptions {
-		s := &subscriptions[i]
-		e := wasi.Event{UserData: s.UserData, EventType: s.EventType + 1}
+		sub := &subscriptions[i]
+		e := wasi.Event{UserData: sub.UserData, EventType: sub.EventType + 1}
 
 		if events[i].EventType != 0 {
 			continue
 		}
 
-		switch s.EventType {
+		switch sub.EventType {
 		case wasi.ClockEvent:
-			c := s.GetClock()
+			c := sub.GetClock()
 			t := c.Timeout.Duration()
 			if !c.Flags.Has(wasi.Abstime) {
 				t += epoch
@@ -833,7 +833,7 @@ func (p *Provider) PollOneOff(ctx context.Context, subscriptions []wasi.Subscrip
 			}
 
 		case wasi.FDReadEvent, wasi.FDWriteEvent:
-			pf := &p.pollfds[j]
+			pf := &s.pollfds[j]
 			j++
 			if pf.Revents == 0 {
 				continue
@@ -886,36 +886,36 @@ func errorEvent(s *wasi.Subscription, err wasi.Errno) wasi.Event {
 	}
 }
 
-func (p *Provider) ProcExit(ctx context.Context, code wasi.ExitCode) wasi.Errno {
-	if p.Exit != nil {
-		return makeErrno(p.Exit(ctx, int(code)))
+func (s *System) ProcExit(ctx context.Context, code wasi.ExitCode) wasi.Errno {
+	if s.Exit != nil {
+		return makeErrno(s.Exit(ctx, int(code)))
 	}
 	return wasi.ENOSYS
 }
 
-func (p *Provider) ProcRaise(ctx context.Context, signal wasi.Signal) wasi.Errno {
-	if p.Raise != nil {
-		return makeErrno(p.Raise(ctx, int(signal)))
+func (s *System) ProcRaise(ctx context.Context, signal wasi.Signal) wasi.Errno {
+	if s.Raise != nil {
+		return makeErrno(s.Raise(ctx, int(signal)))
 	}
 	return wasi.ENOSYS
 }
 
-func (p *Provider) SchedYield(ctx context.Context) wasi.Errno {
-	if p.Yield != nil {
-		return makeErrno(p.Yield(ctx))
+func (s *System) SchedYield(ctx context.Context) wasi.Errno {
+	if s.Yield != nil {
+		return makeErrno(s.Yield(ctx))
 	}
 	return wasi.ENOSYS
 }
 
-func (p *Provider) RandomGet(ctx context.Context, b []byte) wasi.Errno {
-	if _, err := io.ReadFull(p.Rand, b); err != nil {
+func (s *System) RandomGet(ctx context.Context, b []byte) wasi.Errno {
+	if _, err := io.ReadFull(s.Rand, b); err != nil {
 		return wasi.EIO
 	}
 	return wasi.ESUCCESS
 }
 
-func (p *Provider) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) (wasi.FD, wasi.Errno) {
-	socket, errno := p.lookupSocketFD(fd, wasi.SockAcceptRight)
+func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) (wasi.FD, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
 		return -1, errno
 	}
@@ -930,7 +930,7 @@ func (p *Provider) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlag
 	if err != nil {
 		return -1, makeErrno(err)
 	}
-	guestfd := p.fds.Insert(fdinfo{
+	guestfd := s.fds.Insert(fdinfo{
 		fd: connfd,
 		stat: wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
@@ -942,8 +942,8 @@ func (p *Provider) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlag
 	return guestfd, wasi.ESUCCESS
 }
 
-func (p *Provider) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.RIFlags) (wasi.Size, wasi.ROFlags, wasi.Errno) {
-	socket, errno := p.lookupSocketFD(fd, wasi.FDReadRight)
+func (s *System) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.RIFlags) (wasi.Size, wasi.ROFlags, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, wasi.FDReadRight)
 	if errno != wasi.ESUCCESS {
 		return 0, 0, errno
 	}
@@ -951,8 +951,8 @@ func (p *Provider) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec
 	return 0, 0, wasi.ENOSYS // TODO: implement SockRecv
 }
 
-func (p *Provider) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.SIFlags) (wasi.Size, wasi.Errno) {
-	socket, errno := p.lookupSocketFD(fd, wasi.FDWriteRight)
+func (s *System) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.SIFlags) (wasi.Size, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, wasi.FDWriteRight)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
@@ -960,8 +960,8 @@ func (p *Provider) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec
 	return 0, wasi.ENOSYS // TODO: implement SockSend
 }
 
-func (p *Provider) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlags) wasi.Errno {
-	socket, errno := p.lookupSocketFD(fd, wasi.SockShutdownRight)
+func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlags) wasi.Errno {
+	socket, errno := s.lookupSocketFD(fd, wasi.SockShutdownRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
@@ -980,22 +980,22 @@ func (p *Provider) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFl
 	return makeErrno(err)
 }
 
-func (p *Provider) Close(ctx context.Context) error {
-	p.fds.Range(func(fd wasi.FD, f fdinfo) bool {
+func (s *System) Close(ctx context.Context) error {
+	s.fds.Range(func(fd wasi.FD, f fdinfo) bool {
 		unix.Close(f.fd)
 		return true
 	})
-	p.fds.Reset()
-	p.preopens.Reset()
+	s.fds.Reset()
+	s.preopens.Reset()
 
-	p.mutex.Lock()
-	fd0 := p.shutfds[0]
-	fd1 := p.shutfds[1]
-	p.shutfds[0] = -1
-	p.shutfds[1] = -1
-	p.mutex.Unlock()
+	s.mutex.Lock()
+	fd0 := s.shutfds[0]
+	fd1 := s.shutfds[1]
+	s.shutfds[0] = -1
+	s.shutfds[1] = -1
+	s.mutex.Unlock()
 
-	if fd0 != 0 || fd1 != 0 { // true if the provider was initialized
+	if fd0 != 0 || fd1 != 0 { // true if the system was initialized
 		unix.Close(fd0)
 		unix.Close(fd1)
 	}
@@ -1003,33 +1003,33 @@ func (p *Provider) Close(ctx context.Context) error {
 }
 
 // Shutdown may be called to asynchronously cancel all blocking operations on
-// the provider, causing calls such as PollOneOff to unblock and return an
+// the system, causing calls such as PollOneOff to unblock and return an
 // error indicating that the system is shutting down.
-func (p *Provider) Shutdown(ctx context.Context) error {
-	_, err := p.init()
+func (s *System) Shutdown(ctx context.Context) error {
+	_, err := s.init()
 	if err != nil {
 		return err
 	}
-	p.shutdown()
+	s.shutdown()
 	return nil
 }
 
-func (p *Provider) init() (int, error) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	if p.shutfds[0] == 0 && p.shutfds[1] == 0 {
-		if err := pipe(p.shutfds[:], unix.O_NONBLOCK); err != nil {
+func (s *System) init() (int, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.shutfds[0] == 0 && s.shutfds[1] == 0 {
+		if err := pipe(s.shutfds[:], unix.O_NONBLOCK); err != nil {
 			return -1, err
 		}
 	}
-	return p.shutfds[0], nil
+	return s.shutfds[0], nil
 }
 
-func (p *Provider) shutdown() {
-	p.mutex.Lock()
-	fd := p.shutfds[1]
-	p.shutfds[1] = -1
-	p.mutex.Unlock()
+func (s *System) shutdown() {
+	s.mutex.Lock()
+	fd := s.shutfds[1]
+	s.shutfds[1] = -1
+	s.mutex.Unlock()
 	unix.Close(fd)
 }
 

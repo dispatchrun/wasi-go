@@ -18,7 +18,7 @@ const moduleName = "wasi_snapshot_preview1"
 //
 // The host module manages the interaction between the host and the
 // guest WASM module. The host module does not implement WASI preview 1 on its
-// own, and instead calls out to an implementation of the wasi.Provider
+// own, and instead calls out to an implementation of the wasi.System
 // interface, provided via the WithWASI host module Option. The host module is
 // only responsible for (de)serializing inputs and outputs, and for interacting
 // with the guest's memory.
@@ -75,7 +75,7 @@ var HostModule wazergo.HostModule[*Module] = functions{
 type Option = wazergo.Option[*Module]
 
 // WithWASI sets the WASI implementation.
-func WithWASI(wasi wasi.Provider) Option {
+func WithWASI(wasi wasi.System) Option {
 	return wazergo.OptionFunc(func(m *Module) { m.WASI = wasi })
 }
 
@@ -99,7 +99,7 @@ func (f functions) Instantiate(ctx context.Context, opts ...Option) (*Module, er
 }
 
 type Module struct {
-	WASI wasi.Provider
+	WASI wasi.System
 
 	iovecs []wasi.IOVec
 	dirent []wasi.DirEntry
@@ -423,7 +423,7 @@ func (m *Module) PollOneOff(ctx context.Context, in Pointer[wasi.Subscription], 
 }
 
 func (m *Module) ProcExit(ctx context.Context, mod api.Module, exitCode Int32) {
-	// Give the provider a chance to exit.
+	// Give the implementation a chance to exit.
 	m.WASI.ProcExit(ctx, wasi.ExitCode(exitCode))
 
 	// Ensure other callers see the exit code.

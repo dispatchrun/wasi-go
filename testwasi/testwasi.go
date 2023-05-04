@@ -18,7 +18,7 @@ import (
 	"github.com/tetratelabs/wazero/sys"
 )
 
-// TestConfig carries the configuration used to create providers to run the test
+// TestConfig carries the configuration used to create systems to run the test
 // suites against.
 type TestConfig struct {
 	Args    []string
@@ -31,20 +31,20 @@ type TestConfig struct {
 	Now     func() time.Time
 }
 
-// MakeProvider is a function used to create a provider to run the test suites
+// MakeSystem is a function used to create a system to run the test suites
 // against.
 //
-// The function returns the provider and a callback that will be invoked after
-// completing a test to tear down resources allocated by the provider.
-type MakeProvider func(TestConfig) (wasi.Provider, func(), error)
+// The function returns the system and a callback that will be invoked after
+// completing a test to tear down resources allocated by the system.
+type MakeSystem func(TestConfig) (wasi.System, func(), error)
 
 // TestWASIP1 is a generic test suite which runs the list of WebAssembly
-// programs passed as file paths, creating a provider and runtime to execute
+// programs passed as file paths, creating a system and runtime to execute
 // each of the test programs.
 //
 // Tests pass if the execution completed without trapping nor calling proc_exit
 // with a non-zero exit code.
-func TestWASIP1(t *testing.T, filePaths []string, makeProvider MakeProvider) {
+func TestWASIP1(t *testing.T, filePaths []string, makeSystem MakeSystem) {
 	if len(filePaths) == 0 {
 		t.Log("nothing to test")
 	}
@@ -93,7 +93,7 @@ func TestWASIP1(t *testing.T, filePaths []string, makeProvider MakeProvider) {
 			go io.Copy(os.Stdout, stdoutR)
 			go io.Copy(os.Stderr, stderrR)
 
-			provider, teardown, err := makeProvider(TestConfig{
+			system, teardown, err := makeSystem(TestConfig{
 				Args: []string{
 					filepath.Base(test),
 				},
@@ -108,7 +108,7 @@ func TestWASIP1(t *testing.T, filePaths []string, makeProvider MakeProvider) {
 				Now:    time.Now,
 			})
 			if err != nil {
-				t.Fatal("provider:", err)
+				t.Fatal("system:", err)
 			}
 			defer teardown()
 			ctx := context.Background()
@@ -119,7 +119,7 @@ func TestWASIP1(t *testing.T, filePaths []string, makeProvider MakeProvider) {
 			ctx = wazergo.WithModuleInstance(ctx,
 				wazergo.MustInstantiate(ctx, runtime,
 					wasi_snapshot_preview1.HostModule,
-					wasi_snapshot_preview1.WithWASI(provider),
+					wasi_snapshot_preview1.WithWASI(system),
 				),
 			)
 

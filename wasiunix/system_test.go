@@ -18,10 +18,10 @@ func TestWASIP1(t *testing.T) {
 	files, _ := filepath.Glob("../testdata/*/*.wasm")
 
 	testwasi.TestWASIP1(t, files,
-		func(config testwasi.TestConfig) (wasi.Provider, func(), error) {
+		func(config testwasi.TestConfig) (wasi.System, func(), error) {
 			epoch := config.Now()
 
-			provider := &wasiunix.Provider{
+			s := &wasiunix.System{
 				Args:    config.Args,
 				Environ: config.Environ,
 				Monotonic: func(context.Context) (uint64, error) {
@@ -55,28 +55,28 @@ func TestWASIP1(t *testing.T) {
 				return nil, nil, err
 			}
 
-			provider.Preopen(stdin, "/dev/stdin", wasi.FDStat{
+			s.Preopen(stdin, "/dev/stdin", wasi.FDStat{
 				FileType:   wasi.CharacterDeviceType,
 				RightsBase: wasi.AllRights,
 			})
 
-			provider.Preopen(stdout, "/dev/stdout", wasi.FDStat{
+			s.Preopen(stdout, "/dev/stdout", wasi.FDStat{
 				FileType:   wasi.CharacterDeviceType,
 				RightsBase: wasi.AllRights,
 			})
 
-			provider.Preopen(stderr, "/dev/stderr", wasi.FDStat{
+			s.Preopen(stderr, "/dev/stderr", wasi.FDStat{
 				FileType:   wasi.CharacterDeviceType,
 				RightsBase: wasi.AllRights,
 			})
 
-			provider.Preopen(root, "/", wasi.FDStat{
+			s.Preopen(root, "/", wasi.FDStat{
 				FileType:         wasi.DirectoryType,
 				RightsBase:       wasi.AllRights,
 				RightsInheriting: wasi.AllRights,
 			})
 
-			return provider, func() { provider.Close(context.Background()) }, nil
+			return s, func() { s.Close(context.Background()) }, nil
 		},
 	)
 }
@@ -90,8 +90,8 @@ func dup(fd int) (int, error) {
 	return newfd, nil
 }
 
-func TestProviderPollAndShutdown(t *testing.T) {
-	testProvider(func(ctx context.Context, p *wasiunix.Provider) {
+func TestSystemPollAndShutdown(t *testing.T) {
+	testSystem(func(ctx context.Context, p *wasiunix.System) {
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			if err := p.Shutdown(ctx); err != nil {
@@ -128,12 +128,12 @@ func TestProviderPollAndShutdown(t *testing.T) {
 	})
 }
 
-func TestProviderPollBadFileDescriptor(t *testing.T) {
-	testProvider(func(ctx context.Context, p *wasiunix.Provider) {
+func TestSystemPollBadFileDescriptor(t *testing.T) {
+	testSystem(func(ctx context.Context, p *wasiunix.System) {
 		subscriptions := []wasi.Subscription{
 			subscribeFDRead(0),
 			// Subscribe to a file descriptor which is not registered in the
-			// provider. This must not fail the poll_oneoff call and instead
+			// system. This must not fail the poll_oneoff call and instead
 			// report an error on the
 			subscribeFDRead(42),
 		}
@@ -163,8 +163,8 @@ func TestProviderPollBadFileDescriptor(t *testing.T) {
 	})
 }
 
-func TestProviderPollMissingMonotonicClock(t *testing.T) {
-	testProvider(func(ctx context.Context, p *wasiunix.Provider) {
+func TestSystemPollMissingMonotonicClock(t *testing.T) {
+	testSystem(func(ctx context.Context, p *wasiunix.System) {
 		p.Monotonic = nil
 
 		subscriptions := []wasi.Subscription{
@@ -197,10 +197,10 @@ func TestProviderPollMissingMonotonicClock(t *testing.T) {
 	})
 }
 
-func testProvider(f func(context.Context, *wasiunix.Provider)) {
+func testSystem(f func(context.Context, *wasiunix.System)) {
 	ctx := context.Background()
 
-	p := newProvider()
+	p := newSystem()
 	defer p.Close(ctx)
 
 	r, w, err := os.Pipe()
@@ -213,8 +213,8 @@ func testProvider(f func(context.Context, *wasiunix.Provider)) {
 	f(ctx, p)
 }
 
-func newProvider() *wasiunix.Provider {
-	return &wasiunix.Provider{
+func newSystem() *wasiunix.System {
+	return &wasiunix.System{
 		Realtime:           realtime,
 		RealtimePrecision:  time.Microsecond,
 		Monotonic:          monotonic,
