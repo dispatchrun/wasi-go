@@ -1,20 +1,20 @@
-package wasiunix
+package unix
 
 import (
-	"syscall"
+	"bytes"
 	"unsafe"
 
 	"github.com/stealthrocket/wasi-go"
+	"golang.org/x/sys/unix"
 )
 
-const sizeOfDirent = 21
+const sizeOfDirent = 19
 
 type dirent struct {
-	ino     uint64
-	seekoff uint64
-	reclen  uint16
-	namlen  uint16
-	typ     uint8
+	ino    uint64
+	off    int64
+	reclen uint16
+	typ    uint8
 }
 
 const maxNameLen = 1024
@@ -25,7 +25,6 @@ type dirbuf struct {
 	offset int
 	length int
 	cookie wasi.DirCookie
-	basep  uintptr
 }
 
 func (d *dirbuf) readDirEntries(fd int, entries []wasi.DirEntry, cookie wasi.DirCookie, bufferSizeBytes int) (int, error) {
@@ -34,13 +33,12 @@ func (d *dirbuf) readDirEntries(fd int, entries []wasi.DirEntry, cookie wasi.Dir
 	}
 
 	if cookie < d.cookie {
-		if _, err := syscall.Seek(fd, 0, 0); err != nil {
+		if _, err := unix.Seek(fd, 0, unix.SEEK_SET); err != nil {
 			return 0, err
 		}
 		d.offset = 0
 		d.length = 0
 		d.cookie = 0
-		d.basep = 0
 	}
 
 	numEntries := 0
@@ -53,7 +51,7 @@ func (d *dirbuf) readDirEntries(fd int, entries []wasi.DirEntry, cookie wasi.Dir
 			if numEntries > 0 {
 				return numEntries, nil
 			}
-			n, err := syscall.Getdirentries(fd, d.buffer[:], &d.basep)
+			n, err := unix.Getdents(fd, d.buffer[:])
 			if err != nil {
 				return numEntries, err
 			}
@@ -83,31 +81,36 @@ func (d *dirbuf) readDirEntries(fd int, entries []wasi.DirEntry, cookie wasi.Dir
 			}
 
 			switch dirent.typ {
-			case syscall.DT_BLK:
+			case unix.DT_BLK:
 				dirEntry.Type = wasi.BlockDeviceType
-			case syscall.DT_CHR:
+			case unix.DT_CHR:
 				dirEntry.Type = wasi.CharacterDeviceType
-			case syscall.DT_DIR:
+			case unix.DT_DIR:
 				dirEntry.Type = wasi.DirectoryType
-			case syscall.DT_LNK:
+			case unix.DT_LNK:
 				dirEntry.Type = wasi.SymbolicLinkType
-			case syscall.DT_REG:
+			case unix.DT_REG:
 				dirEntry.Type = wasi.RegularFileType
-			case syscall.DT_SOCK:
+			case unix.DT_SOCK:
 				dirEntry.Type = wasi.SocketStreamType
-			default: // DT_FIFO, DT_WHT, DT_UNKNOWN
+			default: // DT_FIFO, DT_UNKNOWN
 				dirEntry.Type = wasi.UnknownType
 			}
 
 			i := d.offset + sizeOfDirent
-			j := d.offset + sizeOfDirent + int(dirent.namlen)
+			j := d.offset + int(dirent.reclen)
 			dirEntry.Name = d.buffer[i:j:j]
+
+			n := bytes.IndexByte(dirEntry.Name, 0)
+			if n >= 0 {
+				dirEntry.Name = dirEntry.Name[:n:n]
+			}
 
 			entries[numEntries] = dirEntry
 			numEntries++
 
 			bufferSizeBytes -= wasi.SizeOfDirent
-			bufferSizeBytes -= int(dirent.namlen)
+			bufferSizeBytes -= len(dirEntry.Name)
 
 			if bufferSizeBytes <= 0 {
 				return numEntries, nil

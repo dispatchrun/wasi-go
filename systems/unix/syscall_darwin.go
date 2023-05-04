@@ -1,6 +1,4 @@
-//go:build darwin
-
-package wasiunix
+package unix
 
 import (
 	"fmt"

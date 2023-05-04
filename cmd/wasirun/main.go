@@ -13,7 +13,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
-	"github.com/stealthrocket/wasi-go/wasiunix"
+	"github.com/stealthrocket/wasi-go/systems/unix"
 	"github.com/stealthrocket/wazergo"
 	"github.com/tetratelabs/wazero"
 )
@@ -69,10 +69,10 @@ ARGS:
 
 OPTIONS:
    --dir <DIR>
-      Grant access to the specified host directory		
+      Grant access to the specified host directory
 
    --listen <ADDR>
-      Grant access to a socket listening on the specified address.
+      Grant access to a socket listening on the specified address
 
    --env <NAME=VAL>
       Pass an environment variable to the module
@@ -109,7 +109,7 @@ func run(args []string) error {
 	runtime := wazero.NewRuntime(ctx)
 	defer runtime.Close(ctx)
 
-	system := &wasiunix.System{
+	system := &unix.System{
 		Args:               append([]string{wasmName}, args...),
 		Environ:            envs,
 		Realtime:           realtime,
