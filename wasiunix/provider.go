@@ -50,8 +50,8 @@ type Provider struct {
 	// Rand is the source for RandomGet.
 	Rand io.Reader
 
-	fds      descriptor.Table[wasi.FD, *fdinfo]
-	preopens descriptor.Table[wasi.FD, struct{}]
+	fds      descriptor.Table[wasi.FD, fdinfo]
+	preopens descriptor.Table[wasi.FD, string]
 	pollfds  []unix.PollFd
 
 	// shutfds are a pair of file descriptors allocated to the read and write
@@ -63,9 +63,6 @@ type Provider struct {
 }
 
 type fdinfo struct {
-	// path is the path of the file.
-	path string
-
 	// fd is the underlying OS file descriptor.
 	fd int
 
@@ -82,23 +79,21 @@ func (p *Provider) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
 	fdstat.RightsBase &= wasi.AllRights
 	fdstat.RightsInheriting &= wasi.AllRights
 	p.preopens.Assign(
-		p.fds.Insert(&fdinfo{
+		p.fds.Insert(fdinfo{
 			fd:   hostfd,
-			path: path,
 			stat: fdstat,
 		}),
-		struct{}{},
+		path,
 	)
 }
 
 func (p *Provider) isPreopen(fd wasi.FD) bool {
-	_, ok := p.preopens.Lookup(fd)
-	return ok
+	return p.preopens.Access(fd) != nil
 }
 
 func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
-	f, ok := p.fds.Lookup(guestfd)
-	if !ok {
+	f := p.fds.Access(guestfd)
+	if f == nil {
 		return nil, wasi.EBADF
 	}
 	if !f.stat.RightsBase.Has(rights) {
@@ -107,18 +102,19 @@ func (p *Provider) lookupFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.
 	return f, wasi.ESUCCESS
 }
 
-func (p *Provider) lookupPreopenFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
-	if !p.isPreopen(guestfd) {
-		return nil, wasi.EBADF
+func (p *Provider) lookupPreopenPath(guestfd wasi.FD) (string, wasi.Errno) {
+	path, ok := p.preopens.Lookup(guestfd)
+	if !ok {
+		return "", wasi.EBADF
 	}
-	f, errno := p.lookupFD(guestfd, rights)
+	f, errno := p.lookupFD(guestfd, 0)
 	if errno != wasi.ESUCCESS {
-		return nil, errno
+		return "", errno
 	}
 	if f.stat.FileType != wasi.DirectoryType {
-		return nil, wasi.ENOTDIR
+		return "", wasi.ENOTDIR
 	}
-	return f, wasi.ESUCCESS
+	return path, wasi.ESUCCESS
 }
 
 func (p *Provider) lookupSocketFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, wasi.Errno) {
@@ -352,25 +348,21 @@ func (p *Provider) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec,
 }
 
 func (p *Provider) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, wasi.Errno) {
-	f, errno := p.lookupPreopenFD(fd, 0)
+	path, errno := p.lookupPreopenPath(fd)
 	if errno != wasi.ESUCCESS {
 		return wasi.PreStat{}, errno
 	}
 	stat := wasi.PreStat{
 		Type: wasi.PreOpenDir,
 		PreStatDir: wasi.PreStatDir{
-			NameLength: wasi.Size(len(f.path)),
+			NameLength: wasi.Size(len(path)),
 		},
 	}
 	return stat, wasi.ESUCCESS
 }
 
 func (p *Provider) FDPreStatDirName(ctx context.Context, fd wasi.FD) (string, wasi.Errno) {
-	f, errno := p.lookupPreopenFD(fd, 0)
-	if errno != wasi.ESUCCESS {
-		return "", errno
-	}
-	return f.path, wasi.ESUCCESS
+	return p.lookupPreopenPath(fd)
 }
 
 func (p *Provider) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
@@ -415,10 +407,11 @@ func (p *Provider) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno 
 		return errno
 	}
 	// TODO: limit max file descriptor number
-	f, replaced := p.fds.Assign(to, f)
+	g, replaced := p.fds.Assign(to, *f)
 	if replaced {
-		unix.Close(f.fd)
+		unix.Close(g.fd)
 	}
+	p.fds.Delete(from)
 	return wasi.ESUCCESS
 }
 
@@ -634,9 +627,8 @@ func (p *Provider) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Lo
 		return -1, makeErrno(err)
 	}
 
-	guestfd := p.fds.Insert(&fdinfo{
-		fd:   hostfd,
-		path: filepath.Join(d.path, path),
+	guestfd := p.fds.Insert(fdinfo{
+		fd: hostfd,
 		stat: wasi.FDStat{
 			FileType:         fileType,
 			Flags:            fdFlags,
@@ -938,7 +930,7 @@ func (p *Provider) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlag
 	if err != nil {
 		return -1, makeErrno(err)
 	}
-	guestfd := p.fds.Insert(&fdinfo{
+	guestfd := p.fds.Insert(fdinfo{
 		fd: connfd,
 		stat: wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
@@ -989,7 +981,7 @@ func (p *Provider) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFl
 }
 
 func (p *Provider) Close(ctx context.Context) error {
-	p.fds.Range(func(fd wasi.FD, f *fdinfo) bool {
+	p.fds.Range(func(fd wasi.FD, f fdinfo) bool {
 		unix.Close(f.fd)
 		return true
 	})
