@@ -16,3 +16,6 @@
 
 # Emacs
 *~
+
+# Test data and dependencies
+testdata/.wasi-libc/
