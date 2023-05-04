@@ -9,6 +9,10 @@ import "context"
 // serialization details. For example, {args_get,args_sizes_get} can
 // both be implemented elsewhere using the higher-level ArgsGet.
 type System interface {
+	// Preopen registers an open directory or socket as a "preopen", granting
+	// access to the WASM module.
+	Preopen(hostfd int, path string, fdstat FDStat)
+
 	// ArgsGet reads command-line argument data.
 	ArgsGet(ctx context.Context) ([]string, Errno)
 
