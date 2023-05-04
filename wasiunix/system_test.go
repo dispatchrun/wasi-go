@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stealthrocket/wasi"
-	"github.com/stealthrocket/wasi/testwasi"
-	"github.com/stealthrocket/wasi/wasiunix"
+	"github.com/stealthrocket/wasi-go"
+	"github.com/stealthrocket/wasi-go/testwasi"
+	"github.com/stealthrocket/wasi-go/wasiunix"
 	"golang.org/x/sys/unix"
 )
 

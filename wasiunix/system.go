@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stealthrocket/wasi"
-	"github.com/stealthrocket/wasi/internal/descriptor"
+	"github.com/stealthrocket/wasi-go"
+	"github.com/stealthrocket/wasi-go/internal/descriptor"
 	"golang.org/x/sys/unix"
 )
 

@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/stealthrocket/wasi"
-	"github.com/stealthrocket/wasi/imports/wasi_snapshot_preview1"
-	"github.com/stealthrocket/wasi/wasiunix"
+	"github.com/stealthrocket/wasi-go"
+	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
+	"github.com/stealthrocket/wasi-go/wasiunix"
 	"github.com/stealthrocket/wazergo"
 	"github.com/tetratelabs/wazero"
 )

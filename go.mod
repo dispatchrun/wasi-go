@@ -1,4 +1,4 @@
-module github.com/stealthrocket/wasi
+module github.com/stealthrocket/wasi-go
 
 go 1.20
 

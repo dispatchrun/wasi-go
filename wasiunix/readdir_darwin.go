@@ -4,7 +4,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/stealthrocket/wasi"
+	"github.com/stealthrocket/wasi-go"
 )
 
 const sizeOfDirent = 21

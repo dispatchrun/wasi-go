@@ -1,5 +1,5 @@
-[![Build](https://github.com/stealthrocket/wasi/actions/workflows/go.yml/badge.svg)](https://github.com/stealthrocket/wasi/actions/workflows/go.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/stealthrocket/wasi.svg)](https://pkg.go.dev/github.com/stealthrocket/wasi)
+[![Build](https://github.com/stealthrocket/wasi-go/actions/workflows/go.yml/badge.svg)](https://github.com/stealthrocket/wasi-go/actions/workflows/go.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/stealthrocket/wasi-go.svg)](https://pkg.go.dev/github.com/stealthrocket/wasi-go)
 [![Apache 2 License](https://img.shields.io/badge/license-Apache%202-blue.svg)](LICENSE)
 
 # WASI
@@ -15,6 +15,6 @@ A Go implementation of the WebAssembly System Interface ([WASI][wasi]).
 
 
 [wasi]: https://github.com/WebAssembly/WASI
-[system]: https://github.com/stealthrocket/wasi/blob/main/system.go
+[system]: https://github.com/stealthrocket/wasi-go/blob/main/system.go
 [preview1]: https://github.com/WebAssembly/WASI/blob/e324ce3/legacy/preview1/docs.md
 [wazero]: https://wazero.io

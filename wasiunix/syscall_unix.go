@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/stealthrocket/wasi"
+	"github.com/stealthrocket/wasi-go"
 	"golang.org/x/sys/unix"
 )
 

@@ -3,7 +3,7 @@ package descriptor_test
 import (
 	"testing"
 
-	"github.com/stealthrocket/wasi/internal/descriptor"
+	"github.com/stealthrocket/wasi-go/internal/descriptor"
 )
 
 type fd uint32

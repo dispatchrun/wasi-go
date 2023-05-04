@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/stealthrocket/wasi"
+	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wazergo"
 	. "github.com/stealthrocket/wazergo/types"
 	"github.com/tetratelabs/wazero/api"
