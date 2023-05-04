@@ -25,7 +25,7 @@ testdata/.deps:
 	mkdir testdata/.deps
 
 testdata/.wasi-libc: .gitmodules
-	git submodule init -- testdata/.deps/wasi-libc
+	git submodule update -- testdata/.deps/wasi-libc
 	cd testdata/.deps/wasi-libc && make -j4 install INSTALL_DIR=../../.wasi-libc
 
 clean:
