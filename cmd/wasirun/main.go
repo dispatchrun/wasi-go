@@ -13,6 +13,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
+	"github.com/stealthrocket/wasi-go/internal/net"
 	"github.com/stealthrocket/wasi-go/systems/unix"
 	"github.com/stealthrocket/wazergo"
 	"github.com/tetratelabs/wazero"
@@ -24,15 +25,17 @@ var (
 	envs    stringList
 	dirs    stringList
 	listens stringList
+	dials   stringList
 	version bool
 	help    bool
 	h       bool
 )
 
 func main() {
-	flag.Var(&envs, "env", "Environment variables to pass to the WASM module.")
-	flag.Var(&dirs, "dir", "Directories to pre-open.")
-	flag.Var(&listens, "listen", "Addresses of listener sockets to pre-open.")
+	flag.Var(&envs, "env", "Environment variable to pass to the WASM module.")
+	flag.Var(&dirs, "dir", "Directory to pre-open.")
+	flag.Var(&listens, "listen", "Socket to pre-open (and an address to listen on).")
+	flag.Var(&dials, "dial", "Socket to pre-open (and an address to connect to).")
 	flag.BoolVar(&version, "version", false, "Print the version and exit.")
 	flag.BoolVar(&help, "help", false, "Print usage information.")
 	flag.BoolVar(&h, "h", false, "Print usage information.")
@@ -71,6 +74,9 @@ OPTIONS:
 
    --listen <ADDR>
       Grant access to a socket listening on the specified address
+
+   --dial <ADDR>
+      Grant access to a socket connected to the specified address
 
    --env <NAME=VAL>
       Pass an environment variable to the module
@@ -150,17 +156,30 @@ func run(args []string) error {
 
 	// Preopen sockets.
 	for _, addr := range listens {
-		fd, err := listen(addr)
+		fd, err := net.Listen(addr)
 		if err != nil {
 			return err
 		}
-		defer syscall.Close(fd)
+		defer net.Close(fd)
 
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            wasi.NonBlock,
-			RightsBase:       listenRights,
-			RightsInheriting: connRights,
+			RightsBase:       net.ListenRights,
+			RightsInheriting: net.ConnectionRights,
+		})
+	}
+	for _, addr := range dials {
+		fd, err := net.Dial(addr)
+		if err != nil {
+			return err
+		}
+		defer net.Close(fd)
+
+		system.Preopen(fd, addr, wasi.FDStat{
+			FileType:   wasi.SocketStreamType,
+			Flags:      wasi.NonBlock,
+			RightsBase: net.ConnectionRights,
 		})
 	}
 

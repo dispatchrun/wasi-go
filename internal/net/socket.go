@@ -1,4 +1,4 @@
-package main
+package net
 
 import (
 	"fmt"
@@ -6,58 +6,47 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-
-	"github.com/stealthrocket/wasi-go"
-	"golang.org/x/sys/unix"
+	"syscall"
 )
 
-const (
-	listenRights = wasi.SockAcceptRight | wasi.PollFDReadWriteRight | wasi.FDFileStatGetRight | wasi.FDStatSetFlagsRight
-	connRights   = wasi.FDReadRight | wasi.FDWriteRight | wasi.PollFDReadWriteRight | wasi.SockShutdownRight | wasi.FDFileStatGetRight | wasi.FDStatSetFlagsRight
-)
-
-func listen(rawAddr string) (fd int, err error) {
-	addr := rawAddr
+func Socket(rawAddr string) (u *url.URL, sa syscall.Sockaddr, fd int, err error) {
 	if !strings.Contains(rawAddr, "://") {
-		addr = "tcp://" + addr
+		rawAddr = "tcp://" + rawAddr
 	}
-	u, err := url.Parse(addr)
+	u, err = url.Parse(rawAddr)
 	if err != nil {
-		return -1, fmt.Errorf("could not parse --listen address '%s': %w", rawAddr, err)
+		return nil, nil, -1, fmt.Errorf("bad address '%s': %w", rawAddr, err)
 	}
 	family, sa, err := socketAddress(u.Scheme, u.Host)
 	if err != nil {
-		return -1, err
+		return nil, nil, -1, err
 	}
 	opt := u.Query()
-	fd, err = unix.Socket(family, unix.SOCK_STREAM, 0)
+	fd, err = syscall.Socket(family, syscall.SOCK_STREAM, 0)
 	if err != nil {
 		return
 	}
 	defer func() {
 		if err != nil {
-			unix.Close(fd)
+			syscall.Close(fd)
 			fd = -1
 		}
 	}()
-	if err = unix.SetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_REUSEADDR, intopt(opt, "reuseaddr", 1)); err != nil {
+	if err = syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, intopt(opt, "reuseaddr", 1)); err != nil {
 		return
 	}
-	if err = unix.SetNonblock(fd, boolopt(opt, "nonblock", true)); err != nil {
-		return
-	}
-	if err = unix.Bind(fd, sa); err != nil {
-		return
-	}
-	err = unix.Listen(fd, intopt(opt, "backlog", 128))
-	return
+	return u, sa, fd, err
 }
 
-func socketAddress(network, addr string) (int, unix.Sockaddr, error) {
+func Close(fd int) error {
+	return syscall.Close(fd)
+}
+
+func socketAddress(network, addr string) (int, syscall.Sockaddr, error) {
 	switch network {
 	case "tcp", "tcp4", "tcp6":
 	default:
-		return -1, nil, fmt.Errorf("unsupported --listen network: %v", network)
+		return -1, nil, fmt.Errorf("unsupported --Listen network: %v", network)
 	}
 	host, portstr, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -81,7 +70,7 @@ func socketAddress(network, addr string) (int, unix.Sockaddr, error) {
 	if network == "tcp" || network == "tcp4" {
 		for _, ip := range ips {
 			if ipv4 := ip.To4(); ipv4 != nil {
-				return unix.AF_INET, &unix.SockaddrInet4{
+				return syscall.AF_INET, &syscall.SockaddrInet4{
 					Port: port,
 					Addr: ([4]byte)(ipv4),
 				}, nil
@@ -90,7 +79,7 @@ func socketAddress(network, addr string) (int, unix.Sockaddr, error) {
 	} else if network == "tcp" || network == "tcp6" {
 		for _, ip := range ips {
 			if ipv6 := ip.To16(); ipv6 != nil {
-				return unix.AF_INET6, &unix.SockaddrInet6{
+				return syscall.AF_INET6, &syscall.SockaddrInet6{
 					Port: port,
 					Addr: ([16]byte)(ipv6),
 				}, nil
