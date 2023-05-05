@@ -195,11 +195,11 @@ func (s *System) FDClose(ctx context.Context, fd wasi.FD) wasi.Errno {
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
+	err := unix.Close(f.fd)
 	s.fds.Delete(fd)
 	// Note: closing pre-opens is allowed.
 	// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/close_preopen.rs
 	s.preopens.Delete(fd)
-	err := unix.Close(f.fd)
 	return makeErrno(err)
 }
 
