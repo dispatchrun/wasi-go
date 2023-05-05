@@ -8,11 +8,16 @@ func Listen(rawAddr string) (int, error) {
 	if err != nil {
 		return -1, err
 	}
+	opt := addr.Query()
+	reuseAddr := intopt(opt, "reuseaddr", 1)
+	if err = syscall.SetsockoptInt(fd, syscall.SOL_SOCKET, syscall.SO_REUSEADDR, reuseAddr); err != nil {
+		syscall.Close(fd)
+		return -1, err
+	}
 	if err := syscall.Bind(fd, sa); err != nil {
 		syscall.Close(fd)
 		return -1, err
 	}
-	opt := addr.Query()
 	nonBlock := boolopt(opt, "nonblock", true)
 	if err := syscall.SetNonblock(fd, nonBlock); err != nil {
 		syscall.Close(fd)
