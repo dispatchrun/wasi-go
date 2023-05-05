@@ -9,6 +9,7 @@ import (
 	"syscall"
 )
 
+// Socket prepares a socket for the specified address.
 func Socket(rawAddr string) (u *url.URL, sa syscall.Sockaddr, fd int, err error) {
 	if !strings.Contains(rawAddr, "://") {
 		rawAddr = "tcp://" + rawAddr
@@ -38,6 +39,7 @@ func Socket(rawAddr string) (u *url.URL, sa syscall.Sockaddr, fd int, err error)
 	return u, sa, fd, err
 }
 
+// Close closes a file descriptor created with Socket, Listen or Dial.
 func Close(fd int) error {
 	return syscall.Close(fd)
 }
