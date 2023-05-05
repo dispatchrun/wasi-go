@@ -21,20 +21,18 @@ import (
 const Version = "devel"
 
 var (
-	envs             stringList
-	dirs             stringList
-	listens          stringList
-	nonBlockingStdio bool
-	version          bool
-	help             bool
-	h                bool
+	envs    stringList
+	dirs    stringList
+	listens stringList
+	version bool
+	help    bool
+	h       bool
 )
 
 func main() {
 	flag.Var(&envs, "env", "Environment variables to pass to the WASM module.")
 	flag.Var(&dirs, "dir", "Directories to pre-open.")
 	flag.Var(&listens, "listen", "Addresses of listener sockets to pre-open.")
-	flag.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "Enable non-blocking stdio.")
 	flag.BoolVar(&version, "version", false, "Print the version and exit.")
 	flag.BoolVar(&help, "help", false, "Print usage information.")
 	flag.BoolVar(&h, "h", false, "Print usage information.")
@@ -76,9 +74,6 @@ OPTIONS:
 
    --env <NAME=VAL>
       Pass an environment variable to the module
-
-  --non-blocking-stdio
-      Enable non-blocking stdio
 
    --version
       Print the version and exit
@@ -134,12 +129,6 @@ func run(args []string) error {
 			FileType:         wasi.CharacterDeviceType,
 			RightsBase:       wasi.AllRights,
 			RightsInheriting: wasi.AllRights,
-		}
-		if nonBlockingStdio {
-			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
-				return err
-			}
-			stat.Flags |= wasi.NonBlock
 		}
 		system.Preopen(stdio.fd, stdio.path, stat)
 	}
