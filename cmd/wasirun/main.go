@@ -13,7 +13,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
-	"github.com/stealthrocket/wasi-go/internal/net"
+	"github.com/stealthrocket/wasi-go/internal/sockets"
 	"github.com/stealthrocket/wasi-go/systems/unix"
 	"github.com/stealthrocket/wazergo"
 	"github.com/tetratelabs/wazero"
@@ -156,30 +156,30 @@ func run(args []string) error {
 
 	// Preopen sockets.
 	for _, addr := range listens {
-		fd, err := net.Listen(addr)
+		fd, err := sockets.Listen(addr)
 		if err != nil {
 			return err
 		}
-		defer net.Close(fd)
+		defer sockets.Close(fd)
 
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            wasi.NonBlock,
-			RightsBase:       net.ListenRights,
-			RightsInheriting: net.ConnectionRights,
+			RightsBase:       sockets.ListenRights,
+			RightsInheriting: sockets.ConnectionRights,
 		})
 	}
 	for _, addr := range dials {
-		fd, err := net.Dial(addr)
-		if err != nil {
+		fd, err := sockets.Dial(addr)
+		if err != nil && err != sockets.EINPROGRESS {
 			return err
 		}
-		defer net.Close(fd)
+		defer sockets.Close(fd)
 
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:   wasi.SocketStreamType,
 			Flags:      wasi.NonBlock,
-			RightsBase: net.ConnectionRights,
+			RightsBase: sockets.ConnectionRights,
 		})
 	}
 

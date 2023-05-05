@@ -1,15 +1,13 @@
-package net
+package sockets
 
 import "syscall"
+
+const EINPROGRESS = syscall.EINPROGRESS
 
 // Dial creates a socket and connects to the specified address.
 func Dial(rawAddr string) (int, error) {
 	addr, sa, fd, err := Socket(rawAddr)
 	if err != nil {
-		return -1, err
-	}
-	if err := syscall.Connect(fd, sa); err != nil {
-		syscall.Close(fd)
 		return -1, err
 	}
 	opt := addr.Query()
@@ -23,5 +21,10 @@ func Dial(rawAddr string) (int, error) {
 		syscall.Close(fd)
 		return -1, err
 	}
-	return fd, nil
+	err = syscall.Connect(fd, sa)
+	if err != nil && err != EINPROGRESS {
+		syscall.Close(fd)
+		return -1, err
+	}
+	return fd, err
 }
