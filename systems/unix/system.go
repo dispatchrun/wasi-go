@@ -76,15 +76,16 @@ type fdinfo struct {
 
 // Preopen adds an open file to the list of pre-opens.
 func (s *System) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
+	s.preopens.Assign(s.Open(hostfd, fdstat), path)
+}
+
+func (s *System) Open(hostfd int, fdstat wasi.FDStat) wasi.FD {
 	fdstat.RightsBase &= wasi.AllRights
 	fdstat.RightsInheriting &= wasi.AllRights
-	s.preopens.Assign(
-		s.fds.Insert(fdinfo{
-			fd:   hostfd,
-			stat: fdstat,
-		}),
-		path,
-	)
+	return s.fds.Insert(fdinfo{
+		fd:   hostfd,
+		stat: fdstat,
+	})
 }
 
 func (s *System) isPreopen(fd wasi.FD) bool {
@@ -158,13 +159,13 @@ func (s *System) ClockTimeGet(ctx context.Context, id wasi.ClockID, precision wa
 			return 0, wasi.ENOTSUP
 		}
 		t, err := s.Realtime(ctx)
-		return wasi.Timestamp(t), makeErrno(err)
+		return wasi.Timestamp(t), MakeErrno(err)
 	case wasi.Monotonic:
 		if s.Monotonic == nil {
 			return 0, wasi.ENOTSUP
 		}
 		t, err := s.Monotonic(ctx)
-		return wasi.Timestamp(t), makeErrno(err)
+		return wasi.Timestamp(t), MakeErrno(err)
 	case wasi.ProcessCPUTimeID, wasi.ThreadCPUTimeID:
 		return 0, wasi.ENOTSUP
 	default:
@@ -178,7 +179,7 @@ func (s *System) FDAdvise(ctx context.Context, fd wasi.FD, offset wasi.FileSize,
 		return errno
 	}
 	err := fdadvise(f.fd, int64(offset), int64(length), advice)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) FDAllocate(ctx context.Context, fd wasi.FD, offset wasi.FileSize, length wasi.FileSize) wasi.Errno {
@@ -187,7 +188,7 @@ func (s *System) FDAllocate(ctx context.Context, fd wasi.FD, offset wasi.FileSiz
 		return errno
 	}
 	err := fallocate(f.fd, int64(offset), int64(length))
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) FDClose(ctx context.Context, fd wasi.FD) wasi.Errno {
@@ -200,7 +201,7 @@ func (s *System) FDClose(ctx context.Context, fd wasi.FD) wasi.Errno {
 	// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/close_preopen.rs
 	s.preopens.Delete(fd)
 	err := unix.Close(f.fd)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) FDDataSync(ctx context.Context, fd wasi.FD) wasi.Errno {
@@ -209,7 +210,7 @@ func (s *System) FDDataSync(ctx context.Context, fd wasi.FD) wasi.Errno {
 		return errno
 	}
 	err := fdatasync(f.fd)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) FDStatGet(ctx context.Context, fd wasi.FD) (wasi.FDStat, wasi.Errno) {
@@ -234,7 +235,7 @@ func (s *System) FDStatSetFlags(ctx context.Context, fd wasi.FD, flags wasi.FDFl
 	}
 	fl, err := unix.FcntlInt(uintptr(f.fd), unix.F_GETFL, 0)
 	if err != nil {
-		return makeErrno(err)
+		return MakeErrno(err)
 	}
 	if flags.Has(wasi.Append) {
 		fl |= unix.O_APPEND
@@ -247,7 +248,7 @@ func (s *System) FDStatSetFlags(ctx context.Context, fd wasi.FD, flags wasi.FDFl
 		fl &^= unix.O_NONBLOCK
 	}
 	if _, err := unix.FcntlInt(uintptr(f.fd), unix.F_SETFL, fl); err != nil {
-		return makeErrno(err)
+		return MakeErrno(err)
 	}
 	f.stat.Flags ^= changes
 	return wasi.ESUCCESS
@@ -279,7 +280,7 @@ func (s *System) FDFileStatGet(ctx context.Context, fd wasi.FD) (wasi.FileStat, 
 	}
 	var sysStat unix.Stat_t
 	if err := unix.Fstat(f.fd, &sysStat); err != nil {
-		return wasi.FileStat{}, makeErrno(err)
+		return wasi.FileStat{}, MakeErrno(err)
 	}
 	stat := makeFileStat(&sysStat)
 	switch f.fd {
@@ -300,7 +301,7 @@ func (s *System) FDFileStatSetSize(ctx context.Context, fd wasi.FD, size wasi.Fi
 		return errno
 	}
 	err := unix.Ftruncate(f.fd, int64(size))
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTime, modifyTime wasi.Timestamp, flags wasi.FSTFlags) wasi.Errno {
@@ -310,7 +311,7 @@ func (s *System) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTime,
 	}
 	var sysStat unix.Stat_t
 	if err := unix.Fstat(f.fd, &sysStat); err != nil {
-		return makeErrno(err)
+		return MakeErrno(err)
 	}
 	ts := [2]unix.Timespec{sysStat.Atim, sysStat.Mtim}
 	if flags.Has(wasi.AccessTimeNow) || flags.Has(wasi.ModifyTimeNow) {
@@ -319,7 +320,7 @@ func (s *System) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTime,
 		}
 		now, err := s.Monotonic(ctx)
 		if err != nil {
-			return makeErrno(err)
+			return MakeErrno(err)
 		}
 		if flags.Has(wasi.AccessTimeNow) {
 			accessTime = wasi.Timestamp(now)
@@ -335,7 +336,7 @@ func (s *System) FDFileStatSetTimes(ctx context.Context, fd wasi.FD, accessTime,
 		ts[1] = unix.NsecToTimespec(int64(modifyTime))
 	}
 	err := futimens(f.fd, &ts)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
@@ -344,7 +345,7 @@ func (s *System) FDPread(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, o
 		return 0, errno
 	}
 	n, err := preadv(f.fd, makeIOVecs(iovecs), int64(offset))
-	return wasi.Size(n), makeErrno(err)
+	return wasi.Size(n), MakeErrno(err)
 }
 
 func (s *System) FDPreStatGet(ctx context.Context, fd wasi.FD) (wasi.PreStat, wasi.Errno) {
@@ -371,7 +372,7 @@ func (s *System) FDPwrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, 
 		return 0, errno
 	}
 	n, err := pwritev(f.fd, makeIOVecs(iovecs), int64(offset))
-	return wasi.Size(n), makeErrno(err)
+	return wasi.Size(n), MakeErrno(err)
 }
 
 func (s *System) FDRead(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) (wasi.Size, wasi.Errno) {
@@ -380,7 +381,7 @@ func (s *System) FDRead(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) (w
 		return 0, errno
 	}
 	n, err := readv(f.fd, makeIOVecs(iovecs))
-	return wasi.Size(n), makeErrno(err)
+	return wasi.Size(n), MakeErrno(err)
 }
 
 func (s *System) FDReadDir(ctx context.Context, fd wasi.FD, entries []wasi.DirEntry, cookie wasi.DirCookie, bufferSizeBytes int) (int, wasi.Errno) {
@@ -395,7 +396,7 @@ func (s *System) FDReadDir(ctx context.Context, fd wasi.FD, entries []wasi.DirEn
 		f.dir = new(dirbuf)
 	}
 	n, err := f.dir.readDirEntries(f.fd, entries, cookie, bufferSizeBytes)
-	return n, makeErrno(err)
+	return n, MakeErrno(err)
 }
 
 func (s *System) FDRenumber(ctx context.Context, from, to wasi.FD) wasi.Errno {
@@ -421,7 +422,7 @@ func (s *System) FDSync(ctx context.Context, fd wasi.FD) wasi.Errno {
 		return errno
 	}
 	err := fsync(f.fd)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) FDSeek(ctx context.Context, fd wasi.FD, delta wasi.FileDelta, whence wasi.Whence) (wasi.FileSize, wasi.Errno) {
@@ -452,7 +453,7 @@ func (s *System) fdseek(fd wasi.FD, rights wasi.Rights, delta wasi.FileDelta, wh
 		return 0, wasi.EINVAL
 	}
 	off, err := lseek(f.fd, int64(delta), sysWhence)
-	return wasi.FileSize(off), makeErrno(err)
+	return wasi.FileSize(off), MakeErrno(err)
 }
 
 func (s *System) FDWrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) (wasi.Size, wasi.Errno) {
@@ -461,7 +462,7 @@ func (s *System) FDWrite(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec) (
 		return 0, errno
 	}
 	n, err := writev(f.fd, makeIOVecs(iovecs))
-	return wasi.Size(n), makeErrno(err)
+	return wasi.Size(n), MakeErrno(err)
 }
 
 func (s *System) PathCreateDirectory(ctx context.Context, fd wasi.FD, path string) wasi.Errno {
@@ -470,7 +471,7 @@ func (s *System) PathCreateDirectory(ctx context.Context, fd wasi.FD, path strin
 		return errno
 	}
 	err := unix.Mkdirat(d.fd, path, 0755)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) PathFileStatGet(ctx context.Context, fd wasi.FD, flags wasi.LookupFlags, path string) (wasi.FileStat, wasi.Errno) {
@@ -484,7 +485,7 @@ func (s *System) PathFileStatGet(ctx context.Context, fd wasi.FD, flags wasi.Loo
 		sysFlags |= unix.AT_SYMLINK_NOFOLLOW
 	}
 	err := unix.Fstatat(d.fd, path, &sysStat, sysFlags)
-	return makeFileStat(&sysStat), makeErrno(err)
+	return makeFileStat(&sysStat), MakeErrno(err)
 }
 
 func (s *System) PathFileStatSetTimes(ctx context.Context, fd wasi.FD, lookupFlags wasi.LookupFlags, path string, accessTime, modifyTime wasi.Timestamp, fstFlags wasi.FSTFlags) wasi.Errno {
@@ -512,7 +513,7 @@ func (s *System) PathFileStatSetTimes(ctx context.Context, fd wasi.FD, lookupFla
 		var stat unix.Stat_t
 		err := unix.Fstatat(d.fd, path, &stat, sysFlags)
 		if err != nil {
-			return makeErrno(err)
+			return MakeErrno(err)
 		}
 		ts[0] = stat.Atim
 		ts[1] = stat.Mtim
@@ -524,7 +525,7 @@ func (s *System) PathFileStatSetTimes(ctx context.Context, fd wasi.FD, lookupFla
 		ts[1] = unix.NsecToTimespec(int64(modifyTime))
 	}
 	err := unix.UtimesNanoAt(d.fd, path, ts[:], sysFlags)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) PathLink(ctx context.Context, fd wasi.FD, flags wasi.LookupFlags, oldPath string, newFD wasi.FD, newPath string) wasi.Errno {
@@ -541,7 +542,7 @@ func (s *System) PathLink(ctx context.Context, fd wasi.FD, flags wasi.LookupFlag
 		sysFlags |= unix.AT_SYMLINK_FOLLOW
 	}
 	err := unix.Linkat(oldDir.fd, oldPath, newDir.fd, newPath, sysFlags)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.LookupFlags, path string, openFlags wasi.OpenFlags, rightsBase, rightsInheriting wasi.Rights, fdFlags wasi.FDFlags) (wasi.FD, wasi.Errno) {
@@ -624,7 +625,7 @@ func (s *System) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Look
 	}
 	hostfd, err := unix.Openat(d.fd, path, oflags, mode)
 	if err != nil {
-		return -1, makeErrno(err)
+		return -1, MakeErrno(err)
 	}
 
 	guestfd := s.fds.Insert(fdinfo{
@@ -646,7 +647,7 @@ func (s *System) PathReadLink(ctx context.Context, fd wasi.FD, path string, buff
 	}
 	n, err := unix.Readlinkat(d.fd, path, buffer)
 	if err != nil {
-		return buffer, makeErrno(err)
+		return buffer, MakeErrno(err)
 	} else if n == len(buffer) {
 		return buffer, wasi.ERANGE
 	}
@@ -659,7 +660,7 @@ func (s *System) PathRemoveDirectory(ctx context.Context, fd wasi.FD, path strin
 		return errno
 	}
 	err := unix.Unlinkat(d.fd, path, unix.AT_REMOVEDIR)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) PathRename(ctx context.Context, fd wasi.FD, oldPath string, newFD wasi.FD, newPath string) wasi.Errno {
@@ -672,7 +673,7 @@ func (s *System) PathRename(ctx context.Context, fd wasi.FD, oldPath string, new
 		return errno
 	}
 	err := unix.Renameat(oldDir.fd, oldPath, newDir.fd, newPath)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) PathSymlink(ctx context.Context, oldPath string, fd wasi.FD, newPath string) wasi.Errno {
@@ -681,7 +682,7 @@ func (s *System) PathSymlink(ctx context.Context, oldPath string, fd wasi.FD, ne
 		return errno
 	}
 	err := unix.Symlinkat(oldPath, d.fd, newPath)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) PathUnlinkFile(ctx context.Context, fd wasi.FD, path string) wasi.Errno {
@@ -690,7 +691,7 @@ func (s *System) PathUnlinkFile(ctx context.Context, fd wasi.FD, path string) wa
 		return errno
 	}
 	err := unix.Unlinkat(d.fd, path, 0)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscription, events []wasi.Event) (int, wasi.Errno) {
@@ -699,7 +700,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	}
 	wakefd, err := s.init()
 	if err != nil {
-		return 0, makeErrno(err)
+		return 0, MakeErrno(err)
 	}
 	epoch := time.Duration(0)
 	timeout := time.Duration(-1)
@@ -748,7 +749,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 				// monotonic clock configured.
 				now, err := s.Monotonic(ctx)
 				if err != nil {
-					return 0, makeErrno(err)
+					return 0, MakeErrno(err)
 				}
 				epoch = time.Duration(now)
 			}
@@ -782,7 +783,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 
 	n, err := unix.Poll(s.pollfds, timeoutMillis)
 	if err != nil {
-		return 0, makeErrno(err)
+		return 0, MakeErrno(err)
 	}
 
 	if n > 0 && s.pollfds[0].Revents != 0 {
@@ -807,7 +808,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	if timeout >= 0 {
 		t, err := s.Monotonic(ctx)
 		if err != nil {
-			return 0, makeErrno(err)
+			return 0, MakeErrno(err)
 		}
 		now = time.Duration(t)
 	}
@@ -888,21 +889,21 @@ func errorEvent(s *wasi.Subscription, err wasi.Errno) wasi.Event {
 
 func (s *System) ProcExit(ctx context.Context, code wasi.ExitCode) wasi.Errno {
 	if s.Exit != nil {
-		return makeErrno(s.Exit(ctx, int(code)))
+		return MakeErrno(s.Exit(ctx, int(code)))
 	}
 	return wasi.ENOSYS
 }
 
 func (s *System) ProcRaise(ctx context.Context, signal wasi.Signal) wasi.Errno {
 	if s.Raise != nil {
-		return makeErrno(s.Raise(ctx, int(signal)))
+		return MakeErrno(s.Raise(ctx, int(signal)))
 	}
 	return wasi.ENOSYS
 }
 
 func (s *System) SchedYield(ctx context.Context) wasi.Errno {
 	if s.Yield != nil {
-		return makeErrno(s.Yield(ctx))
+		return MakeErrno(s.Yield(ctx))
 	}
 	return wasi.ENOSYS
 }
@@ -928,7 +929,7 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 	}
 	connfd, _, err := accept(socket.fd, connflags)
 	if err != nil {
-		return -1, makeErrno(err)
+		return -1, MakeErrno(err)
 	}
 	guestfd := s.fds.Insert(fdinfo{
 		fd: connfd,
@@ -977,7 +978,7 @@ func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlag
 		return wasi.EINVAL
 	}
 	err := unix.Shutdown(socket.fd, sysHow)
-	return makeErrno(err)
+	return MakeErrno(err)
 }
 
 func (s *System) Close(ctx context.Context) error {

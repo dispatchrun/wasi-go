@@ -10,7 +10,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func makeErrno(err error) wasi.Errno {
+func MakeErrno(err error) wasi.Errno {
 	if err == nil {
 		return wasi.ESUCCESS
 	}

@@ -305,4 +305,8 @@ type System interface {
 
 	// Close closes the System.
 	Close(ctx context.Context) error
+
+	// Open is a lower-level variant of Preopen that registers a file
+	// descriptor.
+	Open(hostfd int, fdstat FDStat) FD
 }
