@@ -150,6 +150,8 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
+		defer syscall.Close(fd)
+
 		system.Preopen(fd, dir, wasi.FDStat{
 			FileType:         wasi.DirectoryType,
 			RightsBase:       wasi.AllRights,
@@ -163,6 +165,8 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
+		defer syscall.Close(fd)
+
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            wasi.NonBlock,
