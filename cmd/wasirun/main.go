@@ -179,8 +179,8 @@ func run(args []string) error {
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            wasi.NonBlock,
-			RightsBase:       sockets.ListenRights,
-			RightsInheriting: sockets.ConnectionRights,
+			RightsBase:       wasi.SockListenRights,
+			RightsInheriting: wasi.SockConnectionRights,
 		})
 	}
 	for _, addr := range dials {
@@ -193,7 +193,7 @@ func run(args []string) error {
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:   wasi.SocketStreamType,
 			Flags:      wasi.NonBlock,
-			RightsBase: sockets.ConnectionRights,
+			RightsBase: wasi.SockConnectionRights,
 		})
 	}
 
