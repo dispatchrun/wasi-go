@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/stealthrocket/wasi-go"
-	"github.com/stealthrocket/wasi-go/extensions"
 	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
 	"github.com/stealthrocket/wasi-go/internal/sockets"
 	"github.com/stealthrocket/wasi-go/systems/unix"
@@ -131,7 +130,7 @@ func run(args []string) error {
 	// Setup sockets extension.
 	switch socketExt {
 	case "path_open":
-		system = &extensions.PathOpenSockets{system}
+		system = &unix.PathOpenSockets{system}
 	case "":
 	default:
 		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)

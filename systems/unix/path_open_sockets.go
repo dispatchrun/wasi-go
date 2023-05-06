@@ -1,13 +1,12 @@
-package extensions
+package unix
 
 import (
 	"context"
 	"net/url"
 	"strings"
 
-	. "github.com/stealthrocket/wasi-go"
+	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/internal/sockets"
-	"github.com/stealthrocket/wasi-go/systems/unix"
 )
 
 // PathOpenSockets is an extension to WASI preview 1 that adds the ability to
@@ -27,29 +26,30 @@ import (
 // - nodelay=<0|1>:   Set TCP_NODELAY. Default is 1.
 // - reuseaddr=<0|1>: Set SO_REUSEADDR. Default is 1.
 // - backlog=<N>:     Set the listen(2) backlog. Default is 128.
-type PathOpenSockets struct{ System }
+type PathOpenSockets struct{ wasi.System }
 
-func (p *PathOpenSockets) PathOpen(ctx context.Context, fd FD, lookupFlags LookupFlags, path string, openFlags OpenFlags, rightsBase, rightsInheriting Rights, fdFlags FDFlags) (FD, Errno) {
+func (p *PathOpenSockets) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.LookupFlags, path string, openFlags wasi.OpenFlags, rightsBase, rightsInheriting wasi.Rights, fdFlags wasi.FDFlags) (wasi.FD, wasi.Errno) {
 	addr, op, ok := parseURI(path)
 	if !ok || fd >= 0 {
 		return p.System.PathOpen(ctx, fd, lookupFlags, path, openFlags, rightsBase, rightsInheriting, fdFlags)
 	}
 	var sockfd int
 	var err error
-	if op == "listen" {
+	switch op {
+	case "listen":
 		sockfd, err = sockets.Listen(addr)
-	} else if op == "dial" {
+	case "dial":
 		sockfd, err = sockets.Dial(addr)
 	}
-	errno := ESUCCESS
+	errno := wasi.ESUCCESS
 	if err != nil {
-		errno = unix.MakeErrno(err)
-		if errno != EINPROGRESS {
+		errno = makeErrno(err)
+		if errno != wasi.EINPROGRESS {
 			return -1, errno
 		}
 	}
-	return p.Open(sockfd, FDStat{
-		FileType:         SocketStreamType,
+	return p.Register(sockfd, wasi.FDStat{
+		FileType:         wasi.SocketStreamType,
 		Flags:            fdFlags,
 		RightsBase:       rightsBase,
 		RightsInheriting: rightsInheriting,
