@@ -27,6 +27,7 @@ var (
 	listens   stringList
 	dials     stringList
 	socketExt string
+	trace     bool
 	version   bool
 	help      bool
 	h         bool
@@ -38,6 +39,7 @@ func main() {
 	flag.Var(&listens, "listen", "Socket to pre-open (and an address to listen on).")
 	flag.Var(&dials, "dial", "Socket to pre-open (and an address to connect to).")
 	flag.StringVar(&socketExt, "sockets", "", "Enable a sockets extension.")
+	flag.BoolVar(&trace, "trace", false, "Trace WASI system calls.")
 	flag.BoolVar(&version, "version", false, "Print the version and exit.")
 	flag.BoolVar(&help, "help", false, "Print usage information.")
 	flag.BoolVar(&h, "h", false, "Print usage information.")
@@ -134,6 +136,10 @@ func run(args []string) error {
 	case "":
 	default:
 		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)
+	}
+
+	if trace {
+		system = &wasi.Tracer{os.Stderr, system}
 	}
 
 	// Preopen stdio.
