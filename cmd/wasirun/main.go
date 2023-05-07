@@ -13,6 +13,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
+	"github.com/stealthrocket/wasi-go/internal/sockets"
 	"github.com/stealthrocket/wasi-go/systems/unix"
 	"github.com/stealthrocket/wazergo"
 	"github.com/tetratelabs/wazero"
@@ -21,18 +22,22 @@ import (
 const Version = "devel"
 
 var (
-	envs    stringList
-	dirs    stringList
-	listens stringList
-	version bool
-	help    bool
-	h       bool
+	envs      stringList
+	dirs      stringList
+	listens   stringList
+	dials     stringList
+	socketExt string
+	version   bool
+	help      bool
+	h         bool
 )
 
 func main() {
-	flag.Var(&envs, "env", "Environment variables to pass to the WASM module.")
-	flag.Var(&dirs, "dir", "Directories to pre-open.")
-	flag.Var(&listens, "listen", "Addresses of listener sockets to pre-open.")
+	flag.Var(&envs, "env", "Environment variable to pass to the WASM module.")
+	flag.Var(&dirs, "dir", "Directory to pre-open.")
+	flag.Var(&listens, "listen", "Socket to pre-open (and an address to listen on).")
+	flag.Var(&dials, "dial", "Socket to pre-open (and an address to connect to).")
+	flag.StringVar(&socketExt, "sockets", "", "Enable a sockets extension.")
 	flag.BoolVar(&version, "version", false, "Print the version and exit.")
 	flag.BoolVar(&help, "help", false, "Print usage information.")
 	flag.BoolVar(&h, "h", false, "Print usage information.")
@@ -72,8 +77,14 @@ OPTIONS:
    --listen <ADDR>
       Grant access to a socket listening on the specified address
 
+   --dial <ADDR>
+      Grant access to a socket connected to the specified address
+
    --env <NAME=VAL>
       Pass an environment variable to the module
+
+   --sockets <NAME>
+      Enable a sockets extension with the specified name
 
    --version
       Print the version and exit
@@ -104,7 +115,7 @@ func run(args []string) error {
 	runtime := wazero.NewRuntime(ctx)
 	defer runtime.Close(ctx)
 
-	system := &unix.System{
+	var system wasi.System = &unix.System{
 		Args:               append([]string{wasmName}, args...),
 		Environ:            envs,
 		Realtime:           realtime,
@@ -114,6 +125,15 @@ func run(args []string) error {
 		Yield:              yield,
 		Rand:               rand.Reader,
 		Exit:               exit,
+	}
+
+	// Setup sockets extension.
+	switch socketExt {
+	case "path_open":
+		system = &unix.PathOpenSockets{system}
+	case "":
+	default:
+		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)
 	}
 
 	// Preopen stdio.
@@ -150,17 +170,30 @@ func run(args []string) error {
 
 	// Preopen sockets.
 	for _, addr := range listens {
-		fd, err := listen(addr)
+		fd, err := sockets.Listen(addr)
 		if err != nil {
 			return err
 		}
-		defer syscall.Close(fd)
+		defer sockets.Close(fd)
 
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            wasi.NonBlock,
-			RightsBase:       listenRights,
-			RightsInheriting: connRights,
+			RightsBase:       wasi.SockListenRights,
+			RightsInheriting: wasi.SockConnectionRights,
+		})
+	}
+	for _, addr := range dials {
+		fd, err := sockets.Dial(addr)
+		if err != nil && err != sockets.EINPROGRESS {
+			return err
+		}
+		defer sockets.Close(fd)
+
+		system.Preopen(fd, addr, wasi.FDStat{
+			FileType:   wasi.SocketStreamType,
+			Flags:      wasi.NonBlock,
+			RightsBase: wasi.SockConnectionRights,
 		})
 	}
 

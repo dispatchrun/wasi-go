@@ -135,6 +135,12 @@ const (
 
 	// WriteRights are rights related to writes.
 	WriteRights Rights = FDWriteRight | FDAllocateRight | PathFileStatSetSizeRight | FDDataSyncRight
+
+	// SockListenRights are rights for listener sockets.
+	SockListenRights = SockAcceptRight | PollFDReadWriteRight | FDFileStatGetRight | FDStatSetFlagsRight
+
+	// SockConnectionRights are rights for connection sockets.
+	SockConnectionRights = FDReadRight | FDWriteRight | PollFDReadWriteRight | SockShutdownRight | FDFileStatGetRight | FDStatSetFlagsRight
 )
 
 // Has is true if the flag is set. If multiple flags are specified, Has returns

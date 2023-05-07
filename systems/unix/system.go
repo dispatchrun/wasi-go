@@ -76,15 +76,16 @@ type fdinfo struct {
 
 // Preopen adds an open file to the list of pre-opens.
 func (s *System) Preopen(hostfd int, path string, fdstat wasi.FDStat) {
+	s.preopens.Assign(s.Register(hostfd, fdstat), path)
+}
+
+func (s *System) Register(hostfd int, fdstat wasi.FDStat) wasi.FD {
 	fdstat.RightsBase &= wasi.AllRights
 	fdstat.RightsInheriting &= wasi.AllRights
-	s.preopens.Assign(
-		s.fds.Insert(fdinfo{
-			fd:   hostfd,
-			stat: fdstat,
-		}),
-		path,
-	)
+	return s.fds.Insert(fdinfo{
+		fd:   hostfd,
+		stat: fdstat,
+	})
 }
 
 func (s *System) isPreopen(fd wasi.FD) bool {
