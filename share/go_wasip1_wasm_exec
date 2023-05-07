@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# go_wasip1_wasm_exec is a script that Go uses to run WASM modules
+# compiled with GOOS=wasip1 GOARCH=wasm.
+#
+# From `go help run`:
+#
+#   If [...] GOOS or GOARCH is different from the system default, and a
+#   program named go_$GOOS_$GOARCH_exec can be found on the current search
+#   path, 'go run' invokes the binary using that program. This allows
+#   execution of cross-compiled programs when a simulator or other execution
+#   method is available.
+#
+# To use the script, first ensure wasirun is installed and available in $PATH:
+#
+#   $ go install github.com/stealthrocket/wasi-go/cmd/wasirun@latest
+#
+# Then, add the directory this script resides in to your $PATH:
+#
+#   $ export PATH="$PATH:/path/to/stealthrocket/wasi-go/share"
+#
+# This will grant you the ability to run WASM modules using wasirun:
+#
+#   $ GOOS-wasip1 GOARCH=wasm go run ...
+#
+# Note that there is a similar script in the Go source repository under
+# ./misc/wasm, but it only supports the wasmtime and wazero runtimes (and
+# their WASI host modules) at this time.
+
+exec wasirun --dir / --env PWD="$PWD" "$1" -- "${@:2}"
