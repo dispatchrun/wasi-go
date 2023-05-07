@@ -88,6 +88,9 @@ OPTIONS:
    --sockets <NAME>
       Enable a sockets extension with the specified name
 
+   --trace
+      Enable logging of system calls (like strace)
+
    --version
       Print the version and exit
 
