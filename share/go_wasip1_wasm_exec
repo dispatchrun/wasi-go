@@ -27,4 +27,8 @@
 # ./misc/wasm, but it only supports the wasmtime and wazero runtimes (and
 # their WASI host modules) at this time.
 
-exec wasirun --dir / --env PWD="$PWD" "$1" -- "${@:2}"
+if [ -n "$GOWASITCPLISTEN" ]; then
+  GOWASIRUNTIMEARGS="--listen $GOWASITCPLISTEN $GOWASIRUNTIMEARGS"
+fi
+
+exec wasirun --dir / --env PWD="$PWD" ${GOWASIRUNTIMEARGS:-} "$1" -- "${@:2}"
