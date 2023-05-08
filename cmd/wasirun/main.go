@@ -140,14 +140,14 @@ func run(args []string) error {
 	// Setup sockets extension.
 	switch socketExt {
 	case "path_open":
-		system = &unix.PathOpenSockets{system}
+		system = &unix.PathOpenSockets{System: system}
 	case "":
 	default:
 		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)
 	}
 
 	if trace {
-		system = &wasi.Tracer{os.Stderr, system}
+		system = &wasi.Tracer{Writer: os.Stderr, System: system}
 	}
 
 	// Preopen stdio.

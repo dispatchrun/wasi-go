@@ -92,11 +92,13 @@ func dup(fd int) (int, error) {
 
 func TestSystemPollAndShutdown(t *testing.T) {
 	testSystem(func(ctx context.Context, p *unix.System) {
+		errors := make(chan error)
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			if err := p.Shutdown(ctx); err != nil {
-				t.Fatal(err)
+				errors <- err
 			}
+			close(errors)
 		}()
 
 		// This call should block forever, unless async shutdown works, which is
@@ -124,6 +126,10 @@ func TestSystemPollAndShutdown(t *testing.T) {
 			{UserData: 1, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
 		}) {
 			t.Errorf("poll_oneoff: wrong events: %+v", events)
+		}
+
+		if err := <-errors; err != nil {
+			t.Fatal(err)
 		}
 	})
 }
