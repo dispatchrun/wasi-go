@@ -240,14 +240,6 @@ func subscribeFDRead(fd wasi.FD) wasi.Subscription {
 	)
 }
 
-func subscribeFDWrite(fd wasi.FD) wasi.Subscription {
-	return wasi.MakeSubscriptionFDReadWrite(
-		wasi.UserData(fd),
-		wasi.FDWriteEvent,
-		wasi.SubscriptionFDReadWrite{FD: fd},
-	)
-}
-
 func subscribeTimeout(timeout time.Duration) wasi.Subscription {
 	return wasi.MakeSubscriptionClock(
 		wasi.UserData(42),

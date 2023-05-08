@@ -3,7 +3,6 @@ package unix
 import (
 	"context"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -1033,13 +1032,3 @@ func (s *System) shutdown() {
 	s.mutex.Unlock()
 	unix.Close(fd)
 }
-
-type statDirEntry struct {
-	name string
-	info os.FileInfo
-}
-
-func (d *statDirEntry) Name() string               { return d.name }
-func (d *statDirEntry) IsDir() bool                { return d.info.IsDir() }
-func (d *statDirEntry) Type() os.FileMode          { return d.info.Mode().Type() }
-func (d *statDirEntry) Info() (os.FileInfo, error) { return d.info, nil }
