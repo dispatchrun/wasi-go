@@ -34,10 +34,14 @@ testdata: $(testdata.files)
 testdata/.sysroot:
 	mkdir -p testdata/.sysroot
 
-testdata/.wasi-libc: .gitmodules
+testdata/.wasi-libc: testdata/.wasi-libc/.git
+
+testdata/.wasi-libc/.git: .gitmodules
 	git submodule update --init --recursive -- testdata/.wasi-libc
 
-testdata/.wasi-testsuite: .gitmodules
+testdata/.wasi-testsuite: testdata/.wasi-testsuite/.git
+
+testdata/.wasi-testsuite/.git: .gitmodules
 	git submodule update --init --recursive -- testdata/.wasi-testsuite
 
 testdata/.sysroot/lib/wasm32-wasi/libc.a: testdata/.wasi-libc
