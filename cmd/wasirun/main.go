@@ -22,15 +22,16 @@ import (
 const Version = "devel"
 
 var (
-	envs      stringList
-	dirs      stringList
-	listens   stringList
-	dials     stringList
-	socketExt string
-	trace     bool
-	version   bool
-	help      bool
-	h         bool
+	envs             stringList
+	dirs             stringList
+	listens          stringList
+	dials            stringList
+	socketExt        string
+	trace            bool
+	nonBlockingStdio bool
+	version          bool
+	help             bool
+	h                bool
 )
 
 func main() {
@@ -40,6 +41,7 @@ func main() {
 	flag.Var(&dials, "dial", "Socket to pre-open (and an address to connect to).")
 	flag.StringVar(&socketExt, "sockets", "", "Enable a sockets extension.")
 	flag.BoolVar(&trace, "trace", false, "Trace WASI system calls.")
+	flag.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "Enable non-blocking stdio.")
 	flag.BoolVar(&version, "version", false, "Print the version and exit.")
 	flag.BoolVar(&help, "help", false, "Print usage information.")
 	flag.BoolVar(&h, "h", false, "Print usage information.")
@@ -90,6 +92,9 @@ OPTIONS:
 
    --trace
       Enable logging of system calls (like strace)
+
+   --non-blocking-stdio
+      Enable non-blocking stdio
 
    --version
       Print the version and exit
@@ -158,6 +163,12 @@ func run(args []string) error {
 			FileType:         wasi.CharacterDeviceType,
 			RightsBase:       wasi.AllRights,
 			RightsInheriting: wasi.AllRights,
+		}
+		if nonBlockingStdio {
+			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
+				return err
+			}
+			stat.Flags |= wasi.NonBlock
 		}
 		system.Preopen(stdio.fd, stdio.path, stat)
 	}
