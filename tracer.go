@@ -257,7 +257,7 @@ func (t *Tracer) FDReadDir(ctx context.Context, fd FD, entries []DirEntry, cooki
 	t.printf("FDReadDir(%d, %d) => ", fd, cookie)
 	n, errno := t.System.FDReadDir(ctx, fd, entries, cookie, bufferSizeBytes)
 	if errno == ESUCCESS {
-		t.printf("%d", n) // TODO: better output here
+		t.printDirEntries(entries[:n], bufferSizeBytes)
 	} else {
 		t.printErrno(errno)
 	}
@@ -634,6 +634,21 @@ func (t *Tracer) printIOVecs(iovecs []IOVec, size int) {
 			size -= len(iovec)
 		case size == 0:
 			t.printf("[%d]Byte", len(iovec))
+		}
+	}
+	t.printf("}")
+}
+
+func (t *Tracer) printDirEntries(dirEntries []DirEntry, bufferSizeBytes int) {
+	t.printf("{")
+	for i, e := range dirEntries {
+		if i > 0 {
+			t.printf("},{")
+		}
+		t.printf("Name:%q,Type:%s,INode:%d,Next:%d", string(e.Name), e.Type, e.INode, e.Next)
+		bufferSizeBytes -= SizeOfDirent + len(e.Name)
+		if bufferSizeBytes < 0 {
+			t.printf(",Partial")
 		}
 	}
 	t.printf("}")
