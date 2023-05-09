@@ -20,8 +20,8 @@ The provided implementation of WASI is a thin zero-allocation layer around OS
 system calls.
 
 Non-blocking I/O is fully supported, allowing WebAssembly modules with an embedded
-scheduler (e.g. the Go runtime, or Rust Tokio scheduler) to schedule green
-threads while waiting for I/O.
+scheduler (e.g. the Go runtime, or Rust Tokio scheduler) to schedule goroutines /
+green threads while waiting for I/O.
 
 :battery: **Extensibility**
 
@@ -29,8 +29,8 @@ The library separates the implementation of WASI from the WebAssembly runtime ho
 module, so that implementations of the provided [WASI interface][system] don't
 have to worry about ABI concerns.
 
-The design makes it easy to wrap, augment and extend WASI, for example see the
-provided [tracer][tracer] and a basic [sockets extension][path_open_sockets].
+The design makes it easy to wrap, augment and extend WASI. For example, see the
+provided [tracer][tracer] and [sockets extension][path_open_sockets].
 
 ## Package Layout
 
