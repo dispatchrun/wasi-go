@@ -4,12 +4,12 @@
 
 # WASI
 
-The WebAssembly System Interface ([WASI][wasi]) is a set of system calls for
-WebAssembly modules that allows them to interact with the outside world (e.g.
-perform I/O, read clocks).
+The WebAssembly System Interface ([WASI][wasi]) is a set of system calls that
+allow WebAssembly modules to interact with the outside world (e.g. perform
+I/O, read clocks).
 
 The WASI [standard][wasi] is still under development. This repository provides
-an implementation of [WASI preview 1][preview1] for Unix systems, and a command
+a Go implementation of [WASI preview 1][preview1] for Unix systems, and a command
 to run WebAssembly modules that use WASI system calls.
 
 ## Goals
