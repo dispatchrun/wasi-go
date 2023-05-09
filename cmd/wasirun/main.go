@@ -37,8 +37,8 @@ var (
 func main() {
 	flag.Var(&envs, "env", "Environment variable to pass to the WASM module.")
 	flag.Var(&dirs, "dir", "Directory to pre-open.")
-	flag.Var(&listens, "listen", "Socket to pre-open (and an address to listen on).")
-	flag.Var(&dials, "dial", "Socket to pre-open (and an address to connect to).")
+	flag.Var(&listens, "tcplisten", "Socket to pre-open (and an address to listen on).")
+	flag.Var(&dials, "tcpdial", "Socket to pre-open (and an address to connect to).")
 	flag.StringVar(&socketExt, "sockets", "", "Enable a sockets extension.")
 	flag.BoolVar(&trace, "trace", false, "Trace WASI system calls.")
 	flag.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "Enable non-blocking stdio.")
@@ -78,10 +78,10 @@ OPTIONS:
    --dir <DIR>
       Grant access to the specified host directory
 
-   --listen <ADDR>
+   --tcplisten <ADDR>
       Grant access to a socket listening on the specified address
 
-   --dial <ADDR>
+   --tcpdial <ADDR>
       Grant access to a socket connected to the specified address
 
    --env <NAME=VAL>
