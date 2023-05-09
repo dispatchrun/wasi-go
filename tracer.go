@@ -546,8 +546,35 @@ func (t *Tracer) SockShutdown(ctx context.Context, fd FD, flags SDFlags) Errno {
 	return errno
 }
 
-// TODO: SockRecv(ctx context.Context, fd FD, iovecs []IOVec, flags RIFlags) (Size, ROFlags, Errno)
-// TODO: SockSend(ctx context.Context, fd FD, iovecs []IOVec, flags SIFlags) (Size, Errno)
+func (t *Tracer) SockRecv(ctx context.Context, fd FD, iovecs []IOVec, iflags RIFlags) (Size, ROFlags, Errno) {
+	t.printf("SockRecv(%d, ", fd)
+	t.printIOVecsProto(iovecs)
+	t.printf(", %s) => ", iflags)
+	n, oflags, errno := t.System.SockRecv(ctx, fd, iovecs, iflags)
+	if errno == ESUCCESS {
+		t.printf("[%d]byte: ", n)
+		t.printIOVecs(iovecs, int(n))
+		t.printf(", %s", oflags)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return n, oflags, errno
+}
+
+func (t *Tracer) SockSend(ctx context.Context, fd FD, iovecs []IOVec, iflags SIFlags) (Size, Errno) {
+	t.printf("SockSend(%d, ", fd)
+	t.printIOVecs(iovecs, -1)
+	t.printf(", %s) => ", iflags)
+	n, errno := t.System.SockSend(ctx, fd, iovecs, iflags)
+	if errno == ESUCCESS {
+		t.printf("%d", n)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return n, errno
+}
 
 func (t *Tracer) Close(ctx context.Context) error {
 	t.printf("Close() => ")
