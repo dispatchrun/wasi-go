@@ -947,8 +947,22 @@ func (s *System) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, 
 	if errno != wasi.ESUCCESS {
 		return 0, 0, errno
 	}
-	_ = socket
-	return 0, 0, wasi.ENOSYS // TODO: implement SockRecv
+	var sysIFlags int
+	if flags.Has(wasi.RecvPeek) {
+		sysIFlags |= unix.MSG_PEEK
+	}
+	if flags.Has(wasi.RecvWaitAll) {
+		sysIFlags |= unix.MSG_WAITALL
+	}
+	n, _, sysOFlags, _, err := unix.RecvmsgBuffers(socket.fd, makeIOVecs(iovecs), nil, sysIFlags)
+	if err != nil {
+		return 0, 0, makeErrno(err)
+	}
+	var roflags wasi.ROFlags
+	if (sysOFlags & unix.MSG_TRUNC) != 0 {
+		roflags |= wasi.RecvDataTruncated
+	}
+	return wasi.Size(n), roflags, wasi.ESUCCESS
 }
 
 func (s *System) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.SIFlags) (wasi.Size, wasi.Errno) {
@@ -956,8 +970,8 @@ func (s *System) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, 
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
-	_ = socket
-	return 0, wasi.ENOSYS // TODO: implement SockSend
+	n, err := unix.SendmsgBuffers(socket.fd, makeIOVecs(iovecs), nil, nil, 0)
+	return wasi.Size(n), makeErrno(err)
 }
 
 func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlags) wasi.Errno {
