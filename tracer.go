@@ -189,7 +189,7 @@ func (t *Tracer) FDPread(ctx context.Context, fd FD, iovecs []IOVec, offset File
 	t.printf("FDPread(%d, ", fd)
 	t.printIOVecsProto(iovecs)
 	t.printf("%d) => ", offset)
-	n, errno := t.System.FDRead(ctx, fd, iovecs)
+	n, errno := t.System.FDPread(ctx, fd, iovecs, offset)
 	if errno == ESUCCESS {
 		t.printf("[%d]byte: ", n)
 		t.printIOVecs(iovecs, int(n))
