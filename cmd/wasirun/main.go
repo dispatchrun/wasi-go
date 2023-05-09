@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,6 +29,7 @@ var (
 	listens          stringList
 	dials            stringList
 	socketExt        string
+	pprofAddr        string
 	trace            bool
 	nonBlockingStdio bool
 	version          bool
@@ -40,6 +43,7 @@ func main() {
 	flag.Var(&listens, "tcplisten", "Socket to pre-open (and an address to listen on).")
 	flag.Var(&dials, "tcpdial", "Socket to pre-open (and an address to connect to).")
 	flag.StringVar(&socketExt, "sockets", "", "Enable a sockets extension.")
+	flag.StringVar(&pprofAddr, "pprof-addr", "", "Start a pprof server listening on the specified address.")
 	flag.BoolVar(&trace, "trace", false, "Trace WASI system calls.")
 	flag.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "Enable non-blocking stdio.")
 	flag.BoolVar(&version, "version", false, "Print the version and exit.")
@@ -90,6 +94,9 @@ OPTIONS:
    --sockets <NAME>
       Enable a sockets extension with the specified name
 
+   --pprof-addr <ADDR>
+      Start a pprof server listening on the specified address.
+
    --trace
       Enable logging of system calls (like strace)
 
@@ -119,6 +126,10 @@ func run(args []string) error {
 	args = args[1:]
 	if len(args) > 0 && args[0] == "--" {
 		args = args[1:]
+	}
+
+	if pprofAddr != "" {
+		go http.ListenAndServe(pprofAddr, nil)
 	}
 
 	ctx := context.Background()
