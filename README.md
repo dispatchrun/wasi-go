@@ -70,17 +70,18 @@ As a Go implementation of WASI, we're naturally interested in Go's support for
 WebAssembly and WASI, and are championing the efforts to make Go a first class
 citizen in the ecosystem (along with Rust and Zig).
 
-In Go v1.21 (scheduled for release in August 2023), Go will natively
-compile WebAssembly modules with WASI system calls:
+Go v1.21 (scheduled for release in August 2023) has native support for WebAssembly
+and WASI:
 
 ```go
-$ GOOS=wasip1 GOARCH=wasm go build ...
+$ GOOS=wasip1 GOARCH=wasm go build -o app.wasm app.go
+$ wasirun app.wasm
 ```
 
-To play around with this feature before release, [use `gotip`][gotip].
+To test this feature before release, use [`gotip`][gotip].
 
-This repository provides [a script][go-script] that you can use to skip the
-`go build` step and directly `go run` WebAssembly modules.
+This repository bundles [a script][go-script] that can be used to skip the
+`go build` step.
 
 
 [wasm]: https://webassembly.org
