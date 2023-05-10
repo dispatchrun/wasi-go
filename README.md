@@ -49,3 +49,15 @@ provided [tracer][tracer] and [sockets extension][path_open_sockets].
 [wasirun]: https://github.com/stealthrocket/wasi-go/tree/main/cmd/wasirun
 [tracer]: https://github.com/stealthrocket/wasi-go/blob/main/tracer.go
 [path_open_sockets]: https://github.com/stealthrocket/wasi-go/blob/main/systems/unix/path_open_sockets.go
+
+## Sockets
+
+WASI preview 1 lacks comprehensive socket support. It only allows WebAssembly modules
+to accept connections on a pre-opened socket.
+
+Many WebAssembly runtimes in the wild extend WASI with host functions that allow the
+guest to create sockets, bind them to an address, listen for incoming connections,
+make outbound connections, and get/set socket options. We follow suite here, and
+align with the [WasmEdge][wasmedge] runtime in terms of the API.
+
+[wasmedge]: https://github.com/WasmEdge/WasmEdge
