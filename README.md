@@ -17,24 +17,20 @@ to run WebAssembly modules that use WASI system calls.
 :zap: **Performance**
 
 The provided implementation of WASI is a thin zero-allocation layer around OS
-system calls.
-
-Non-blocking I/O is fully supported, allowing WebAssembly modules with an embedded
-scheduler (e.g. the Go runtime, or Rust Tokio scheduler) to schedule goroutines /
-green threads while waiting for I/O.
+system calls. Non-blocking I/O is fully supported, allowing WebAssembly modules
+with an embedded scheduler (e.g. the Go runtime, or Rust Tokio scheduler) to
+schedule goroutines / green threads while waiting for I/O.
 
 :battery: **Extensibility**
 
 The library separates the implementation of WASI from the WebAssembly runtime host
 module, so that implementations of the provided [WASI interface][system] don't
-have to worry about ABI concerns.
-
-The design makes it easy to wrap, augment and extend WASI.
+have to worry about ABI concerns. The design makes it easy to wrap, augment and
+extend WASI.
 
 :electric_plug: **Sockets**
 
 WASI preview 1 was unfortunately sealed before sockets support was complete.
-
 Many WebAssembly runtimes extend WASI with system calls that allow the module
 to create sockets, bind them to an address, listen for incoming connections
 and make outbound connections. This library supports a few of these sockets
