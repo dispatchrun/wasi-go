@@ -32,12 +32,62 @@ have to worry about ABI concerns.
 The design makes it easy to wrap, augment and extend WASI. For example, see the
 provided [tracer][tracer] and [sockets extension][sockets-extension].
 
-## Package Layout
+:electric_plug: **Sockets**
 
-- `.`: types, constants and an [interface][system] for WASI preview 1
-- [`systems/unix`][unix-system]: a Unix implementation
-- [`imports/wasi_snapshot_preview1`][host-module]: a host module for the [wazero][wazero] runtime
-- [`cmd/wasirun`][wasirun]: a command to run WebAssembly modules that use WASI system calls
+WASI preview 1 was unfortunately sealed before sockets support was complete.
+
+Many WebAssembly runtimes extend WASI with system calls that allow the module
+to create sockets, bind them to an address, listen for incoming connections
+and make outbound connections. This library supports a few of these sockets
+extensions.
+
+## Usage
+
+### As a Command
+
+A `wasirun` command is provided for running WebAssembly modules that use WASI system calls.
+It bundles the WASI implementation from this library with the [wazero][wazero] runtime.
+
+```
+$ go install github.com/stealthrocket/wasi-go/cmd/wasirun@latest
+```
+
+The `wasirun` command has many options for controlling the capabilities of the WebAssembly
+module, and for tracing and profiling execution. See `wasirun --help` for details.
+
+### As a Library
+
+The package layout is as follows:
+
+- `.` types, constants and an [interface][system] for WASI preview 1
+- [`systems/unix`][unix-system] a Unix implementation (tested on Linux and macOS)
+- [`imports/wasi_snapshot_preview1`][host-module] a host module for the [wazero][wazero] runtime
+- [`cmd/wasirun`][wasirun] a command to run WebAssembly modules
+- [`testwasi`][testwasi] a test suite against the WASI interface
+
+To run a WebAssembly module, it's also necessary to prepare "preopens"
+(files/directories that the WebAssembly module can access) and clocks.
+To see how it all fits together, see the implementation of the [wasirun][wasirun]
+command. 
+
+### With Go
+
+As a Go implementation of WASI, we're naturally interested in Go's support for
+WebAssembly and WASI, and are championing the efforts to make Go a first class
+citizen in the ecosystem (along with Rust and Zig).
+
+In Go v1.21 (scheduled for release in August 2023), Go will natively
+compile WebAssembly modules with WASI system calls:
+
+```go
+$ GOOS=wasip1 GOARCH=wasm go build ...
+```
+
+To play around with this feature before release, [use `gotip`][gotip].
+
+This repository provides [a script][go-script] that you can use to skip the
+`go build` step and directly `go run` WebAssembly modules.
+
 
 [wasm]: https://webassembly.org
 [wasi]: https://github.com/WebAssembly/WASI
@@ -46,18 +96,9 @@ provided [tracer][tracer] and [sockets extension][sockets-extension].
 [host-module]: https://github.com/stealthrocket/wasi-go/blob/main/imports/wasi_snapshot_preview1/module.go
 [preview1]: https://github.com/WebAssembly/WASI/blob/e324ce3/legacy/preview1/docs.md
 [wazero]: https://wazero.io
-[wasirun]: https://github.com/stealthrocket/wasi-go/tree/main/cmd/wasirun
+[wasirun]: https://github.com/stealthrocket/wasi-go/blob/main/cmd/wasirun/main.go
+[testwasi]: https://github.com/stealthrocket/wasi-go/tree/main/testwasi
 [tracer]: https://github.com/stealthrocket/wasi-go/blob/main/tracer.go
 [sockets-extension]: https://github.com/stealthrocket/wasi-go/blob/main/sockets_extension.go
-
-## Sockets
-
-WASI preview 1 has only basic socket support. WebAssembly modules are only
-allowed to accept connections on a pre-opened socket.
-
-Many WebAssembly runtimes in the wild extend WASI with host functions that allow
-the guest to create sockets, bind them to an address, listen for incoming
-connections, make outbound connections, and get/set socket options.
-
-This repository supports more than one socket extension. See `wasirun --help`
-for details.
+[gotip]: https://pkg.go.dev/golang.org/dl/gotip
+[go-script]: https://github.com/stealthrocket/wasi-go/blob/main/share/go_wasip1_wasm_exec
