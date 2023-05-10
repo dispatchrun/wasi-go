@@ -22,10 +22,10 @@ const moduleName = "wasi_snapshot_preview1"
 // interface provided via the WithWASI host module Option. This design
 // means that the implementation doesn't have to concern itself with ABI
 // details nor access the guest's memory.
-type HostModule wazergo.HostModule[*Module]
+var HostModule wazergo.HostModule[*Module] = functions{}
 
 // NewHostModule constructs a HostModule.
-func NewHostModule(flavor Flavor) wazergo.HostModule[*Module] {
+func NewHostModule(extensions ...Extension) wazergo.HostModule[*Module] {
 	m := functions{
 		"args_get":                wazergo.F2((*Module).ArgsGet),
 		"args_sizes_get":          wazergo.F2((*Module).ArgsSizesGet),
@@ -75,25 +75,17 @@ func NewHostModule(flavor Flavor) wazergo.HostModule[*Module] {
 		"sock_shutdown":           wazergo.F2((*Module).SockShutdown),
 	}
 
-	switch flavor {
-	case WasmEdge:
-		m["sock_open"] = wazergo.F3((*Module).WasmEdgeSockOpen)
-		m["sock_bind"] = wazergo.F3((*Module).WasmEdgeSockBind)
-		m["sock_connect"] = wazergo.F3((*Module).WasmEdgeSockConnect)
-		m["sock_listen"] = wazergo.F2((*Module).WasmEdgeSockListen)
-		m["sock_getsockopt"] = wazergo.F5((*Module).WasmEdgeSockGetOpt)
-		m["sock_setsockopt"] = wazergo.F5((*Module).WasmEdgeSockSetOpt)
+	for _, extension := range extensions {
+		for name, function := range extension {
+			m[name] = function
+		}
 	}
 
 	return m
 }
 
-type Flavor int
-
-const (
-	Base Flavor = iota
-	WasmEdge
-)
+// Extension is an extension to WASI preview 1.
+type Extension wazergo.Functions[*Module]
 
 // Option configures the host module.
 type Option = wazergo.Option[*Module]

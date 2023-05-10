@@ -154,12 +154,12 @@ func run(args []string) error {
 	}
 
 	// Setup sockets extension.
-	flavor := wasi_snapshot_preview1.Base
+	var extensions []wasi_snapshot_preview1.Extension
 	switch socketExt {
 	case "none", "":
 		// no sockets extension
 	case "wasmedge":
-		flavor = wasi_snapshot_preview1.WasmEdge
+		extensions = append(extensions, wasi_snapshot_preview1.WasmEdge)
 	case "path_open":
 		system = &unix.PathOpenSockets{System: system}
 	case "auto":
@@ -167,7 +167,7 @@ func run(args []string) error {
 		for _, f := range functions {
 			moduleName, name, ok := f.Import()
 			if ok && moduleName == "wasi_snapshot_preview1" && name == "sock_open" {
-				flavor = wasi_snapshot_preview1.WasmEdge
+				extensions = append(extensions, wasi_snapshot_preview1.WasmEdge)
 				break
 			}
 		}
@@ -247,7 +247,7 @@ func run(args []string) error {
 	}
 
 	module := wazergo.MustInstantiate(ctx, runtime,
-		wasi_snapshot_preview1.NewHostModule(flavor),
+		wasi_snapshot_preview1.NewHostModule(extensions...),
 		wasi_snapshot_preview1.WithWASI(system),
 	)
 	ctx = wazergo.WithModuleInstance(ctx, module)

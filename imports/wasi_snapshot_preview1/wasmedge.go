@@ -6,10 +6,21 @@ import (
 	"io"
 
 	"github.com/stealthrocket/wasi-go"
+	"github.com/stealthrocket/wazergo"
 	. "github.com/stealthrocket/wazergo/types"
 	"github.com/stealthrocket/wazergo/wasm"
 	"github.com/tetratelabs/wazero/api"
 )
+
+// WasmEdge is the WasmEdge sockets extension to WASI preview 1.
+var WasmEdge = Extension{
+	"sock_open":       wazergo.F3((*Module).WasmEdgeSockOpen),
+	"sock_bind":       wazergo.F3((*Module).WasmEdgeSockBind),
+	"sock_connect":    wazergo.F3((*Module).WasmEdgeSockConnect),
+	"sock_listen":     wazergo.F2((*Module).WasmEdgeSockListen),
+	"sock_getsockopt": wazergo.F5((*Module).WasmEdgeSockGetOpt),
+	"sock_setsockopt": wazergo.F5((*Module).WasmEdgeSockSetOpt),
+}
 
 func (m *Module) WasmEdgeSockOpen(ctx context.Context, family Int32, sockType Int32, openfd Pointer[Int32]) Errno {
 	s, ok := m.WASI.(wasi.SocketsExtension)
