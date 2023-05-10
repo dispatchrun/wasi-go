@@ -72,12 +72,12 @@ var HostModule wazergo.HostModule[*Module] = functions{
 	"sock_shutdown":           wazergo.F2((*Module).SockShutdown),
 
 	// WasmEdge sockets extension.
-	"sock_open":       wazergo.F3((*Module).SockOpen),
-	"sock_bind":       wazergo.F3((*Module).SockBind),
-	"sock_connect":    wazergo.F3((*Module).SockConnect),
-	"sock_listen":     wazergo.F2((*Module).SockListen),
-	"sock_getsockopt": wazergo.F5((*Module).SockGetOpt),
-	"sock_setsockopt": wazergo.F5((*Module).SockSetOpt),
+	"sock_open":       wazergo.F3((*Module).WasmEdgeSockOpen),
+	"sock_bind":       wazergo.F3((*Module).WasmEdgeSockBind),
+	"sock_connect":    wazergo.F3((*Module).WasmEdgeSockConnect),
+	"sock_listen":     wazergo.F2((*Module).WasmEdgeSockListen),
+	"sock_getsockopt": wazergo.F5((*Module).WasmEdgeSockGetOpt),
+	"sock_setsockopt": wazergo.F5((*Module).WasmEdgeSockSetOpt),
 }
 
 // Option configures the host module.
@@ -496,7 +496,7 @@ func (m *Module) SockShutdown(ctx context.Context, fd Int32, flags Int32) Errno 
 	return Errno(m.WASI.SockShutdown(ctx, wasi.FD(fd), wasi.SDFlags(flags)))
 }
 
-func (m *Module) SockOpen(ctx context.Context, family Int32, sockType Int32, openfd Pointer[Int32]) Errno {
+func (m *Module) WasmEdgeSockOpen(ctx context.Context, family Int32, sockType Int32, openfd Pointer[Int32]) Errno {
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
@@ -508,28 +508,28 @@ func (m *Module) SockOpen(ctx context.Context, family Int32, sockType Int32, ope
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) SockBind(ctx context.Context, fd Int32, addr Pointer[wasi.SocketAddress], port Uint32) Errno {
+func (m *Module) WasmEdgeSockBind(ctx context.Context, fd Int32, addr Pointer[wasi.SocketAddress], port Uint32) Errno {
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
 	return Errno(m.Sockets.SockBind(ctx, wasi.FD(fd), addr.Load(), wasi.Port(port)))
 }
 
-func (m *Module) SockConnect(ctx context.Context, fd Int32, addr Pointer[wasi.SocketAddress], port Uint32) Errno {
+func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer[wasi.SocketAddress], port Uint32) Errno {
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
 	return Errno(m.Sockets.SockConnect(ctx, wasi.FD(fd), addr.Load(), wasi.Port(port)))
 }
 
-func (m *Module) SockListen(ctx context.Context, fd Int32, backlog Int32) Errno {
+func (m *Module) WasmEdgeSockListen(ctx context.Context, fd Int32, backlog Int32) Errno {
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
 	return Errno(m.Sockets.SockListen(ctx, wasi.FD(fd), int(backlog)))
 }
 
-func (m *Module) SockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
+func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
@@ -540,7 +540,7 @@ func (m *Module) SockSetOpt(ctx context.Context, fd Int32, level Int32, option I
 	return Errno(m.Sockets.SockSetOptInt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), int(value.Load())))
 }
 
-func (m *Module) SockGetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
+func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
