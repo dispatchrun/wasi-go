@@ -81,6 +81,24 @@ func (arg IOVec) FormatObject(w io.Writer, memory api.Memory, object []byte) {
 	types.Bytes(arg.LoadObject(memory, object)).Format(w)
 }
 
+func (arg SocketAddress) ObjectSize() int {
+	return 8
+}
+
+func (arg SocketAddress) LoadObject(memory api.Memory, object []byte) SocketAddress {
+	offset := binary.LittleEndian.Uint32(object[:4])
+	length := binary.LittleEndian.Uint32(object[4:])
+	return wasm.Read(memory, offset, length)
+}
+
+func (arg SocketAddress) StoreObject(memory api.Memory, object []byte) {
+	panic("BUG: socket addresses cannot be stored back to wasm memory")
+}
+
+func (arg SocketAddress) FormatObject(w io.Writer, memory api.Memory, object []byte) {
+	types.Bytes(arg.LoadObject(memory, object)).Format(w)
+}
+
 func formatObject[T types.Object[T]](w io.Writer, object []byte, typ T) {
 	types.Format(w, typ.LoadObject(nil, object))
 }

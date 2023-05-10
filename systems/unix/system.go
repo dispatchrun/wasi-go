@@ -16,7 +16,7 @@ import (
 
 // System is a WASI preview 1 implementation for Unix.
 //
-// It implements the wasi.System interface.
+// It implements the wasi.System and wasi.SocketsExtension interfaces.
 //
 // An instance of System is not safe for concurrent use.
 type System struct {
@@ -60,6 +60,9 @@ type System struct {
 	mutex   sync.Mutex
 	shutfds [2]int
 }
+
+var _ wasi.System = (*System)(nil)
+var _ wasi.SocketsExtension = (*System)(nil)
 
 type fdinfo struct {
 	// fd is the underlying OS file descriptor.
@@ -991,6 +994,152 @@ func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlag
 		return wasi.EINVAL
 	}
 	err := unix.Shutdown(socket.fd, sysHow)
+	return makeErrno(err)
+}
+
+func (s *System) SockOpen(pf wasi.ProtocolFamily, socketType wasi.SocketType) (wasi.FD, wasi.Errno) {
+	var sysDomain int
+	switch pf {
+	case wasi.Inet:
+		sysDomain = unix.AF_INET
+	case wasi.Inet6:
+		sysDomain = unix.AF_INET6
+	default:
+		return -1, wasi.EINVAL
+	}
+	var fdType wasi.FileType
+	var sysType int
+	switch socketType {
+	case wasi.DatagramSocket:
+		sysType = unix.SOCK_DGRAM
+		fdType = wasi.SocketDGramType
+	case wasi.StreamSocket:
+		sysType = unix.SOCK_STREAM
+		fdType = wasi.SocketStreamType
+	default:
+		return -1, wasi.EINVAL
+	}
+	fd, err := unix.Socket(sysDomain, sysType, 0)
+	if err != nil {
+		return -1, makeErrno(err)
+	}
+	guestfd := s.fds.Insert(fdinfo{
+		fd: fd,
+		stat: wasi.FDStat{
+			FileType:         fdType,
+			RightsBase:       wasi.SockListenRights | wasi.SockConnectionRights,
+			RightsInheriting: wasi.SockConnectionRights,
+		},
+	})
+	return guestfd, wasi.ESUCCESS
+}
+
+func (s *System) SockBind(fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) wasi.Errno {
+	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
+	if errno != wasi.ESUCCESS {
+		return errno
+	}
+	var sa unix.Sockaddr
+	switch len(addr) {
+	case 4:
+		sa = &unix.SockaddrInet4{Port: int(port), Addr: [4]byte(addr)}
+	case 16:
+		sa = &unix.SockaddrInet6{Port: int(port), Addr: [16]byte(addr)}
+	default:
+		return wasi.EINVAL
+	}
+	err := unix.Bind(socket.fd, sa)
+	return makeErrno(err)
+}
+
+func (s *System) SockConnect(fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) wasi.Errno {
+	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
+	if errno != wasi.ESUCCESS {
+		return errno
+	}
+	var sa unix.Sockaddr
+	switch len(addr) {
+	case 4:
+		sa = &unix.SockaddrInet4{Port: int(port), Addr: [4]byte(addr)}
+	case 16:
+		sa = &unix.SockaddrInet6{Port: int(port), Addr: [16]byte(addr)}
+	default:
+		return wasi.EINVAL
+	}
+	err := unix.Connect(socket.fd, sa)
+	return makeErrno(err)
+}
+
+func (s *System) SockListen(fd wasi.FD, backlog int) wasi.Errno {
+	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
+	if errno != wasi.ESUCCESS {
+		return errno
+	}
+	err := unix.Listen(socket.fd, backlog)
+	return makeErrno(err)
+}
+
+func (s *System) SockGetOptInt(fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (int, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, 0)
+	if errno != wasi.ESUCCESS {
+		return 0, errno
+	}
+	var sysLevel int
+	switch level {
+	case wasi.SocketLevel:
+		sysLevel = unix.SOL_SOCKET
+	default:
+		return 0, wasi.EINVAL
+	}
+	var sysOption int
+	switch option {
+	case wasi.ReuseAddress:
+		sysOption = unix.SO_REUSEADDR
+	case wasi.QuerySocketType:
+		sysOption = unix.SO_TYPE
+	case wasi.QuerySocketError:
+		sysOption = unix.SO_ERROR
+	}
+	value, err := unix.GetsockoptInt(socket.fd, sysLevel, sysOption)
+	if err != nil {
+		return 0, makeErrno(err)
+	}
+	switch option {
+	case wasi.QuerySocketType:
+		switch value {
+		case unix.SOCK_DGRAM:
+			value = int(wasi.DatagramSocket)
+		case unix.SOCK_STREAM:
+			value = int(wasi.StreamSocket)
+		}
+	case wasi.QuerySocketError:
+		value = int(makeErrno(unix.Errno(value)))
+	}
+	return value, wasi.ESUCCESS
+}
+
+func (s *System) SockSetOptInt(fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption, value int) wasi.Errno {
+	socket, errno := s.lookupSocketFD(fd, 0)
+	if errno != wasi.ESUCCESS {
+		return errno
+	}
+	var sysLevel int
+	switch level {
+	case wasi.SocketLevel:
+		sysLevel = unix.SOL_SOCKET
+	default:
+		return wasi.EINVAL
+	}
+	var sysOption int
+	switch option {
+	case wasi.ReuseAddress:
+		sysOption = unix.SO_REUSEADDR
+	case wasi.QuerySocketType:
+		sysOption = unix.SO_TYPE
+	case wasi.QuerySocketError:
+		sysOption = unix.SO_ERROR
+	}
+	err := unix.SetsockoptInt(socket.fd, sysLevel, sysOption, value)
 	return makeErrno(err)
 }
 
