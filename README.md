@@ -30,7 +30,7 @@ module, so that implementations of the provided [WASI interface][system] don't
 have to worry about ABI concerns.
 
 The design makes it easy to wrap, augment and extend WASI. For example, see the
-provided [tracer][tracer] and [sockets extension][path_open_sockets].
+provided [tracer][tracer] and [sockets extension][sockets-extension].
 
 ## Package Layout
 
@@ -48,21 +48,16 @@ provided [tracer][tracer] and [sockets extension][path_open_sockets].
 [wazero]: https://wazero.io
 [wasirun]: https://github.com/stealthrocket/wasi-go/tree/main/cmd/wasirun
 [tracer]: https://github.com/stealthrocket/wasi-go/blob/main/tracer.go
-[path_open_sockets]: https://github.com/stealthrocket/wasi-go/blob/main/systems/unix/path_open_sockets.go
+[sockets-extension]: https://github.com/stealthrocket/wasi-go/blob/main/sockets_extension.go
 
 ## Sockets
 
-WASI preview 1 lacks comprehensive socket support. It only allows WebAssembly modules
-to accept connections on a pre-opened socket.
+WASI preview 1 has only basic socket support. WebAssembly modules are only
+allowed to accept connections on a pre-opened socket.
 
-Many WebAssembly runtimes in the wild extend WASI with host functions that allow the
-guest to create sockets, bind them to an address, listen for incoming connections,
-make outbound connections, and get/set socket options.
+Many WebAssembly runtimes in the wild extend WASI with host functions that allow
+the guest to create sockets, bind them to an address, listen for incoming
+connections, make outbound connections, and get/set socket options.
 
-The following socket extensions are provided:
-1. [WasmEdge][wasmedge] sockets extension (v2)
-2. [an extension][path_open_sockets] to the `path_open` system call that allows
-   for paths like `tcp+listen://host:port?option=value` and
-   `tcp+dial://host:port?option=value`
-
-[wasmedge]: https://github.com/WasmEdge/WasmEdge
+This repository supports more than one socket extension. See `wasirun --help`
+for details.
