@@ -11,17 +11,17 @@ type SocketsExtension interface {
 	// SockOpen opens a socket.
 	//
 	// Note: This is similar to socket in POSIX.
-	SockOpen(ctx context.Context, family ProtocolFamily, socketType SocketType) (FD, Errno)
+	SockOpen(ctx context.Context, family ProtocolFamily, socketType SocketType, protocol Protocol, rightsBase, rightsInheriting Rights) (FD, Errno)
 
 	// SockBind binds a socket to an address.
 	//
 	// Note: This is similar to bind in POSIX.
-	SockBind(ctx context.Context, fd FD, addr SocketAddress, port Port) Errno
+	SockBind(ctx context.Context, fd FD, addr SocketAddress) Errno
 
 	// SockConnect connects a socket to an address.
 	//
 	// Note: This is similar to connect in POSIX.
-	SockConnect(ctx context.Context, fd FD, addr SocketAddress, port Port) Errno
+	SockConnect(ctx context.Context, fd FD, addr SocketAddress) Errno
 
 	// SockListen allows the socket to accept connections with SockAccept.
 	//
@@ -42,16 +42,33 @@ type SocketsExtension interface {
 // Port is a port.
 type Port uint32
 
-// SocketAddress is a 4 byte IPv4 address or 16 byte IPv6 address.
-type SocketAddress []byte
+// SocketAddress is a socket address.
+type SocketAddress interface {
+	String() string
 
-func (sa SocketAddress) String() string {
-	switch len(sa) {
-	case 4, 16:
-		return net.IP(sa).String()
-	default:
-		return fmt.Sprintf("SocketAddress(%v)", []byte(sa))
-	}
+	sockaddr()
+}
+
+type Inet4Address struct {
+	Port int
+	Addr [4]byte
+}
+
+func (a *Inet4Address) sockaddr() {}
+
+func (a *Inet4Address) String() string {
+	return fmt.Sprintf("%s:%d", net.IP(a.Addr[:]), a.Port)
+}
+
+type Inet6Address struct {
+	Port int
+	Addr [16]byte
+}
+
+func (a *Inet6Address) sockaddr() {}
+
+func (a *Inet6Address) String() string {
+	return fmt.Sprintf("%s:%d", net.IP(a.Addr[:]), a.Port)
 }
 
 // ProtocolFamily is a socket protocol family.

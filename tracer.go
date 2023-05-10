@@ -579,13 +579,13 @@ func (t *Tracer) SockSend(ctx context.Context, fd FD, iovecs []IOVec, iflags SIF
 	return n, errno
 }
 
-func (t *Tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType SocketType) (FD, Errno) {
+func (t *Tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType SocketType, protocol Protocol, rightsBase, rightsInheriting Rights) (FD, Errno) {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
 		return -1, ENOSYS
 	}
-	t.printf("SockOpen(%s, %s) => ", pf, socketType)
-	fd, errno := s.SockOpen(ctx, pf, socketType)
+	t.printf("SockOpen(%s, %s, %s, %s, %s) => ", pf, socketType, protocol, rightsBase, rightsInheriting)
+	fd, errno := s.SockOpen(ctx, pf, socketType, protocol, rightsBase, rightsInheriting)
 	if errno == ESUCCESS {
 		t.printf("%d", fd)
 	} else {
@@ -595,13 +595,13 @@ func (t *Tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType Soc
 	return fd, errno
 }
 
-func (t *Tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress, port Port) Errno {
+func (t *Tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress) Errno {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
 		return ENOSYS
 	}
-	t.printf("SockBind(%d, %s, %d) => ", fd, addr, port)
-	errno := s.SockBind(ctx, fd, addr, port)
+	t.printf("SockBind(%d, %s) => ", fd, addr)
+	errno := s.SockBind(ctx, fd, addr)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -611,13 +611,13 @@ func (t *Tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress, port P
 	return errno
 }
 
-func (t *Tracer) SockConnect(ctx context.Context, fd FD, addr SocketAddress, port Port) Errno {
+func (t *Tracer) SockConnect(ctx context.Context, fd FD, addr SocketAddress) Errno {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
 		return ENOSYS
 	}
-	t.printf("SockConnect(%d, %s, %d) => ", fd, addr, port)
-	errno := s.SockConnect(ctx, fd, addr, port)
+	t.printf("SockConnect(%d, %s) => ", fd, addr)
+	errno := s.SockConnect(ctx, fd, addr)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {

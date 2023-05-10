@@ -997,7 +997,7 @@ func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlag
 	return makeErrno(err)
 }
 
-func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketType wasi.SocketType) (wasi.FD, wasi.Errno) {
+func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketType wasi.SocketType, protocol wasi.Protocol, rightsBase, rightsInheriting wasi.Rights) (wasi.FD, wasi.Errno) {
 	var sysDomain int
 	switch pf {
 	case wasi.Inet:
@@ -1019,7 +1019,18 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	default:
 		return -1, wasi.EINVAL
 	}
-	fd, err := unix.Socket(sysDomain, sysType, 0)
+	var sysProtocol int
+	switch protocol {
+	case wasi.IPProtocol:
+		sysProtocol = unix.IPPROTO_IP
+	case wasi.TCPProtocol:
+		sysProtocol = unix.IPPROTO_TCP
+	case wasi.UDPProtocol:
+		sysProtocol = unix.IPPROTO_UDP
+	default:
+		return -1, wasi.EINVAL
+	}
+	fd, err := unix.Socket(sysDomain, sysType, sysProtocol)
 	if err != nil {
 		return -1, makeErrno(err)
 	}
@@ -1027,24 +1038,24 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 		fd: fd,
 		stat: wasi.FDStat{
 			FileType:         fdType,
-			RightsBase:       wasi.SockListenRights | wasi.SockConnectionRights,
-			RightsInheriting: wasi.SockConnectionRights,
+			RightsBase:       rightsBase,
+			RightsInheriting: rightsInheriting,
 		},
 	})
 	return guestfd, wasi.ESUCCESS
 }
 
-func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) wasi.Errno {
+func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) wasi.Errno {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
 	var sa unix.Sockaddr
-	switch len(addr) {
-	case 4:
-		sa = &unix.SockaddrInet4{Port: int(port), Addr: [4]byte(addr)}
-	case 16:
-		sa = &unix.SockaddrInet6{Port: int(port), Addr: [16]byte(addr)}
+	switch t := addr.(type) {
+	case *wasi.Inet4Address:
+		sa = &unix.SockaddrInet4{Port: t.Port, Addr: t.Addr}
+	case *wasi.Inet6Address:
+		sa = &unix.SockaddrInet6{Port: t.Port, Addr: t.Addr}
 	default:
 		return wasi.EINVAL
 	}
@@ -1052,17 +1063,17 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 	return makeErrno(err)
 }
 
-func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) wasi.Errno {
+func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) wasi.Errno {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
 	var sa unix.Sockaddr
-	switch len(addr) {
-	case 4:
-		sa = &unix.SockaddrInet4{Port: int(port), Addr: [4]byte(addr)}
-	case 16:
-		sa = &unix.SockaddrInet6{Port: int(port), Addr: [16]byte(addr)}
+	switch t := addr.(type) {
+	case *wasi.Inet4Address:
+		sa = &unix.SockaddrInet4{Port: t.Port, Addr: t.Addr}
+	case *wasi.Inet6Address:
+		sa = &unix.SockaddrInet6{Port: t.Port, Addr: t.Addr}
 	default:
 		return wasi.EINVAL
 	}
