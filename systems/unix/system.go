@@ -51,7 +51,10 @@ type System struct {
 
 	fds      descriptor.Table[wasi.FD, fdinfo]
 	preopens descriptor.Table[wasi.FD, string]
-	pollfds  []unix.PollFd
+
+	pollfds   []unix.PollFd
+	inet4addr unix.SockaddrInet4
+	inet6addr unix.SockaddrInet6
 
 	// shutfds are a pair of file descriptors allocated to the read and write
 	// ends of a pipe. They are used to asynchronously interrupting calls to
@@ -1053,9 +1056,13 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 	var sa unix.Sockaddr
 	switch t := addr.(type) {
 	case *wasi.Inet4Address:
-		sa = &unix.SockaddrInet4{Port: t.Port, Addr: t.Addr}
+		s.inet4addr.Port = t.Port
+		s.inet4addr.Addr = t.Addr
+		sa = &s.inet4addr
 	case *wasi.Inet6Address:
-		sa = &unix.SockaddrInet6{Port: t.Port, Addr: t.Addr}
+		s.inet6addr.Port = t.Port
+		s.inet6addr.Addr = t.Addr
+		sa = &s.inet6addr
 	default:
 		return wasi.EINVAL
 	}
@@ -1071,9 +1078,13 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAd
 	var sa unix.Sockaddr
 	switch t := addr.(type) {
 	case *wasi.Inet4Address:
-		sa = &unix.SockaddrInet4{Port: t.Port, Addr: t.Addr}
+		s.inet4addr.Port = t.Port
+		s.inet4addr.Addr = t.Addr
+		sa = &s.inet4addr
 	case *wasi.Inet6Address:
-		sa = &unix.SockaddrInet6{Port: t.Port, Addr: t.Addr}
+		s.inet6addr.Port = t.Port
+		s.inet6addr.Addr = t.Addr
+		sa = &s.inet6addr
 	default:
 		return wasi.EINVAL
 	}

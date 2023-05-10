@@ -35,9 +35,13 @@ func (m *Module) WasmEdgeSockBind(ctx context.Context, fd Int32, addr Pointer[wa
 	var sa wasi.SocketAddress
 	switch len(b) {
 	case 4:
-		sa = &wasi.Inet4Address{Port: int(port), Addr: [4]byte(b)}
+		m.inet4addr.Port = int(port)
+		m.inet4addr.Addr = [4]byte(b)
+		sa = &m.inet4addr
 	case 16:
-		sa = &wasi.Inet6Address{Port: int(port), Addr: [16]byte(b)}
+		m.inet6addr.Port = int(port)
+		m.inet6addr.Addr = [16]byte(b)
+		sa = &m.inet6addr
 	default:
 		return Errno(wasi.EINVAL)
 	}
@@ -53,9 +57,13 @@ func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer
 	var sa wasi.SocketAddress
 	switch len(b) {
 	case 4:
-		sa = &wasi.Inet4Address{Port: int(port), Addr: [4]byte(b)}
+		m.inet4addr.Port = int(port)
+		m.inet4addr.Addr = [4]byte(b)
+		sa = &m.inet4addr
 	case 16:
-		sa = &wasi.Inet6Address{Port: int(port), Addr: [16]byte(b)}
+		m.inet6addr.Port = int(port)
+		m.inet6addr.Addr = [16]byte(b)
+		sa = &m.inet6addr
 	default:
 		return Errno(wasi.EINVAL)
 	}

@@ -15,10 +15,14 @@ type SocketsExtension interface {
 
 	// SockBind binds a socket to an address.
 	//
+	// The implementation must not retain the socket address.
+	//
 	// Note: This is similar to bind in POSIX.
 	SockBind(ctx context.Context, fd FD, addr SocketAddress) Errno
 
 	// SockConnect connects a socket to an address.
+	//
+	// The implementation must not retain the socket address.
 	//
 	// Note: This is similar to connect in POSIX.
 	SockConnect(ctx context.Context, fd FD, addr SocketAddress) Errno

@@ -125,8 +125,10 @@ func (f functions) Instantiate(ctx context.Context, opts ...Option) (*Module, er
 type Module struct {
 	WASI wasi.System
 
-	iovecs []wasi.IOVec
-	dirent []wasi.DirEntry
+	iovecs    []wasi.IOVec
+	dirent    []wasi.DirEntry
+	inet4addr wasi.Inet4Address
+	inet6addr wasi.Inet6Address
 }
 
 func (m *Module) ArgsGet(ctx context.Context, argv Pointer[Uint32], buf Pointer[Uint8]) Errno {
