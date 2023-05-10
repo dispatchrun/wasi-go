@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 )
 
 // SocketsExtension is a sockets extension for WASI preview 1.
@@ -72,7 +73,7 @@ type Inet6Address struct {
 func (a *Inet6Address) sockaddr() {}
 
 func (a *Inet6Address) String() string {
-	return fmt.Sprintf("%s:%d", net.IP(a.Addr[:]), a.Port)
+	return net.JoinHostPort(net.IP(a.Addr[:]).String(), strconv.Itoa(a.Port))
 }
 
 // ProtocolFamily is a socket protocol family.
