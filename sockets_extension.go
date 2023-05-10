@@ -1,36 +1,40 @@
 package wasi
 
+import (
+	"context"
+)
+
 // SocketsExtension is a sockets extension for WASI preview 1.
 type SocketsExtension interface {
 	// SockOpen opens a socket.
 	//
 	// Note: This is similar to socket in POSIX.
-	SockOpen(family ProtocolFamily, socketType SocketType) (FD, Errno)
+	SockOpen(ctx context.Context, family ProtocolFamily, socketType SocketType) (FD, Errno)
 
 	// SockBind binds a socket to an address.
 	//
 	// Note: This is similar to bind in POSIX.
-	SockBind(fd FD, addr SocketAddress, port Port) Errno
+	SockBind(ctx context.Context, fd FD, addr SocketAddress, port Port) Errno
 
 	// SockConnect connects a socket to an address.
 	//
 	// Note: This is similar to connect in POSIX.
-	SockConnect(fd FD, addr SocketAddress, port Port) Errno
+	SockConnect(ctx context.Context, fd FD, addr SocketAddress, port Port) Errno
 
 	// SockListen allows the socket to accept connections with SockAccept.
 	//
 	// Note: This is similar to listen in POSIX.
-	SockListen(fd FD, backlog int) Errno
+	SockListen(ctx context.Context, fd FD, backlog int) Errno
 
 	// SockGetOptInt gets a socket option.
 	//
 	// Note: This is similar to getsockopt in POSIX.
-	SockGetOptInt(fd FD, level SocketOptionLevel, option SocketOption) (int, Errno)
+	SockGetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (int, Errno)
 
 	// SockSetOptInt sets a socket option.
 	//
 	// Note: This is similar to setsockopt in POSIX.
-	SockSetOptInt(fd FD, level SocketOptionLevel, option SocketOption, value int) Errno
+	SockSetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value int) Errno
 }
 
 // Port is a port.

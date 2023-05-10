@@ -997,7 +997,7 @@ func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlag
 	return makeErrno(err)
 }
 
-func (s *System) SockOpen(pf wasi.ProtocolFamily, socketType wasi.SocketType) (wasi.FD, wasi.Errno) {
+func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketType wasi.SocketType) (wasi.FD, wasi.Errno) {
 	var sysDomain int
 	switch pf {
 	case wasi.Inet:
@@ -1034,7 +1034,7 @@ func (s *System) SockOpen(pf wasi.ProtocolFamily, socketType wasi.SocketType) (w
 	return guestfd, wasi.ESUCCESS
 }
 
-func (s *System) SockBind(fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) wasi.Errno {
+func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) wasi.Errno {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
 		return errno
@@ -1052,7 +1052,7 @@ func (s *System) SockBind(fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) w
 	return makeErrno(err)
 }
 
-func (s *System) SockConnect(fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) wasi.Errno {
+func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress, port wasi.Port) wasi.Errno {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
 		return errno
@@ -1070,7 +1070,7 @@ func (s *System) SockConnect(fd wasi.FD, addr wasi.SocketAddress, port wasi.Port
 	return makeErrno(err)
 }
 
-func (s *System) SockListen(fd wasi.FD, backlog int) wasi.Errno {
+func (s *System) SockListen(ctx context.Context, fd wasi.FD, backlog int) wasi.Errno {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
 		return errno
@@ -1079,7 +1079,7 @@ func (s *System) SockListen(fd wasi.FD, backlog int) wasi.Errno {
 	return makeErrno(err)
 }
 
-func (s *System) SockGetOptInt(fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (int, wasi.Errno) {
+func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (int, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
@@ -1118,7 +1118,7 @@ func (s *System) SockGetOptInt(fd wasi.FD, level wasi.SocketOptionLevel, option 
 	return value, wasi.ESUCCESS
 }
 
-func (s *System) SockSetOptInt(fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption, value int) wasi.Errno {
+func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption, value int) wasi.Errno {
 	socket, errno := s.lookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno

@@ -500,7 +500,7 @@ func (m *Module) SockOpen(ctx context.Context, family Int32, sockType Int32, ope
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
-	result, errno := m.Sockets.SockOpen(wasi.ProtocolFamily(family), wasi.SocketType(sockType))
+	result, errno := m.Sockets.SockOpen(ctx, wasi.ProtocolFamily(family), wasi.SocketType(sockType))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -512,21 +512,21 @@ func (m *Module) SockBind(ctx context.Context, fd Int32, addr Pointer[wasi.Socke
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
-	return Errno(m.Sockets.SockBind(wasi.FD(fd), addr.Load(), wasi.Port(port)))
+	return Errno(m.Sockets.SockBind(ctx, wasi.FD(fd), addr.Load(), wasi.Port(port)))
 }
 
 func (m *Module) SockConnect(ctx context.Context, fd Int32, addr Pointer[wasi.SocketAddress], port Uint32) Errno {
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
-	return Errno(m.Sockets.SockConnect(wasi.FD(fd), addr.Load(), wasi.Port(port)))
+	return Errno(m.Sockets.SockConnect(ctx, wasi.FD(fd), addr.Load(), wasi.Port(port)))
 }
 
 func (m *Module) SockListen(ctx context.Context, fd Int32, backlog Int32) Errno {
 	if m.Sockets == nil {
 		return Errno(wasi.ENOSYS)
 	}
-	return Errno(m.Sockets.SockListen(wasi.FD(fd), int(backlog)))
+	return Errno(m.Sockets.SockListen(ctx, wasi.FD(fd), int(backlog)))
 }
 
 func (m *Module) SockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
@@ -537,7 +537,7 @@ func (m *Module) SockSetOpt(ctx context.Context, fd Int32, level Int32, option I
 		// Only int options are supported for now.
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(m.Sockets.SockSetOptInt(wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), int(value.Load())))
+	return Errno(m.Sockets.SockSetOptInt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), int(value.Load())))
 }
 
 func (m *Module) SockGetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
@@ -548,7 +548,7 @@ func (m *Module) SockGetOpt(ctx context.Context, fd Int32, level Int32, option I
 		// Only int options are supported for now.
 		return Errno(wasi.EINVAL)
 	}
-	result, errno := m.Sockets.SockGetOptInt(wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option))
+	result, errno := m.Sockets.SockGetOptInt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
