@@ -1064,7 +1064,7 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 }
 
 func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) wasi.Errno {
-	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
+	socket, errno := s.lookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
