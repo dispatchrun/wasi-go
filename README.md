@@ -29,8 +29,7 @@ The library separates the implementation of WASI from the WebAssembly runtime ho
 module, so that implementations of the provided [WASI interface][system] don't
 have to worry about ABI concerns.
 
-The design makes it easy to wrap, augment and extend WASI. For example, see the
-provided [tracer][tracer] and [sockets extension][sockets-extension].
+The design makes it easy to wrap, augment and extend WASI.
 
 :electric_plug: **Sockets**
 
@@ -65,10 +64,9 @@ The package layout is as follows:
 - [`cmd/wasirun`][wasirun] a command to run WebAssembly modules
 - [`testwasi`][testwasi] a test suite against the WASI interface
 
-To run a WebAssembly module, it's also necessary to prepare "preopens"
-(files/directories that the WebAssembly module can access) and clocks.
-To see how it all fits together, see the implementation of the [wasirun][wasirun]
-command. 
+To run a WebAssembly module, it's also necessary to prepare clocks and "preopens"
+(files/directories that the WebAssembly module can access). To see how it all fits
+together, see the implementation of the [wasirun][wasirun] command.
 
 ### With Go
 
