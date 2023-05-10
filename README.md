@@ -57,7 +57,12 @@ to accept connections on a pre-opened socket.
 
 Many WebAssembly runtimes in the wild extend WASI with host functions that allow the
 guest to create sockets, bind them to an address, listen for incoming connections,
-make outbound connections, and get/set socket options. We follow suite here, and
-align with the [WasmEdge][wasmedge] runtime in terms of the API.
+make outbound connections, and get/set socket options.
+
+The following socket extensions are provided:
+1. [WasmEdge][wasmedge] sockets extension (v2)
+2. [an extension][path_open_sockets] to the `path_open` system call that allows
+   for paths like `tcp+listen://host:port?option=value` and
+   `tcp+dial://host:port?option=value`
 
 [wasmedge]: https://github.com/WasmEdge/WasmEdge

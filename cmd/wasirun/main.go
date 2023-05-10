@@ -92,7 +92,7 @@ OPTIONS:
       Pass an environment variable to the module
 
    --sockets <NAME>
-      Enable a sockets extension with the specified name
+      Enable a sockets extension, one of {none, wasmedge, path_open}
 
    --pprof-addr <ADDR>
       Start a pprof server listening on the specified address.
@@ -149,10 +149,14 @@ func run(args []string) error {
 	}
 
 	// Setup sockets extension.
+	flavor := wasi_snapshot_preview1.Base
 	switch socketExt {
+	case "none", "":
+		// no sockets extension
+	case "wasmedge":
+		flavor = wasi_snapshot_preview1.WasmEdge
 	case "path_open":
 		system = &unix.PathOpenSockets{System: system}
-	case "":
 	default:
 		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)
 	}
@@ -229,7 +233,7 @@ func run(args []string) error {
 	}
 
 	module := wazergo.MustInstantiate(ctx, runtime,
-		wasi_snapshot_preview1.HostModule,
+		wasi_snapshot_preview1.NewHostModule(flavor),
 		wasi_snapshot_preview1.WithWASI(system),
 	)
 	ctx = wazergo.WithModuleInstance(ctx, module)

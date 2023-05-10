@@ -118,7 +118,7 @@ func TestWASIP1(t *testing.T, filePaths []string, makeSystem MakeSystem) {
 
 			ctx = wazergo.WithModuleInstance(ctx,
 				wazergo.MustInstantiate(ctx, runtime,
-					wasi_snapshot_preview1.HostModule,
+					wasi_snapshot_preview1.NewHostModule(wasi_snapshot_preview1.Base),
 					wasi_snapshot_preview1.WithWASI(system),
 				),
 			)
