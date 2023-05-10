@@ -12,9 +12,10 @@ import (
 	"github.com/tetratelabs/wazero/sys"
 )
 
-const moduleName = "wasi_snapshot_preview1"
+// HostModuleName is the name of the host module.
+const HostModuleName = "wasi_snapshot_preview1"
 
-// HostModule is a wazero host module for WASI.
+// NewHostModule constructs a wazero host module for WASI.
 //
 // The host module manages the interaction between the host and the
 // guest WASM module. The host module does not implement WASI on its
@@ -22,9 +23,6 @@ const moduleName = "wasi_snapshot_preview1"
 // interface provided via the WithWASI host module Option. This design
 // means that the implementation doesn't have to concern itself with ABI
 // details nor access the guest's memory.
-var HostModule wazergo.HostModule[*Module] = functions{}
-
-// NewHostModule constructs a HostModule.
 func NewHostModule(extensions ...Extension) wazergo.HostModule[*Module] {
 	m := functions{
 		"args_get":                wazergo.F2((*Module).ArgsGet),
@@ -98,7 +96,7 @@ func WithWASI(wasi wasi.System) Option {
 type functions wazergo.Functions[*Module]
 
 func (f functions) Name() string {
-	return moduleName
+	return HostModuleName
 }
 
 func (f functions) Functions() wazergo.Functions[*Module] {

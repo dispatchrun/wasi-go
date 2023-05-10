@@ -166,7 +166,10 @@ func run(args []string) error {
 		functions := wasmModule.ImportedFunctions()
 		for _, f := range functions {
 			moduleName, name, ok := f.Import()
-			if ok && moduleName == "wasi_snapshot_preview1" && name == "sock_open" {
+			if !ok || moduleName != wasi_snapshot_preview1.HostModuleName {
+				continue
+			}
+			if name == "sock_open" {
 				extensions = append(extensions, wasi_snapshot_preview1.WasmEdge)
 				break
 			}
