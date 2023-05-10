@@ -42,7 +42,7 @@ func main() {
 	flag.Var(&dirs, "dir", "Directory to pre-open.")
 	flag.Var(&listens, "tcplisten", "Socket to pre-open (and an address to listen on).")
 	flag.Var(&dials, "tcpdial", "Socket to pre-open (and an address to connect to).")
-	flag.StringVar(&socketExt, "sockets", "", "Enable a sockets extension.")
+	flag.StringVar(&socketExt, "sockets", "auto", "Enable a sockets extension.")
 	flag.StringVar(&pprofAddr, "pprof-addr", "", "Start a pprof server listening on the specified address.")
 	flag.BoolVar(&trace, "trace", false, "Trace WASI system calls.")
 	flag.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "Enable non-blocking stdio.")
@@ -92,7 +92,7 @@ OPTIONS:
       Pass an environment variable to the module
 
    --sockets <NAME>
-      Enable a sockets extension, one of {none, wasmedge, path_open}
+      Enable a sockets extension, one of {none, wasmedge, path_open, auto}
 
    --pprof-addr <ADDR>
       Start a pprof server listening on the specified address.
@@ -136,6 +136,11 @@ func run(args []string) error {
 	runtime := wazero.NewRuntime(ctx)
 	defer runtime.Close(ctx)
 
+	wasmModule, err := runtime.CompileModule(ctx, wasmCode)
+	if err != nil {
+		return err
+	}
+
 	var system wasi.System = &unix.System{
 		Args:               append([]string{wasmName}, args...),
 		Environ:            envs,
@@ -157,6 +162,14 @@ func run(args []string) error {
 		flavor = wasi_snapshot_preview1.WasmEdge
 	case "path_open":
 		system = &unix.PathOpenSockets{System: system}
+	case "auto":
+		functions := wasmModule.ImportedFunctions()
+		for _, f := range functions {
+			if f.Name() == "sock_open" {
+				flavor = wasi_snapshot_preview1.WasmEdge
+				break
+			}
+		}
 	default:
 		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)
 	}
@@ -238,7 +251,7 @@ func run(args []string) error {
 	)
 	ctx = wazergo.WithModuleInstance(ctx, module)
 
-	instance, err := runtime.Instantiate(ctx, wasmCode)
+	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
 		return err
 	}
