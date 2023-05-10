@@ -165,7 +165,8 @@ func run(args []string) error {
 	case "auto":
 		functions := wasmModule.ImportedFunctions()
 		for _, f := range functions {
-			if f.Name() == "sock_open" {
+			moduleName, name, ok := f.Import()
+			if ok && moduleName == "wasi_snapshot_preview1" && name == "sock_open" {
 				flavor = wasi_snapshot_preview1.WasmEdge
 				break
 			}
