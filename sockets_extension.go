@@ -2,6 +2,8 @@ package wasi
 
 import (
 	"context"
+	"fmt"
+	"net"
 )
 
 // SocketsExtension is a sockets extension for WASI preview 1.
@@ -43,6 +45,15 @@ type Port uint32
 // SocketAddress is a 4 byte IPv4 address or 16 byte IPv6 address.
 type SocketAddress []byte
 
+func (sa SocketAddress) String() string {
+	switch len(sa) {
+	case 4, 16:
+		return net.IP(sa).String()
+	default:
+		return fmt.Sprintf("SocketAddress(%v)", []byte(sa))
+	}
+}
+
 // ProtocolFamily is a socket protocol family.
 type ProtocolFamily int32
 
@@ -51,6 +62,17 @@ const (
 	Inet
 	Inet6
 )
+
+func (pf ProtocolFamily) String() string {
+	switch pf {
+	case Inet:
+		return "Inet"
+	case Inet6:
+		return "Inet6"
+	default:
+		return fmt.Sprintf("ProtocolFamily(%d)", pf)
+	}
+}
 
 // Protocol is a socket protocol.
 type Protocol int32
@@ -61,6 +83,19 @@ const (
 	UDPProtocol
 )
 
+func (p Protocol) String() string {
+	switch p {
+	case IPProtocol:
+		return "IPProtocol"
+	case TCPProtocol:
+		return "TCPProtocol"
+	case UDPProtocol:
+		return "UDPProtocol"
+	default:
+		return fmt.Sprintf("Protocol(%d)", p)
+	}
+}
+
 // SocketType is a type of socket.
 type SocketType int32
 
@@ -70,6 +105,17 @@ const (
 	StreamSocket
 )
 
+func (st SocketType) String() string {
+	switch st {
+	case DatagramSocket:
+		return "DatagramSocket"
+	case StreamSocket:
+		return "StreamSocket"
+	default:
+		return fmt.Sprintf("SocketType(%d)", st)
+	}
+}
+
 // SocketOptionLevel controls the level that a socket option is applied
 // at or queried from.
 type SocketOptionLevel int32
@@ -77,6 +123,15 @@ type SocketOptionLevel int32
 const (
 	SocketLevel SocketOptionLevel = iota
 )
+
+func (sl SocketOptionLevel) String() string {
+	switch sl {
+	case SocketLevel:
+		return "SocketLevel"
+	default:
+		return fmt.Sprintf("SocketOptionLevel(%d)", sl)
+	}
+}
 
 // SocketOption is a socket option that can be queried or set.
 type SocketOption int32
@@ -86,3 +141,16 @@ const (
 	QuerySocketType
 	QuerySocketError
 )
+
+func (so SocketOption) String() string {
+	switch so {
+	case ReuseAddress:
+		return "ReuseAddress"
+	case QuerySocketType:
+		return "QuerySocketType"
+	case QuerySocketError:
+		return "QuerySocketError"
+	default:
+		return fmt.Sprintf("SocketOption(%d)", so)
+	}
+}
