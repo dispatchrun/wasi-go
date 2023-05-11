@@ -192,9 +192,8 @@ func run(args []string) error {
 		{syscall.Stderr, "/dev/stderr"},
 	} {
 		stat := wasi.FDStat{
-			FileType:         wasi.CharacterDeviceType,
-			RightsBase:       wasi.AllRights,
-			RightsInheriting: wasi.AllRights,
+			FileType:   wasi.CharacterDeviceType,
+			RightsBase: wasi.AllRights & ^(wasi.FDSeekRight | wasi.FDTellRight),
 		}
 		if nonBlockingStdio {
 			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
