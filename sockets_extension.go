@@ -58,6 +58,7 @@ type Port uint32
 
 // SocketAddress is a socket address.
 type SocketAddress interface {
+	Network() string
 	String() string
 
 	sockaddr()
@@ -70,6 +71,8 @@ type Inet4Address struct {
 
 func (a *Inet4Address) sockaddr() {}
 
+func (a *Inet4Address) Network() string { return "ip4" }
+
 func (a *Inet4Address) String() string {
 	return fmt.Sprintf("%s:%d", net.IP(a.Addr[:]), a.Port)
 }
@@ -80,6 +83,8 @@ type Inet6Address struct {
 }
 
 func (a *Inet6Address) sockaddr() {}
+
+func (a *Inet6Address) Network() string { return "ip6" }
 
 func (a *Inet6Address) String() string {
 	return net.JoinHostPort(net.IP(a.Addr[:]).String(), strconv.Itoa(a.Port))
