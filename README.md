@@ -78,7 +78,7 @@ $ GOOS=wasip1 GOARCH=wasm go build -o app.wasm app.go
 $ wasirun app.wasm
 ```
 
-To test this feature before release, use [`gotip`][gotip].
+To test this feature before release, use [`gotip`][gotip] in place of `go`.
 
 This repository bundles [a script][go-script] that can be used to skip the
 `go build` step.
