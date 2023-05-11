@@ -1181,6 +1181,16 @@ func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		sysOption = unix.SO_TYPE
 	case wasi.QuerySocketError:
 		sysOption = unix.SO_ERROR
+	case wasi.DontRoute:
+		sysOption = unix.SO_DONTROUTE
+	case wasi.Broadcast:
+		sysOption = unix.SO_BROADCAST
+	case wasi.SendBufferSize:
+		sysOption = unix.SO_SNDBUF
+	case wasi.RecvBufferSize:
+		sysOption = unix.SO_RCVBUF
+	case wasi.KeepAlive:
+		sysOption = unix.SO_KEEPALIVE
 	}
 	err := unix.SetsockoptInt(socket.fd, sysLevel, sysOption, value)
 	return makeErrno(err)
