@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"syscall"
 	"time"
 
@@ -98,16 +97,11 @@ func main() {
 	flagSet.Parse(os.Args[1:])
 
 	if version {
-		version := "devel"
-		info, ok := debug.ReadBuildInfo()
-		if ok {
-			for _, dep := range info.Deps {
-				if strings.Contains(dep.Path, "github.com/stealthrocket/wasi-go") {
-					version = dep.Version
-				}
-			}
+		if info, ok := debug.ReadBuildInfo(); ok {
+			fmt.Println("wasirun", info.Main.Version)
+		} else {
+			fmt.Println("wasirun", "devel")
 		}
-		fmt.Println("wasirun", version)
 		os.Exit(0)
 	}
 
