@@ -42,6 +42,15 @@ type SocketsExtension interface {
 	//
 	// Note: This is similar to setsockopt in POSIX.
 	SockSetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value int) Errno
+
+	// SockPeerName gets the address of the peer when the socket is a
+	// connection.
+	//
+	// The returned address is only valid until the next call on this
+	// interface. Assume that any method may invalidate the address.
+	//
+	// Note: This is similar to getpeername in POSIX.
+	SockPeerName(ctx context.Context, fd FD) (SocketAddress, Errno)
 }
 
 // Port is a port.

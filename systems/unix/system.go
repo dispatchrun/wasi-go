@@ -53,8 +53,10 @@ type System struct {
 	preopens descriptor.Table[wasi.FD, string]
 
 	pollfds   []unix.PollFd
-	inet4addr unix.SockaddrInet4
-	inet6addr unix.SockaddrInet6
+	unixInet4 unix.SockaddrInet4
+	unixInet6 unix.SockaddrInet6
+	wasiInet4 wasi.Inet4Address
+	wasiInet6 wasi.Inet6Address
 
 	// shutfds are a pair of file descriptors allocated to the read and write
 	// ends of a pipe. They are used to asynchronously interrupting calls to
@@ -1056,13 +1058,13 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 	var sa unix.Sockaddr
 	switch t := addr.(type) {
 	case *wasi.Inet4Address:
-		s.inet4addr.Port = t.Port
-		s.inet4addr.Addr = t.Addr
-		sa = &s.inet4addr
+		s.unixInet4.Port = t.Port
+		s.unixInet4.Addr = t.Addr
+		sa = &s.unixInet4
 	case *wasi.Inet6Address:
-		s.inet6addr.Port = t.Port
-		s.inet6addr.Addr = t.Addr
-		sa = &s.inet6addr
+		s.unixInet6.Port = t.Port
+		s.unixInet6.Addr = t.Addr
+		sa = &s.unixInet6
 	default:
 		return wasi.EINVAL
 	}
@@ -1078,13 +1080,13 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAd
 	var sa unix.Sockaddr
 	switch t := addr.(type) {
 	case *wasi.Inet4Address:
-		s.inet4addr.Port = t.Port
-		s.inet4addr.Addr = t.Addr
-		sa = &s.inet4addr
+		s.unixInet4.Port = t.Port
+		s.unixInet4.Addr = t.Addr
+		sa = &s.unixInet4
 	case *wasi.Inet6Address:
-		s.inet6addr.Port = t.Port
-		s.inet6addr.Addr = t.Addr
-		sa = &s.inet6addr
+		s.unixInet6.Port = t.Port
+		s.unixInet6.Addr = t.Addr
+		sa = &s.unixInet6
 	default:
 		return wasi.EINVAL
 	}
@@ -1182,6 +1184,29 @@ func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 	}
 	err := unix.SetsockoptInt(socket.fd, sysLevel, sysOption, value)
 	return makeErrno(err)
+}
+
+func (s *System) SockPeerName(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, 0)
+	if errno != wasi.ESUCCESS {
+		return nil, errno
+	}
+	sa, err := unix.Getpeername(socket.fd)
+	if err != nil {
+		return nil, makeErrno(err)
+	}
+	switch t := sa.(type) {
+	case *unix.SockaddrInet4:
+		s.wasiInet4.Addr = t.Addr
+		s.wasiInet4.Port = t.Port
+		return &s.wasiInet4, wasi.ESUCCESS
+	case *unix.SockaddrInet6:
+		s.wasiInet6.Addr = t.Addr
+		s.wasiInet6.Port = t.Port
+		return &s.wasiInet6, wasi.ESUCCESS
+	default:
+		return nil, wasi.ENOTSUP
+	}
 }
 
 func (s *System) Close(ctx context.Context) error {

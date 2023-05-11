@@ -14,12 +14,13 @@ import (
 
 // WasmEdge is the WasmEdge sockets extension to WASI preview 1.
 var WasmEdge = Extension{
-	"sock_open":       wazergo.F3((*Module).WasmEdgeSockOpen),
-	"sock_bind":       wazergo.F3((*Module).WasmEdgeSockBind),
-	"sock_connect":    wazergo.F3((*Module).WasmEdgeSockConnect),
-	"sock_listen":     wazergo.F2((*Module).WasmEdgeSockListen),
-	"sock_getsockopt": wazergo.F5((*Module).WasmEdgeSockGetOpt),
-	"sock_setsockopt": wazergo.F5((*Module).WasmEdgeSockSetOpt),
+	"sock_open":        wazergo.F3((*Module).WasmEdgeSockOpen),
+	"sock_bind":        wazergo.F3((*Module).WasmEdgeSockBind),
+	"sock_connect":     wazergo.F3((*Module).WasmEdgeSockConnect),
+	"sock_listen":      wazergo.F2((*Module).WasmEdgeSockListen),
+	"sock_getsockopt":  wazergo.F5((*Module).WasmEdgeSockGetOpt),
+	"sock_setsockopt":  wazergo.F5((*Module).WasmEdgeSockSetOpt),
+	"sock_getpeeraddr": wazergo.F3((*Module).WasmEdgeSockPeerAddr),
 }
 
 func (m *Module) WasmEdgeSockOpen(ctx context.Context, family Int32, sockType Int32, openfd Pointer[Int32]) Errno {
@@ -115,6 +116,34 @@ func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, 
 		return Errno(errno)
 	}
 	value.Store(Int32(result))
+	return Errno(wasi.ESUCCESS)
+}
+
+func (m *Module) WasmEdgeSockPeerAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
+	s, ok := m.WASI.(wasi.SocketsExtension)
+	if !ok {
+		return Errno(wasi.ENOSYS)
+	}
+	buf := addr.Load()
+	if len(buf) != 128 { // WasmEdge sockets v2 only supports 128 byte buffers
+		return Errno(wasi.EINVAL)
+	}
+	sa, errno := s.SockPeerName(ctx, wasi.FD(fd))
+	if errno != wasi.ESUCCESS {
+		return Errno(errno)
+	}
+	switch t := sa.(type) {
+	case *wasi.Inet4Address:
+		binary.LittleEndian.PutUint16(buf, uint16(wasi.Inet))
+		copy(buf[2:], t.Addr[:])
+		port.Store(Uint32(t.Port))
+	case *wasi.Inet6Address:
+		binary.LittleEndian.PutUint16(buf, uint16(wasi.Inet6))
+		copy(buf[2:], t.Addr[:])
+		port.Store(Uint32(t.Port))
+	default:
+		return Errno(wasi.ENOTSUP)
+	}
 	return Errno(wasi.ESUCCESS)
 }
 

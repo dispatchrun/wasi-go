@@ -675,6 +675,22 @@ func (t *Tracer) SockSetOptInt(ctx context.Context, fd FD, level SocketOptionLev
 	return errno
 }
 
+func (t *Tracer) SockPeerName(ctx context.Context, fd FD) (SocketAddress, Errno) {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return nil, ENOSYS
+	}
+	t.printf("SockPeerName(%d) => ", fd)
+	addr, errno := s.SockPeerName(ctx, fd)
+	if errno == ESUCCESS {
+		t.printf("%s", addr)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return addr, errno
+}
+
 func (t *Tracer) Close(ctx context.Context) error {
 	t.printf("Close() => ")
 	err := t.System.Close(ctx)
