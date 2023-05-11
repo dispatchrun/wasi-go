@@ -55,8 +55,10 @@ type System struct {
 	pollfds   []unix.PollFd
 	unixInet4 unix.SockaddrInet4
 	unixInet6 unix.SockaddrInet6
+	unixUnix  unix.SockaddrUnix
 	wasiInet4 wasi.Inet4Address
 	wasiInet6 wasi.Inet6Address
+	wasiUnix  wasi.UnixAddress
 
 	// shutfds are a pair of file descriptors allocated to the read and write
 	// ends of a pipe. They are used to asynchronously interrupting calls to
@@ -1055,17 +1057,8 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	var sa unix.Sockaddr
-	switch t := addr.(type) {
-	case *wasi.Inet4Address:
-		s.unixInet4.Port = t.Port
-		s.unixInet4.Addr = t.Addr
-		sa = &s.unixInet4
-	case *wasi.Inet6Address:
-		s.unixInet6.Port = t.Port
-		s.unixInet6.Addr = t.Addr
-		sa = &s.unixInet6
-	default:
+	sa, ok := s.toUnixSockAddress(addr)
+	if !ok {
 		return wasi.EINVAL
 	}
 	err := unix.Bind(socket.fd, sa)
@@ -1077,17 +1070,8 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAd
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	var sa unix.Sockaddr
-	switch t := addr.(type) {
-	case *wasi.Inet4Address:
-		s.unixInet4.Port = t.Port
-		s.unixInet4.Addr = t.Addr
-		sa = &s.unixInet4
-	case *wasi.Inet6Address:
-		s.unixInet6.Port = t.Port
-		s.unixInet6.Addr = t.Addr
-		sa = &s.unixInet6
-	default:
+	sa, ok := s.toUnixSockAddress(addr)
+	if !ok {
 		return wasi.EINVAL
 	}
 	err := unix.Connect(socket.fd, sa)
@@ -1101,6 +1085,46 @@ func (s *System) SockListen(ctx context.Context, fd wasi.FD, backlog int) wasi.E
 	}
 	err := unix.Listen(socket.fd, backlog)
 	return makeErrno(err)
+}
+
+func (s *System) SockSendTo(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.SIFlags, addr wasi.SocketAddress) (wasi.Size, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, wasi.FDWriteRight)
+	if errno != wasi.ESUCCESS {
+		return 0, errno
+	}
+	sa, ok := s.toUnixSockAddress(addr)
+	if !ok {
+		return 0, wasi.EINVAL
+	}
+	n, err := unix.SendmsgBuffers(socket.fd, makeIOVecs(iovecs), nil, sa, 0)
+	return wasi.Size(n), makeErrno(err)
+}
+
+func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.RIFlags) (wasi.Size, wasi.ROFlags, wasi.SocketAddress, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, wasi.FDReadRight)
+	if errno != wasi.ESUCCESS {
+		return 0, 0, nil, errno
+	}
+	var sysIFlags int
+	if flags.Has(wasi.RecvPeek) {
+		sysIFlags |= unix.MSG_PEEK
+	}
+	if flags.Has(wasi.RecvWaitAll) {
+		sysIFlags |= unix.MSG_WAITALL
+	}
+	n, _, sysOFlags, sa, err := unix.RecvmsgBuffers(socket.fd, makeIOVecs(iovecs), nil, sysIFlags)
+	if err != nil {
+		return 0, 0, nil, makeErrno(err)
+	}
+	addr, ok := s.fromUnixSockAddress(sa)
+	if !ok {
+		return 0, 0, nil, wasi.ENOTSUP
+	}
+	var roflags wasi.ROFlags
+	if (sysOFlags & unix.MSG_TRUNC) != 0 {
+		roflags |= wasi.RecvDataTruncated
+	}
+	return wasi.Size(n), roflags, addr, wasi.ESUCCESS
 }
 
 func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (int, wasi.Errno) {
@@ -1133,6 +1157,15 @@ func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		sysOption = unix.SO_RCVBUF
 	case wasi.KeepAlive:
 		sysOption = unix.SO_KEEPALIVE
+	case wasi.OOBInline:
+		sysOption = unix.SO_OOBINLINE
+	case wasi.RecvLowWatermark:
+		sysOption = unix.SO_RCVLOWAT
+	case wasi.QueryAcceptConnections:
+		sysOption = unix.SO_ACCEPTCONN
+	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
+		// These accept struct linger / struct timeval.
+		return 0, wasi.EINVAL
 	default:
 		return 0, wasi.EINVAL
 	}
@@ -1191,6 +1224,17 @@ func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		sysOption = unix.SO_RCVBUF
 	case wasi.KeepAlive:
 		sysOption = unix.SO_KEEPALIVE
+	case wasi.OOBInline:
+		sysOption = unix.SO_OOBINLINE
+	case wasi.RecvLowWatermark:
+		sysOption = unix.SO_RCVLOWAT
+	case wasi.QueryAcceptConnections:
+		sysOption = unix.SO_ACCEPTCONN
+	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
+		// These accept struct linger / struct timeval.
+		return wasi.EINVAL
+	default:
+		return wasi.EINVAL
 	}
 	err := unix.SetsockoptInt(socket.fd, sysLevel, sysOption, value)
 	return makeErrno(err)
@@ -1205,18 +1249,11 @@ func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketA
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	switch t := sa.(type) {
-	case *unix.SockaddrInet4:
-		s.wasiInet4.Addr = t.Addr
-		s.wasiInet4.Port = t.Port
-		return &s.wasiInet4, wasi.ESUCCESS
-	case *unix.SockaddrInet6:
-		s.wasiInet6.Addr = t.Addr
-		s.wasiInet6.Port = t.Port
-		return &s.wasiInet6, wasi.ESUCCESS
-	default:
+	addr, ok := s.fromUnixSockAddress(sa)
+	if !ok {
 		return nil, wasi.ENOTSUP
 	}
+	return addr, wasi.ESUCCESS
 }
 
 func (s *System) SockPeerAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
@@ -1228,18 +1265,11 @@ func (s *System) SockPeerAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAd
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	switch t := sa.(type) {
-	case *unix.SockaddrInet4:
-		s.wasiInet4.Addr = t.Addr
-		s.wasiInet4.Port = t.Port
-		return &s.wasiInet4, wasi.ESUCCESS
-	case *unix.SockaddrInet6:
-		s.wasiInet6.Addr = t.Addr
-		s.wasiInet6.Port = t.Port
-		return &s.wasiInet6, wasi.ESUCCESS
-	default:
+	addr, ok := s.fromUnixSockAddress(sa)
+	if !ok {
 		return nil, wasi.ENOTSUP
 	}
+	return addr, wasi.ESUCCESS
 }
 
 func (s *System) Close(ctx context.Context) error {
@@ -1293,4 +1323,42 @@ func (s *System) shutdown() {
 	s.shutfds[1] = -1
 	s.mutex.Unlock()
 	unix.Close(fd)
+}
+
+func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, ok bool) {
+	switch t := addr.(type) {
+	case *wasi.Inet4Address:
+		s.unixInet4.Port = t.Port
+		s.unixInet4.Addr = t.Addr
+		sa = &s.unixInet4
+	case *wasi.Inet6Address:
+		s.unixInet6.Port = t.Port
+		s.unixInet6.Addr = t.Addr
+		sa = &s.unixInet6
+	case *wasi.UnixAddress:
+		s.unixUnix.Name = t.Name
+		sa = &s.unixUnix
+	default:
+		return nil, false
+	}
+	return sa, true
+}
+
+func (s *System) fromUnixSockAddress(sa unix.Sockaddr) (addr wasi.SocketAddress, ok bool) {
+	switch t := sa.(type) {
+	case *unix.SockaddrInet4:
+		s.wasiInet4.Addr = t.Addr
+		s.wasiInet4.Port = t.Port
+		addr = &s.wasiInet4
+	case *unix.SockaddrInet6:
+		s.wasiInet6.Addr = t.Addr
+		s.wasiInet6.Port = t.Port
+		addr = &s.wasiInet6
+	case *unix.SockaddrUnix:
+		s.wasiUnix.Name = t.Name
+		addr = &s.wasiUnix
+	default:
+		return nil, false
+	}
+	return addr, true
 }

@@ -33,6 +33,22 @@ type SocketsExtension interface {
 	// Note: This is similar to listen in POSIX.
 	SockListen(ctx context.Context, fd FD, backlog int) Errno
 
+	// SockSendTo sends a message on a socket.
+	//
+	// It's similar to SockSend, but accepts an additional SocketAddress.
+	//
+	// Note: This is similar to sendto in POSIX, though it also supports
+	// writing the data from multiple buffers in the manner of writev.
+	SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, flags SIFlags, addr SocketAddress) (Size, Errno)
+
+	// SockRecvFrom receives a message from a socket.
+	//
+	// It's similar to SockRecv, but returns an additional SocketAddress.
+	//
+	// Note: This is similar to recvfrom in POSIX, though it also supports reading
+	// the data into multiple buffers in the manner of readv.
+	SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, flags RIFlags) (Size, ROFlags, SocketAddress, Errno)
+
 	// SockGetOptInt gets a socket option.
 	//
 	// Note: This is similar to getsockopt in POSIX.
@@ -96,6 +112,18 @@ func (a *Inet6Address) Network() string { return "ip6" }
 
 func (a *Inet6Address) String() string {
 	return net.JoinHostPort(net.IP(a.Addr[:]).String(), strconv.Itoa(a.Port))
+}
+
+type UnixAddress struct {
+	Name string
+}
+
+func (a *UnixAddress) sockaddr() {}
+
+func (a *UnixAddress) Network() string { return "unix" }
+
+func (a *UnixAddress) String() string {
+	return a.Name
 }
 
 // ProtocolFamily is a socket protocol family.
@@ -189,6 +217,12 @@ const (
 	SendBufferSize
 	RecvBufferSize
 	KeepAlive
+	OOBInline
+	Linger
+	RecvLowWatermark
+	RecvTimeout
+	SendTimeout
+	QueryAcceptConnections
 )
 
 func (so SocketOption) String() string {
@@ -209,6 +243,18 @@ func (so SocketOption) String() string {
 		return "RecvBufferSize"
 	case KeepAlive:
 		return "KeepAlive"
+	case OOBInline:
+		return "OOBInline"
+	case Linger:
+		return "Linger"
+	case RecvLowWatermark:
+		return "RecvLowWatermark"
+	case RecvTimeout:
+		return "RecvTimeout"
+	case SendTimeout:
+		return "SendTimeout"
+	case QueryAcceptConnections:
+		return "QueryAcceptConnections"
 	default:
 		return fmt.Sprintf("SocketOption(%d)", so)
 	}

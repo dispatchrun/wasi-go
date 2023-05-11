@@ -119,6 +119,7 @@ type Module struct {
 	dirent    []wasi.DirEntry
 	inet4addr wasi.Inet4Address
 	inet6addr wasi.Inet6Address
+	unixaddr  wasi.UnixAddress
 }
 
 func (m *Module) ArgsGet(ctx context.Context, argv Pointer[Uint32], buf Pointer[Uint8]) Errno {

@@ -49,7 +49,8 @@ OPTIONS:
       Pass an environment variable to the module
 
    --sockets <NAME>
-      Enable a sockets extension, either {none, wasmedge, path_open, auto}
+      Enable a sockets extension, either {none, auto, path_open,
+      wasmedgev1, wasmedgev2}
 
    --pprof-addr <ADDR>
       Start a pprof server listening on the specified address
@@ -158,21 +159,32 @@ func run(wasmFile string, args []string) error {
 	switch socketExt {
 	case "none", "":
 		// no sockets extension
-	case "wasmedge":
-		extensions = append(extensions, wasi_snapshot_preview1.WasmEdge)
+	case "wasmedgev1":
+		extensions = append(extensions, wasi_snapshot_preview1.WasmEdgeV1)
+	case "wasmedgev2":
+		extensions = append(extensions, wasi_snapshot_preview1.WasmEdgeV2)
 	case "path_open":
 		system = &unix.PathOpenSockets{System: system}
 	case "auto":
 		functions := wasmModule.ImportedFunctions()
+		hasSockOpen := false
+		sockAcceptParamCount := 0
 		for _, f := range functions {
 			moduleName, name, ok := f.Import()
 			if !ok || moduleName != wasi_snapshot_preview1.HostModuleName {
 				continue
 			}
 			if name == "sock_open" {
-				extensions = append(extensions, wasi_snapshot_preview1.WasmEdge)
-				break
+				hasSockOpen = true
+			} else if name == "sock_accept" {
+				sockAcceptParamCount = len(f.ParamTypes())
 			}
+		}
+		switch {
+		case sockAcceptParamCount == 2:
+			extensions = append(extensions, wasi_snapshot_preview1.WasmEdgeV1)
+		case hasSockOpen && sockAcceptParamCount == 3:
+			extensions = append(extensions, wasi_snapshot_preview1.WasmEdgeV2)
 		}
 	default:
 		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)
