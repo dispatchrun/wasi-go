@@ -124,7 +124,6 @@ func run(wasmFile string, args []string) error {
 		return fmt.Errorf("could not read WASM file '%s': %w", wasmFile, err)
 	}
 
-	args = args[1:]
 	if len(args) > 0 && args[0] == "--" {
 		args = args[1:]
 	}
