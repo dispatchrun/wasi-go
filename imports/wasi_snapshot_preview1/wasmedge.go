@@ -12,28 +12,47 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-// WasmEdge is the WasmEdge sockets extension to WASI preview 1.
-//
-// See:
-// - https://github.com/WasmEdge/WasmEdge/blob/master/lib/host/wasi/wasimodule.cpp
-// - https://github.com/WasmEdge/WasmEdge/blob/master/lib/host/wasi/wasifunc.cpp
-// - https://github.com/WasmEdge/WasmEdge/blob/master/lib/host/wasi/inode-linux.cpp
-// - https://github.com/WasmEdge/WasmEdge/blob/master/thirdparty/wasi/api.hpp
-//
-// TODO: sock_recv_from (sock_recv_from_v2)
-// TODO: sock_send_to (sock_send_to_v2)
-// TODO: sock_getaddrinfo
-// TODO: support AF_UNIX
-// TODO: support SO_OOBINLINE, SO_LINGER, SO_RCVLOWAT, SO_RCVTIMEO, SO_SNDTIMEO, SO_ACCEPTCONN, SO_BINDTODEVICE
-var WasmEdge = Extension{
+// WasmEdgeV1 is the original WasmEdge sockets extension to WASI preview 1.
+var WasmEdgeV1 = Extension{
+	"sock_accept":       wazergo.F2((*Module).WasmEdgeV1SockAccept),
 	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
 	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
 	"sock_connect":      wazergo.F3((*Module).WasmEdgeSockConnect),
 	"sock_listen":       wazergo.F2((*Module).WasmEdgeSockListen),
+	"sock_send_to":      wazergo.F6((*Module).WasmEdgeSockSendTo),
+	"sock_recv_from":    wazergo.F6((*Module).WasmEdgeV1SockRecvFrom),
 	"sock_getsockopt":   wazergo.F5((*Module).WasmEdgeSockGetOpt),
 	"sock_setsockopt":   wazergo.F5((*Module).WasmEdgeSockSetOpt),
-	"sock_getlocaladdr": wazergo.F3((*Module).WasmEdgeSockLocalAddr),
-	"sock_getpeeraddr":  wazergo.F3((*Module).WasmEdgeSockPeerAddr),
+	"sock_getlocaladdr": wazergo.F4((*Module).WasmEdgeV1SockLocalAddr),
+	"sock_getpeeraddr":  wazergo.F4((*Module).WasmEdgeV1SockPeerAddr),
+	"sock_getaddrinfo":  wazergo.F8((*Module).WasmEdgeSockAddrInfo),
+}
+
+// WasmEdgeV2 is V2 of the WasmEdge sockets extension to WASI preview 1.
+//
+// Version 2 has a sock_accept function that's compatible with the WASI
+// preview 1 specification, and adds support for AF_UNIX addresses.
+//
+// TODO: support AF_UNIX addresses
+// TODO: support SO_OOBINLINE, SO_LINGER, SO_RCVLOWAT, SO_RCVTIMEO, SO_SNDTIMEO, SO_ACCEPTCONN, SO_BINDTODEVICE
+var WasmEdgeV2 = Extension{
+	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
+	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
+	"sock_connect":      wazergo.F3((*Module).WasmEdgeSockConnect),
+	"sock_listen":       wazergo.F2((*Module).WasmEdgeSockListen),
+	"sock_send_to":      wazergo.F6((*Module).WasmEdgeSockSendTo),
+	"sock_recv_from":    wazergo.F7((*Module).WasmEdgeV2SockRecvFrom),
+	"sock_getsockopt":   wazergo.F5((*Module).WasmEdgeSockGetOpt),
+	"sock_setsockopt":   wazergo.F5((*Module).WasmEdgeSockSetOpt),
+	"sock_getlocaladdr": wazergo.F3((*Module).WasmEdgeV2SockLocalAddr),
+	"sock_getpeeraddr":  wazergo.F3((*Module).WasmEdgeV2SockPeerAddr),
+	"sock_getaddrinfo":  wazergo.F8((*Module).WasmEdgeSockAddrInfo),
+}
+
+func (m *Module) WasmEdgeV1SockAccept(ctx context.Context, fd Int32, connfd Pointer[Int32]) Errno {
+	// V1 sock_accept was not compatible with WASI preview 1, as the
+	// fdflags param was missing. This was corrected in V2.
+	return m.SockAccept(ctx, fd, 0, connfd)
 }
 
 func (m *Module) WasmEdgeSockOpen(ctx context.Context, family Int32, sockType Int32, openfd Pointer[Int32]) Errno {
@@ -83,6 +102,21 @@ func (m *Module) WasmEdgeSockListen(ctx context.Context, fd Int32, backlog Int32
 	return Errno(s.SockListen(ctx, wasi.FD(fd), int(backlog)))
 }
 
+func (m *Module) WasmEdgeSockSendTo(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[Uint8], port Int32, flags Uint32, nwritten Pointer[Uint32]) Errno {
+	// TODO: implement sock_send_to (equivalent to sock_send_to_v2)
+	return Errno(wasi.ENOSYS)
+}
+
+func (m *Module) WasmEdgeV1SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[Uint8], iflags Uint32, nread Pointer[Uint32], oflags Pointer[Uint32]) Errno {
+	// TODO: implement sock_recv_from
+	return Errno(wasi.ENOSYS)
+}
+
+func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[Uint8], iflags Uint32, port Pointer[Uint32], nread Pointer[Uint32], oflags Pointer[Uint32]) Errno {
+	// TODO: implement sock_recv_from_v2
+	return Errno(wasi.ENOSYS)
+}
+
 func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
 	s, ok := m.WASI.(wasi.SocketsExtension)
 	if !ok {
@@ -112,7 +146,7 @@ func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, 
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) WasmEdgeSockLocalAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
+func (m *Module) WasmEdgeV1SockLocalAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], addrType Pointer[Uint32], port Pointer[Uint32]) Errno {
 	s, ok := m.WASI.(wasi.SocketsExtension)
 	if !ok {
 		return Errno(wasi.ENOSYS)
@@ -121,7 +155,25 @@ func (m *Module) WasmEdgeSockLocalAddr(ctx context.Context, fd Int32, addr Point
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	portint, ok := m.wasmEdgePutSocketAddress(addr.Load(), sa)
+	portint, pf, ok := m.wasmEdgeV1PutSocketAddress(addr.Load(), sa)
+	if !ok {
+		return Errno(wasi.EINVAL)
+	}
+	addrType.Store(Uint32(pf))
+	port.Store(Uint32(portint))
+	return Errno(wasi.ESUCCESS)
+}
+
+func (m *Module) WasmEdgeV2SockLocalAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
+	s, ok := m.WASI.(wasi.SocketsExtension)
+	if !ok {
+		return Errno(wasi.ENOSYS)
+	}
+	sa, errno := s.SockLocalAddress(ctx, wasi.FD(fd))
+	if errno != wasi.ESUCCESS {
+		return Errno(errno)
+	}
+	portint, ok := m.wasmEdgeV2PutSocketAddress(addr.Load(), sa)
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
@@ -129,7 +181,7 @@ func (m *Module) WasmEdgeSockLocalAddr(ctx context.Context, fd Int32, addr Point
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) WasmEdgeSockPeerAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
+func (m *Module) WasmEdgeV1SockPeerAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], addrType Pointer[Uint32], port Pointer[Uint32]) Errno {
 	s, ok := m.WASI.(wasi.SocketsExtension)
 	if !ok {
 		return Errno(wasi.ENOSYS)
@@ -138,12 +190,35 @@ func (m *Module) WasmEdgeSockPeerAddr(ctx context.Context, fd Int32, addr Pointe
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	portint, ok := m.wasmEdgePutSocketAddress(addr.Load(), sa)
+	portint, pf, ok := m.wasmEdgeV1PutSocketAddress(addr.Load(), sa)
+	if !ok {
+		return Errno(wasi.EINVAL)
+	}
+	addrType.Store(Uint32(pf))
+	port.Store(Uint32(portint))
+	return Errno(wasi.ESUCCESS)
+}
+
+func (m *Module) WasmEdgeV2SockPeerAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
+	s, ok := m.WASI.(wasi.SocketsExtension)
+	if !ok {
+		return Errno(wasi.ENOSYS)
+	}
+	sa, errno := s.SockPeerAddress(ctx, wasi.FD(fd))
+	if errno != wasi.ESUCCESS {
+		return Errno(errno)
+	}
+	portint, ok := m.wasmEdgeV2PutSocketAddress(addr.Load(), sa)
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
 	port.Store(Uint32(portint))
 	return Errno(wasi.ESUCCESS)
+}
+
+func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, nodePtr Pointer[Uint8], nodeLen Uint32, servicePtr Pointer[Uint8], serviceLen Uint32, hintsPtr Pointer[Uint8], resPtr Pointer[Uint8], maxResLength Uint32, resLengthPtr Pointer[Uint8]) Errno {
+	// TODO: implement sock_getaddrinfo
+	return Errno(wasi.ENOSYS)
 }
 
 func (m *Module) wasmEdgeGetSocketAddress(b wasmEdgeAddress, port int) (sa wasi.SocketAddress, ok bool) {
@@ -172,8 +247,28 @@ func (m *Module) wasmEdgeGetSocketAddress(b wasmEdgeAddress, port int) (sa wasi.
 	return
 }
 
-func (m *Module) wasmEdgePutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAddress) (port int, ok bool) {
-	// WasmEdge sockets v2 only supports 128 byte buffers.
+func (m *Module) wasmEdgeV1PutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAddress) (port int, pf wasi.ProtocolFamily, ok bool) {
+	if len(b) != 16 {
+		return
+	}
+	switch t := sa.(type) {
+	case *wasi.Inet4Address:
+		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet))
+		copy(b, t.Addr[:])
+		pf = wasi.Inet
+		port = t.Port
+		ok = true
+	case *wasi.Inet6Address:
+		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet6))
+		copy(b, t.Addr[:])
+		pf = wasi.Inet6
+		port = t.Port
+		ok = true
+	}
+	return
+}
+
+func (m *Module) wasmEdgeV2PutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAddress) (port int, ok bool) {
 	if len(b) != 128 {
 		return
 	}
