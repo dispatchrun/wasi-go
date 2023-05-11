@@ -19,6 +19,9 @@ func makeErrno(err error) wasi.Errno {
 	}
 	var sysErrno unix.Errno
 	if errors.As(err, &sysErrno) {
+		if sysErrno == 0 {
+			return wasi.ESUCCESS
+		}
 		return syscallErrnoToWASI(sysErrno)
 	}
 	var timeout interface{ Timeout() bool }

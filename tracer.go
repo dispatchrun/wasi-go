@@ -12,6 +12,9 @@ type Tracer struct {
 	System
 }
 
+var _ System = (*Tracer)(nil)
+var _ SocketsExtension = (*Tracer)(nil)
+
 func (t *Tracer) Preopen(hostfd int, path string, fdstat FDStat) {
 	t.printf("Preopen(%d, %q, ", hostfd, path)
 	t.printFDStat(fdstat)
@@ -574,6 +577,134 @@ func (t *Tracer) SockSend(ctx context.Context, fd FD, iovecs []IOVec, iflags SIF
 	}
 	t.printf("\n")
 	return n, errno
+}
+
+func (t *Tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType SocketType, protocol Protocol, rightsBase, rightsInheriting Rights) (FD, Errno) {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return -1, ENOSYS
+	}
+	t.printf("SockOpen(%s, %s, %s, %s, %s) => ", pf, socketType, protocol, rightsBase, rightsInheriting)
+	fd, errno := s.SockOpen(ctx, pf, socketType, protocol, rightsBase, rightsInheriting)
+	if errno == ESUCCESS {
+		t.printf("%d", fd)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return fd, errno
+}
+
+func (t *Tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress) Errno {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return ENOSYS
+	}
+	t.printf("SockBind(%d, %s) => ", fd, addr)
+	errno := s.SockBind(ctx, fd, addr)
+	if errno == ESUCCESS {
+		t.printf("ok")
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return errno
+}
+
+func (t *Tracer) SockConnect(ctx context.Context, fd FD, addr SocketAddress) Errno {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return ENOSYS
+	}
+	t.printf("SockConnect(%d, %s) => ", fd, addr)
+	errno := s.SockConnect(ctx, fd, addr)
+	if errno == ESUCCESS {
+		t.printf("ok")
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return errno
+}
+
+func (t *Tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return ENOSYS
+	}
+	t.printf("SockListen(%d, %d) => ", fd, backlog)
+	errno := s.SockListen(ctx, fd, backlog)
+	if errno == ESUCCESS {
+		t.printf("ok")
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return errno
+}
+
+func (t *Tracer) SockGetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (int, Errno) {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return 0, ENOSYS
+	}
+	t.printf("SockGetOptInt(%d, %s, %s) => ", fd, level, option)
+	value, errno := s.SockGetOptInt(ctx, fd, level, option)
+	if errno == ESUCCESS {
+		t.printf("%d", value)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return value, errno
+}
+
+func (t *Tracer) SockSetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value int) Errno {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return ENOSYS
+	}
+	t.printf("SockSetOptInt(%d, %s, %s, %d) => ", fd, level, option, value)
+	errno := s.SockSetOptInt(ctx, fd, level, option, value)
+	if errno == ESUCCESS {
+		t.printf("ok")
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return errno
+}
+
+func (t *Tracer) SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return nil, ENOSYS
+	}
+	t.printf("SockLocalAddress(%d) => ", fd)
+	addr, errno := s.SockLocalAddress(ctx, fd)
+	if errno == ESUCCESS {
+		t.printf("%s", addr)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return addr, errno
+}
+
+func (t *Tracer) SockPeerAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return nil, ENOSYS
+	}
+	t.printf("SockPeerAddress(%d) => ", fd)
+	addr, errno := s.SockPeerAddress(ctx, fd)
+	if errno == ESUCCESS {
+		t.printf("%s", addr)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return addr, errno
 }
 
 func (t *Tracer) Close(ctx context.Context) error {

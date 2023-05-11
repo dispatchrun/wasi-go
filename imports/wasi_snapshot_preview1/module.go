@@ -12,64 +12,78 @@ import (
 	"github.com/tetratelabs/wazero/sys"
 )
 
-const moduleName = "wasi_snapshot_preview1"
+// HostModuleName is the name of the host module.
+const HostModuleName = "wasi_snapshot_preview1"
 
-// HostModule is a wazero host module for WASI preview 1.
+// NewHostModule constructs a wazero host module for WASI.
 //
 // The host module manages the interaction between the host and the
-// guest WASM module. The host module does not implement WASI preview 1 on its
+// guest WASM module. The host module does not implement WASI on its
 // own, and instead calls out to an implementation of the wasi.System
-// interface, provided via the WithWASI host module Option. The host module is
-// only responsible for (de)serializing inputs and outputs, and for interacting
-// with the guest's memory.
-var HostModule wazergo.HostModule[*Module] = functions{
-	"args_get":                wazergo.F2((*Module).ArgsGet),
-	"args_sizes_get":          wazergo.F2((*Module).ArgsSizesGet),
-	"environ_get":             wazergo.F2((*Module).EnvironGet),
-	"environ_sizes_get":       wazergo.F2((*Module).EnvironSizesGet),
-	"clock_res_get":           wazergo.F2((*Module).ClockResGet),
-	"clock_time_get":          wazergo.F3((*Module).ClockTimeGet),
-	"fd_advise":               wazergo.F4((*Module).FDAdvise),
-	"fd_allocate":             wazergo.F3((*Module).FDAllocate),
-	"fd_close":                wazergo.F1((*Module).FDClose),
-	"fd_datasync":             wazergo.F1((*Module).FDDataSync),
-	"fd_fdstat_get":           wazergo.F2((*Module).FDStatGet),
-	"fd_fdstat_set_flags":     wazergo.F2((*Module).FDStatSetFlags),
-	"fd_fdstat_set_rights":    wazergo.F3((*Module).FDStatSetRights),
-	"fd_filestat_get":         wazergo.F2((*Module).FDFileStatGet),
-	"fd_filestat_set_size":    wazergo.F2((*Module).FDFileStatSetSize),
-	"fd_filestat_set_times":   wazergo.F4((*Module).FDFileStatSetTimes),
-	"fd_pread":                wazergo.F4((*Module).FDPread),
-	"fd_prestat_get":          wazergo.F2((*Module).FDPreStatGet),
-	"fd_prestat_dir_name":     wazergo.F2((*Module).FDPreStatDirName),
-	"fd_pwrite":               wazergo.F4((*Module).FDPwrite),
-	"fd_read":                 wazergo.F3((*Module).FDRead),
-	"fd_readdir":              wazergo.F4((*Module).FDReadDir),
-	"fd_renumber":             wazergo.F2((*Module).FDRenumber),
-	"fd_seek":                 wazergo.F4((*Module).FDSeek),
-	"fd_sync":                 wazergo.F1((*Module).FDSync),
-	"fd_tell":                 wazergo.F2((*Module).FDTell),
-	"fd_write":                wazergo.F3((*Module).FDWrite),
-	"path_create_directory":   wazergo.F2((*Module).PathCreateDirectory),
-	"path_filestat_get":       wazergo.F4((*Module).PathFileStatGet),
-	"path_filestat_set_times": wazergo.F6((*Module).PathFileStatSetTimes),
-	"path_link":               wazergo.F5((*Module).PathLink),
-	"path_open":               wazergo.F8((*Module).PathOpen),
-	"path_readlink":           wazergo.F4((*Module).PathReadLink),
-	"path_remove_directory":   wazergo.F2((*Module).PathRemoveDirectory),
-	"path_rename":             wazergo.F4((*Module).PathRename),
-	"path_symlink":            wazergo.F3((*Module).PathSymlink),
-	"path_unlink_file":        wazergo.F2((*Module).PathUnlinkFile),
-	"poll_oneoff":             wazergo.F4((*Module).PollOneOff),
-	"proc_exit":               procExitShape((*Module).ProcExit),
-	"proc_raise":              wazergo.F1((*Module).ProcRaise),
-	"sched_yield":             wazergo.F0((*Module).SchedYield),
-	"random_get":              wazergo.F1((*Module).RandomGet),
-	"sock_accept":             wazergo.F3((*Module).SockAccept),
-	"sock_recv":               wazergo.F5((*Module).SockRecv),
-	"sock_send":               wazergo.F4((*Module).SockSend),
-	"sock_shutdown":           wazergo.F2((*Module).SockShutdown),
+// interface provided via the WithWASI host module Option. This design
+// means that the implementation doesn't have to concern itself with ABI
+// details nor access the guest's memory.
+func NewHostModule(extensions ...Extension) wazergo.HostModule[*Module] {
+	m := functions{
+		"args_get":                wazergo.F2((*Module).ArgsGet),
+		"args_sizes_get":          wazergo.F2((*Module).ArgsSizesGet),
+		"environ_get":             wazergo.F2((*Module).EnvironGet),
+		"environ_sizes_get":       wazergo.F2((*Module).EnvironSizesGet),
+		"clock_res_get":           wazergo.F2((*Module).ClockResGet),
+		"clock_time_get":          wazergo.F3((*Module).ClockTimeGet),
+		"fd_advise":               wazergo.F4((*Module).FDAdvise),
+		"fd_allocate":             wazergo.F3((*Module).FDAllocate),
+		"fd_close":                wazergo.F1((*Module).FDClose),
+		"fd_datasync":             wazergo.F1((*Module).FDDataSync),
+		"fd_fdstat_get":           wazergo.F2((*Module).FDStatGet),
+		"fd_fdstat_set_flags":     wazergo.F2((*Module).FDStatSetFlags),
+		"fd_fdstat_set_rights":    wazergo.F3((*Module).FDStatSetRights),
+		"fd_filestat_get":         wazergo.F2((*Module).FDFileStatGet),
+		"fd_filestat_set_size":    wazergo.F2((*Module).FDFileStatSetSize),
+		"fd_filestat_set_times":   wazergo.F4((*Module).FDFileStatSetTimes),
+		"fd_pread":                wazergo.F4((*Module).FDPread),
+		"fd_prestat_get":          wazergo.F2((*Module).FDPreStatGet),
+		"fd_prestat_dir_name":     wazergo.F2((*Module).FDPreStatDirName),
+		"fd_pwrite":               wazergo.F4((*Module).FDPwrite),
+		"fd_read":                 wazergo.F3((*Module).FDRead),
+		"fd_readdir":              wazergo.F4((*Module).FDReadDir),
+		"fd_renumber":             wazergo.F2((*Module).FDRenumber),
+		"fd_seek":                 wazergo.F4((*Module).FDSeek),
+		"fd_sync":                 wazergo.F1((*Module).FDSync),
+		"fd_tell":                 wazergo.F2((*Module).FDTell),
+		"fd_write":                wazergo.F3((*Module).FDWrite),
+		"path_create_directory":   wazergo.F2((*Module).PathCreateDirectory),
+		"path_filestat_get":       wazergo.F4((*Module).PathFileStatGet),
+		"path_filestat_set_times": wazergo.F6((*Module).PathFileStatSetTimes),
+		"path_link":               wazergo.F5((*Module).PathLink),
+		"path_open":               wazergo.F8((*Module).PathOpen),
+		"path_readlink":           wazergo.F4((*Module).PathReadLink),
+		"path_remove_directory":   wazergo.F2((*Module).PathRemoveDirectory),
+		"path_rename":             wazergo.F4((*Module).PathRename),
+		"path_symlink":            wazergo.F3((*Module).PathSymlink),
+		"path_unlink_file":        wazergo.F2((*Module).PathUnlinkFile),
+		"poll_oneoff":             wazergo.F4((*Module).PollOneOff),
+		"proc_exit":               procExitShape((*Module).ProcExit),
+		"proc_raise":              wazergo.F1((*Module).ProcRaise),
+		"sched_yield":             wazergo.F0((*Module).SchedYield),
+		"random_get":              wazergo.F1((*Module).RandomGet),
+		"sock_accept":             wazergo.F3((*Module).SockAccept),
+		"sock_recv":               wazergo.F5((*Module).SockRecv),
+		"sock_send":               wazergo.F4((*Module).SockSend),
+		"sock_shutdown":           wazergo.F2((*Module).SockShutdown),
+	}
+
+	for _, extension := range extensions {
+		for name, function := range extension {
+			m[name] = function
+		}
+	}
+
+	return m
 }
+
+// Extension is an extension to WASI preview 1.
+type Extension wazergo.Functions[*Module]
 
 // Option configures the host module.
 type Option = wazergo.Option[*Module]
@@ -82,7 +96,7 @@ func WithWASI(wasi wasi.System) Option {
 type functions wazergo.Functions[*Module]
 
 func (f functions) Name() string {
-	return moduleName
+	return HostModuleName
 }
 
 func (f functions) Functions() wazergo.Functions[*Module] {
@@ -101,8 +115,10 @@ func (f functions) Instantiate(ctx context.Context, opts ...Option) (*Module, er
 type Module struct {
 	WASI wasi.System
 
-	iovecs []wasi.IOVec
-	dirent []wasi.DirEntry
+	iovecs    []wasi.IOVec
+	dirent    []wasi.DirEntry
+	inet4addr wasi.Inet4Address
+	inet6addr wasi.Inet6Address
 }
 
 func (m *Module) ArgsGet(ctx context.Context, argv Pointer[Uint32], buf Pointer[Uint8]) Errno {

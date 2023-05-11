@@ -137,6 +137,11 @@ func run(wasmFile string, args []string) error {
 	runtime := wazero.NewRuntime(ctx)
 	defer runtime.Close(ctx)
 
+	wasmModule, err := runtime.CompileModule(ctx, wasmCode)
+	if err != nil {
+		return err
+	}
+
 	var system wasi.System = &unix.System{
 		Args:               append([]string{wasmName}, args...),
 		Environ:            envs,
@@ -150,10 +155,26 @@ func run(wasmFile string, args []string) error {
 	}
 
 	// Setup sockets extension.
+	var extensions []wasi_snapshot_preview1.Extension
 	switch socketExt {
+	case "none", "":
+		// no sockets extension
+	case "wasmedge":
+		extensions = append(extensions, wasi_snapshot_preview1.WasmEdge)
 	case "path_open":
 		system = &unix.PathOpenSockets{System: system}
-	case "":
+	case "auto":
+		functions := wasmModule.ImportedFunctions()
+		for _, f := range functions {
+			moduleName, name, ok := f.Import()
+			if !ok || moduleName != wasi_snapshot_preview1.HostModuleName {
+				continue
+			}
+			if name == "sock_open" {
+				extensions = append(extensions, wasi_snapshot_preview1.WasmEdge)
+				break
+			}
+		}
 	default:
 		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)
 	}
@@ -230,12 +251,12 @@ func run(wasmFile string, args []string) error {
 	}
 
 	module := wazergo.MustInstantiate(ctx, runtime,
-		wasi_snapshot_preview1.HostModule,
+		wasi_snapshot_preview1.NewHostModule(extensions...),
 		wasi_snapshot_preview1.WithWASI(system),
 	)
 	ctx = wazergo.WithModuleInstance(ctx, module)
 
-	instance, err := runtime.Instantiate(ctx, wasmCode)
+	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
 		return err
 	}
