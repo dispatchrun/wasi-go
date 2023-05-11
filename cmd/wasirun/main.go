@@ -97,7 +97,7 @@ func main() {
 	flagSet.Parse(os.Args[1:])
 
 	if version {
-		if info, ok := debug.ReadBuildInfo(); ok {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "(devel)" {
 			fmt.Println("wasirun", info.Main.Version)
 		} else {
 			fmt.Println("wasirun", "devel")
