@@ -34,7 +34,7 @@ var WasmEdgeV1 = Extension{
 // preview 1 specification, and adds support for AF_UNIX addresses.
 //
 // TODO: support AF_UNIX addresses
-// TODO: support SO_BINDTODEVICE socket option
+// TODO: support SO_LINGER, SO_RCVTIMEO, SO_SNDTIMEO, SO_BINDTODEVICE socket options
 var WasmEdgeV2 = Extension{
 	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
 	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
