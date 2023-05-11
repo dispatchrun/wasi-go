@@ -7,7 +7,7 @@
 This error may occur is the local clang installation does not have a version of
 `libclang_rt` built for WebAssembly, for example:
 
-e```
+```
 wasm-ld: error: cannot open {...}/lib/wasi/libclang_rt.builtins-wasm32.a: No such file or directory
 clang-9: error: linker command failed with exit code 1 (use -v to see invocation)
 ```
