@@ -88,7 +88,7 @@ func main() {
 	flagSet.Var(&dirs, "dir", "")
 	flagSet.Var(&listens, "listen", "")
 	flagSet.Var(&dials, "dial", "")
-	flagSet.StringVar(&socketExt, "sockets", "", "")
+	flagSet.StringVar(&socketExt, "sockets", "auto", "")
 	flagSet.StringVar(&pprofAddr, "pprof-addr", "", "")
 	flagSet.BoolVar(&trace, "trace", false, "")
 	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
