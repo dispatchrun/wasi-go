@@ -1141,6 +1141,15 @@ func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		sysOption = unix.SO_RCVBUF
 	case wasi.KeepAlive:
 		sysOption = unix.SO_KEEPALIVE
+	case wasi.OOBInline:
+		sysOption = unix.SO_OOBINLINE
+	case wasi.RecvLowWatermark:
+		sysOption = unix.SO_RCVLOWAT
+	case wasi.QueryAcceptConnections:
+		sysOption = unix.SO_ACCEPTCONN
+	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
+		// These accept struct linger / struct timeval.
+		return 0, wasi.EINVAL
 	default:
 		return 0, wasi.EINVAL
 	}
@@ -1199,6 +1208,17 @@ func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		sysOption = unix.SO_RCVBUF
 	case wasi.KeepAlive:
 		sysOption = unix.SO_KEEPALIVE
+	case wasi.OOBInline:
+		sysOption = unix.SO_OOBINLINE
+	case wasi.RecvLowWatermark:
+		sysOption = unix.SO_RCVLOWAT
+	case wasi.QueryAcceptConnections:
+		sysOption = unix.SO_ACCEPTCONN
+	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
+		// These accept struct linger / struct timeval.
+		return wasi.EINVAL
+	default:
+		return wasi.EINVAL
 	}
 	err := unix.SetsockoptInt(socket.fd, sysLevel, sysOption, value)
 	return makeErrno(err)

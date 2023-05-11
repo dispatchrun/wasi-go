@@ -201,6 +201,12 @@ const (
 	SendBufferSize
 	RecvBufferSize
 	KeepAlive
+	OOBInline
+	Linger
+	RecvLowWatermark
+	RecvTimeout
+	SendTimeout
+	QueryAcceptConnections
 )
 
 func (so SocketOption) String() string {
@@ -221,6 +227,18 @@ func (so SocketOption) String() string {
 		return "RecvBufferSize"
 	case KeepAlive:
 		return "KeepAlive"
+	case OOBInline:
+		return "OOBInline"
+	case Linger:
+		return "Linger"
+	case RecvLowWatermark:
+		return "RecvLowWatermark"
+	case RecvTimeout:
+		return "RecvTimeout"
+	case SendTimeout:
+		return "SendTimeout"
+	case QueryAcceptConnections:
+		return "QueryAcceptConnections"
 	default:
 		return fmt.Sprintf("SocketOption(%d)", so)
 	}

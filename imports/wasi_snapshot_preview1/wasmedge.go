@@ -34,7 +34,7 @@ var WasmEdgeV1 = Extension{
 // preview 1 specification, and adds support for AF_UNIX addresses.
 //
 // TODO: support AF_UNIX addresses
-// TODO: support SO_OOBINLINE, SO_LINGER, SO_RCVLOWAT, SO_RCVTIMEO, SO_SNDTIMEO, SO_ACCEPTCONN, SO_BINDTODEVICE
+// TODO: support SO_BINDTODEVICE socket option
 var WasmEdgeV2 = Extension{
 	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
 	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
@@ -122,8 +122,13 @@ func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, 
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
+	// Only int options are supported for now.
+	switch wasi.SocketOption(option) {
+	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
+		// These accept struct linger / struct timeval.
+		return Errno(wasi.ENOTSUP)
+	}
 	if valueLen != 4 {
-		// Only int options are supported for now.
 		return Errno(wasi.EINVAL)
 	}
 	return Errno(s.SockSetOptInt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), int(value.Load())))
@@ -134,8 +139,13 @@ func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, 
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
+	// Only int options are supported for now.
+	switch wasi.SocketOption(option) {
+	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
+		// These accept struct linger / struct timeval.
+		return Errno(wasi.ENOTSUP)
+	}
 	if valueLen != 4 {
-		// Only int options are supported for now.
 		return Errno(wasi.EINVAL)
 	}
 	result, errno := s.SockGetOptInt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option))
