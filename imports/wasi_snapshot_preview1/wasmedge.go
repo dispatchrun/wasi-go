@@ -102,18 +102,31 @@ func (m *Module) WasmEdgeSockListen(ctx context.Context, fd Int32, backlog Int32
 	return Errno(s.SockListen(ctx, wasi.FD(fd), int(backlog)))
 }
 
-func (m *Module) WasmEdgeSockSendTo(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[Uint8], port Int32, flags Uint32, nwritten Pointer[Uint32]) Errno {
-	// TODO: implement sock_send_to (equivalent to sock_send_to_v2)
-	return Errno(wasi.ENOSYS)
+func (m *Module) WasmEdgeSockSendTo(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[wasmEdgeAddress], port Int32, flags Uint32, nwritten Pointer[Int32]) Errno {
+	s, ok := m.WASI.(wasi.SocketsExtension)
+	if !ok {
+		return Errno(wasi.ENOSYS)
+	}
+	socketAddr, ok := m.wasmEdgeGetSocketAddress(addr.Load(), int(port))
+	if !ok {
+		return Errno(wasi.EINVAL)
+	}
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	size, errno := s.SockSendTo(ctx, wasi.FD(fd), m.iovecs, socketAddr, wasi.SIFlags(flags))
+	if errno != wasi.ESUCCESS {
+		return Errno(errno)
+	}
+	nwritten.Store(Int32(size))
+	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) WasmEdgeV1SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[Uint8], iflags Uint32, nread Pointer[Uint32], oflags Pointer[Uint32]) Errno {
-	// TODO: implement sock_recv_from
+	// TODO: implement sock_recv_from (v1)
 	return Errno(wasi.ENOSYS)
 }
 
 func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[Uint8], iflags Uint32, port Pointer[Uint32], nread Pointer[Uint32], oflags Pointer[Uint32]) Errno {
-	// TODO: implement sock_recv_from_v2
+	// TODO: implement sock_recv_from (v2)
 	return Errno(wasi.ENOSYS)
 }
 

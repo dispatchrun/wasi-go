@@ -643,6 +643,24 @@ func (t *Tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
 	return errno
 }
 
+func (t *Tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, addr SocketAddress, iflags SIFlags) (Size, Errno) {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return 0, ENOSYS
+	}
+	t.printf("SockSendTo(%d, ", fd)
+	t.printIOVecs(iovecs, -1)
+	t.printf(", %s, %s) => ", addr, iflags)
+	n, errno := s.SockSendTo(ctx, fd, iovecs, addr, iflags)
+	if errno == ESUCCESS {
+		t.printf("%d", n)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return n, errno
+}
+
 func (t *Tracer) SockGetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (int, Errno) {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {

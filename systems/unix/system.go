@@ -1057,7 +1057,15 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	var sa unix.Sockaddr
+	sa, ok := s.sockAddress(addr)
+	if !ok {
+		return wasi.EINVAL
+	}
+	err := unix.Bind(socket.fd, sa)
+	return makeErrno(err)
+}
+
+func (s *System) sockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, ok bool) {
 	switch t := addr.(type) {
 	case *wasi.Inet4Address:
 		s.unixInet4.Port = t.Port
@@ -1071,10 +1079,9 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 		s.unixUnix.Name = t.Name
 		sa = &s.unixUnix
 	default:
-		return wasi.EINVAL
+		return nil, false
 	}
-	err := unix.Bind(socket.fd, sa)
-	return makeErrno(err)
+	return sa, true
 }
 
 func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) wasi.Errno {
@@ -1082,20 +1089,8 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAd
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	var sa unix.Sockaddr
-	switch t := addr.(type) {
-	case *wasi.Inet4Address:
-		s.unixInet4.Port = t.Port
-		s.unixInet4.Addr = t.Addr
-		sa = &s.unixInet4
-	case *wasi.Inet6Address:
-		s.unixInet6.Port = t.Port
-		s.unixInet6.Addr = t.Addr
-		sa = &s.unixInet6
-	case *wasi.UnixAddress:
-		s.unixUnix.Name = t.Name
-		sa = &s.unixUnix
-	default:
+	sa, ok := s.sockAddress(addr)
+	if !ok {
 		return wasi.EINVAL
 	}
 	err := unix.Connect(socket.fd, sa)
@@ -1109,6 +1104,19 @@ func (s *System) SockListen(ctx context.Context, fd wasi.FD, backlog int) wasi.E
 	}
 	err := unix.Listen(socket.fd, backlog)
 	return makeErrno(err)
+}
+
+func (s *System) SockSendTo(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, addr wasi.SocketAddress, flags wasi.SIFlags) (wasi.Size, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, wasi.FDWriteRight)
+	if errno != wasi.ESUCCESS {
+		return 0, errno
+	}
+	sa, ok := s.sockAddress(addr)
+	if !ok {
+		return 0, wasi.EINVAL
+	}
+	n, err := unix.SendmsgBuffers(socket.fd, makeIOVecs(iovecs), nil, sa, 0)
+	return wasi.Size(n), makeErrno(err)
 }
 
 func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (int, wasi.Errno) {

@@ -33,6 +33,14 @@ type SocketsExtension interface {
 	// Note: This is similar to listen in POSIX.
 	SockListen(ctx context.Context, fd FD, backlog int) Errno
 
+	// SockSendTo sends a message on a socket.
+	//
+	// It's similar to SockSend, but accepts an additional SocketAddress.
+	//
+	// Note: This is similar to sendto in POSIX, though it also supports
+	// writing the data from multiple buffers in the manner of writev.
+	SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, addr SocketAddress, flags SIFlags) (Size, Errno)
+
 	// SockGetOptInt gets a socket option.
 	//
 	// Note: This is similar to getsockopt in POSIX.
