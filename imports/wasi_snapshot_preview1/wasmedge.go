@@ -13,6 +13,17 @@ import (
 )
 
 // WasmEdge is the WasmEdge sockets extension to WASI preview 1.
+//
+// See:
+// - https://github.com/WasmEdge/WasmEdge/blob/master/lib/host/wasi/wasimodule.cpp
+// - https://github.com/WasmEdge/WasmEdge/blob/master/lib/host/wasi/wasifunc.cpp
+// - https://github.com/WasmEdge/WasmEdge/blob/master/lib/host/wasi/inode-linux.cpp
+// - https://github.com/WasmEdge/WasmEdge/blob/master/thirdparty/wasi/api.hpp
+//
+// TODO: sock_recv_from (sock_recv_from_v2)
+// TODO: sock_send_to (sock_send_to_v2)
+// TODO: sock_getaddrinfo
+// TODO: support AF_UNIX
 var WasmEdge = Extension{
 	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
 	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
