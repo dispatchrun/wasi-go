@@ -1121,11 +1121,26 @@ func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		sysOption = unix.SO_TYPE
 	case wasi.QuerySocketError:
 		sysOption = unix.SO_ERROR
+	case wasi.DontRoute:
+		sysOption = unix.SO_DONTROUTE
+	case wasi.Broadcast:
+		sysOption = unix.SO_BROADCAST
+	case wasi.SendBufferSize:
+		sysOption = unix.SO_SNDBUF
+	case wasi.RecvBufferSize:
+		sysOption = unix.SO_RCVBUF
+	case wasi.KeepAlive:
+		sysOption = unix.SO_KEEPALIVE
+	default:
+		return 0, wasi.EINVAL
 	}
+
 	value, err := unix.GetsockoptInt(socket.fd, sysLevel, sysOption)
 	if err != nil {
 		return 0, makeErrno(err)
 	}
+
+	errno = wasi.ESUCCESS
 	switch option {
 	case wasi.QuerySocketType:
 		switch value {
@@ -1133,11 +1148,15 @@ func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 			value = int(wasi.DatagramSocket)
 		case unix.SOCK_STREAM:
 			value = int(wasi.StreamSocket)
+		default:
+			value = -1
+			errno = wasi.ENOTSUP
 		}
 	case wasi.QuerySocketError:
 		value = int(makeErrno(unix.Errno(value)))
 	}
-	return value, wasi.ESUCCESS
+
+	return value, errno
 }
 
 func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption, value int) wasi.Errno {

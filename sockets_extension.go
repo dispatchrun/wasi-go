@@ -162,6 +162,11 @@ const (
 	ReuseAddress SocketOption = iota
 	QuerySocketType
 	QuerySocketError
+	DontRoute
+	Broadcast
+	SendBufferSize
+	RecvBufferSize
+	KeepAlive
 )
 
 func (so SocketOption) String() string {
@@ -172,6 +177,16 @@ func (so SocketOption) String() string {
 		return "QuerySocketType"
 	case QuerySocketError:
 		return "QuerySocketError"
+	case DontRoute:
+		return "DontRoute"
+	case Broadcast:
+		return "Broadcast"
+	case SendBufferSize:
+		return "SendBufferSize"
+	case RecvBufferSize:
+		return "RecvBufferSize"
+	case KeepAlive:
+		return "KeepAlive"
 	default:
 		return fmt.Sprintf("SocketOption(%d)", so)
 	}
