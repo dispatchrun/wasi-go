@@ -98,6 +98,18 @@ func (a *Inet6Address) String() string {
 	return net.JoinHostPort(net.IP(a.Addr[:]).String(), strconv.Itoa(a.Port))
 }
 
+type UnixAddress struct {
+	Name string
+}
+
+func (a *UnixAddress) sockaddr() {}
+
+func (a *UnixAddress) Network() string { return "unix" }
+
+func (a *UnixAddress) String() string {
+	return a.Name
+}
+
 // ProtocolFamily is a socket protocol family.
 type ProtocolFamily int32
 

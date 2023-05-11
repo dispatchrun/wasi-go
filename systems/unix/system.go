@@ -55,8 +55,10 @@ type System struct {
 	pollfds   []unix.PollFd
 	unixInet4 unix.SockaddrInet4
 	unixInet6 unix.SockaddrInet6
+	unixUnix  unix.SockaddrUnix
 	wasiInet4 wasi.Inet4Address
 	wasiInet6 wasi.Inet6Address
+	wasiUnix  wasi.UnixAddress
 
 	// shutfds are a pair of file descriptors allocated to the read and write
 	// ends of a pipe. They are used to asynchronously interrupting calls to
@@ -1065,6 +1067,9 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 		s.unixInet6.Port = t.Port
 		s.unixInet6.Addr = t.Addr
 		sa = &s.unixInet6
+	case *wasi.UnixAddress:
+		s.unixUnix.Name = t.Name
+		sa = &s.unixUnix
 	default:
 		return wasi.EINVAL
 	}
@@ -1087,6 +1092,9 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAd
 		s.unixInet6.Port = t.Port
 		s.unixInet6.Addr = t.Addr
 		sa = &s.unixInet6
+	case *wasi.UnixAddress:
+		s.unixUnix.Name = t.Name
+		sa = &s.unixUnix
 	default:
 		return wasi.EINVAL
 	}
@@ -1214,6 +1222,9 @@ func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketA
 		s.wasiInet6.Addr = t.Addr
 		s.wasiInet6.Port = t.Port
 		return &s.wasiInet6, wasi.ESUCCESS
+	case *unix.SockaddrUnix:
+		s.wasiUnix.Name = t.Name
+		return &s.wasiUnix, wasi.ESUCCESS
 	default:
 		return nil, wasi.ENOTSUP
 	}
@@ -1237,6 +1248,9 @@ func (s *System) SockPeerAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAd
 		s.wasiInet6.Addr = t.Addr
 		s.wasiInet6.Port = t.Port
 		return &s.wasiInet6, wasi.ESUCCESS
+	case *unix.SockaddrUnix:
+		s.wasiUnix.Name = t.Name
+		return &s.wasiUnix, wasi.ESUCCESS
 	default:
 		return nil, wasi.ENOTSUP
 	}
