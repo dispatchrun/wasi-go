@@ -14,13 +14,14 @@ import (
 
 // WasmEdge is the WasmEdge sockets extension to WASI preview 1.
 var WasmEdge = Extension{
-	"sock_open":        wazergo.F3((*Module).WasmEdgeSockOpen),
-	"sock_bind":        wazergo.F3((*Module).WasmEdgeSockBind),
-	"sock_connect":     wazergo.F3((*Module).WasmEdgeSockConnect),
-	"sock_listen":      wazergo.F2((*Module).WasmEdgeSockListen),
-	"sock_getsockopt":  wazergo.F5((*Module).WasmEdgeSockGetOpt),
-	"sock_setsockopt":  wazergo.F5((*Module).WasmEdgeSockSetOpt),
-	"sock_getpeeraddr": wazergo.F3((*Module).WasmEdgeSockPeerAddr),
+	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
+	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
+	"sock_connect":      wazergo.F3((*Module).WasmEdgeSockConnect),
+	"sock_listen":       wazergo.F2((*Module).WasmEdgeSockListen),
+	"sock_getsockopt":   wazergo.F5((*Module).WasmEdgeSockGetOpt),
+	"sock_setsockopt":   wazergo.F5((*Module).WasmEdgeSockSetOpt),
+	"sock_getlocaladdr": wazergo.F3((*Module).WasmEdgeSockLocalAddr),
+	"sock_getpeeraddr":  wazergo.F3((*Module).WasmEdgeSockPeerAddr),
 }
 
 func (m *Module) WasmEdgeSockOpen(ctx context.Context, family Int32, sockType Int32, openfd Pointer[Int32]) Errno {
@@ -99,12 +100,29 @@ func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, 
 	return Errno(wasi.ESUCCESS)
 }
 
+func (m *Module) WasmEdgeSockLocalAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
+	s, ok := m.WASI.(wasi.SocketsExtension)
+	if !ok {
+		return Errno(wasi.ENOSYS)
+	}
+	sa, errno := s.SockLocalAddress(ctx, wasi.FD(fd))
+	if errno != wasi.ESUCCESS {
+		return Errno(errno)
+	}
+	portint, ok := m.wasmEdgePutSocketAddress(addr.Load(), sa)
+	if !ok {
+		return Errno(wasi.EINVAL)
+	}
+	port.Store(Uint32(portint))
+	return Errno(wasi.ESUCCESS)
+}
+
 func (m *Module) WasmEdgeSockPeerAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
 	s, ok := m.WASI.(wasi.SocketsExtension)
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
-	sa, errno := s.SockPeerName(ctx, wasi.FD(fd))
+	sa, errno := s.SockPeerAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}

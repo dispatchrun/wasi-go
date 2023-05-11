@@ -1186,7 +1186,30 @@ func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 	return makeErrno(err)
 }
 
-func (s *System) SockPeerName(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
+func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
+	socket, errno := s.lookupSocketFD(fd, 0)
+	if errno != wasi.ESUCCESS {
+		return nil, errno
+	}
+	sa, err := unix.Getsockname(socket.fd)
+	if err != nil {
+		return nil, makeErrno(err)
+	}
+	switch t := sa.(type) {
+	case *unix.SockaddrInet4:
+		s.wasiInet4.Addr = t.Addr
+		s.wasiInet4.Port = t.Port
+		return &s.wasiInet4, wasi.ESUCCESS
+	case *unix.SockaddrInet6:
+		s.wasiInet6.Addr = t.Addr
+		s.wasiInet6.Port = t.Port
+		return &s.wasiInet6, wasi.ESUCCESS
+	default:
+		return nil, wasi.ENOTSUP
+	}
+}
+
+func (s *System) SockPeerAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return nil, errno
