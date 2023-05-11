@@ -24,6 +24,7 @@ import (
 // TODO: sock_send_to (sock_send_to_v2)
 // TODO: sock_getaddrinfo
 // TODO: support AF_UNIX
+// TODO: support SO_OOBINLINE, SO_LINGER, SO_RCVLOWAT, SO_RCVTIMEO, SO_SNDTIMEO, SO_ACCEPTCONN, SO_BINDTODEVICE
 var WasmEdge = Extension{
 	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
 	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
