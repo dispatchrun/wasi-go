@@ -43,21 +43,11 @@ func (m *Module) WasmEdgeSockBind(ctx context.Context, fd Int32, addr Pointer[wa
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
-	b := addr.Load()
-	var sa wasi.SocketAddress
-	switch len(b) {
-	case 4:
-		m.inet4addr.Port = int(port)
-		m.inet4addr.Addr = [4]byte(b)
-		sa = &m.inet4addr
-	case 16:
-		m.inet6addr.Port = int(port)
-		m.inet6addr.Addr = [16]byte(b)
-		sa = &m.inet6addr
-	default:
+	socketAddr, ok := m.wasmEdgeGetSocketAddress(addr.Load(), int(port))
+	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(s.SockBind(ctx, wasi.FD(fd), sa))
+	return Errno(s.SockBind(ctx, wasi.FD(fd), socketAddr))
 }
 
 func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Uint32) Errno {
@@ -65,21 +55,11 @@ func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
-	b := addr.Load()
-	var sa wasi.SocketAddress
-	switch len(b) {
-	case 4:
-		m.inet4addr.Port = int(port)
-		m.inet4addr.Addr = [4]byte(b)
-		sa = &m.inet4addr
-	case 16:
-		m.inet6addr.Port = int(port)
-		m.inet6addr.Addr = [16]byte(b)
-		sa = &m.inet6addr
-	default:
+	socketAddr, ok := m.wasmEdgeGetSocketAddress(addr.Load(), int(port))
+	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(s.SockConnect(ctx, wasi.FD(fd), sa))
+	return Errno(s.SockConnect(ctx, wasi.FD(fd), socketAddr))
 }
 
 func (m *Module) WasmEdgeSockListen(ctx context.Context, fd Int32, backlog Int32) Errno {
@@ -124,27 +104,62 @@ func (m *Module) WasmEdgeSockPeerAddr(ctx context.Context, fd Int32, addr Pointe
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
-	buf := addr.Load()
-	if len(buf) != 128 { // WasmEdge sockets v2 only supports 128 byte buffers
-		return Errno(wasi.EINVAL)
-	}
 	sa, errno := s.SockPeerName(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
+	portint, ok := m.wasmEdgePutSocketAddress(addr.Load(), sa)
+	if !ok {
+		return Errno(wasi.EINVAL)
+	}
+	port.Store(Uint32(portint))
+	return Errno(wasi.ESUCCESS)
+}
+
+func (m *Module) wasmEdgeGetSocketAddress(b wasmEdgeAddress, port int) (sa wasi.SocketAddress, ok bool) {
+	if len(b) == 128 {
+		switch wasi.ProtocolFamily(binary.LittleEndian.Uint16(b)) {
+		case wasi.Inet:
+			b = b[2:6]
+		case wasi.Inet6:
+			b = b[2:18]
+		default:
+			return // not implemented
+		}
+	}
+	switch len(b) {
+	case 4:
+		m.inet4addr.Port = port
+		copy(m.inet4addr.Addr[:], b)
+		sa = &m.inet4addr
+		ok = true
+	case 16:
+		m.inet6addr.Port = port
+		copy(m.inet6addr.Addr[:], b)
+		sa = &m.inet6addr
+		ok = true
+	}
+	return
+}
+
+func (m *Module) wasmEdgePutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAddress) (port int, ok bool) {
+	// WasmEdge sockets v2 only supports 128 byte buffers.
+	if len(b) != 128 {
+		return
+	}
 	switch t := sa.(type) {
 	case *wasi.Inet4Address:
-		binary.LittleEndian.PutUint16(buf, uint16(wasi.Inet))
-		copy(buf[2:], t.Addr[:])
-		port.Store(Uint32(t.Port))
+		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet))
+		copy(b[2:], t.Addr[:])
+		port = t.Port
+		ok = true
 	case *wasi.Inet6Address:
-		binary.LittleEndian.PutUint16(buf, uint16(wasi.Inet6))
-		copy(buf[2:], t.Addr[:])
-		port.Store(Uint32(t.Port))
-	default:
-		return Errno(wasi.ENOTSUP)
+		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet6))
+		copy(b[2:], t.Addr[:])
+		port = t.Port
+		ok = true
 	}
-	return Errno(wasi.ESUCCESS)
+	return
 }
 
 type wasmEdgeAddress []byte
