@@ -643,15 +643,15 @@ func (t *Tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
 	return errno
 }
 
-func (t *Tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, addr SocketAddress, iflags SIFlags) (Size, Errno) {
+func (t *Tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, iflags SIFlags, addr SocketAddress) (Size, Errno) {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
 		return 0, ENOSYS
 	}
 	t.printf("SockSendTo(%d, ", fd)
 	t.printIOVecs(iovecs, -1)
-	t.printf(", %s, %s) => ", addr, iflags)
-	n, errno := s.SockSendTo(ctx, fd, iovecs, addr, iflags)
+	t.printf(", %s, %s) => ", iflags, addr)
+	n, errno := s.SockSendTo(ctx, fd, iovecs, iflags, addr)
 	if errno == ESUCCESS {
 		t.printf("%d", n)
 	} else {
@@ -659,6 +659,26 @@ func (t *Tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, addr Soc
 	}
 	t.printf("\n")
 	return n, errno
+}
+
+func (t *Tracer) SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, iflags RIFlags) (Size, ROFlags, SocketAddress, Errno) {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return 0, 0, nil, ENOSYS
+	}
+	t.printf("SockRecvFrom(%d, ", fd)
+	t.printIOVecsProto(iovecs)
+	t.printf(", %s) => ", iflags)
+	n, oflags, addr, errno := s.SockRecvFrom(ctx, fd, iovecs, iflags)
+	if errno == ESUCCESS {
+		t.printf("[%d]byte: ", n)
+		t.printIOVecs(iovecs, int(n))
+		t.printf(", %s, %s", oflags, addr)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return n, oflags, addr, errno
 }
 
 func (t *Tracer) SockGetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (int, Errno) {

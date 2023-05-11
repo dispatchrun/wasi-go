@@ -39,7 +39,15 @@ type SocketsExtension interface {
 	//
 	// Note: This is similar to sendto in POSIX, though it also supports
 	// writing the data from multiple buffers in the manner of writev.
-	SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, addr SocketAddress, flags SIFlags) (Size, Errno)
+	SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, flags SIFlags, addr SocketAddress) (Size, Errno)
+
+	// SockRecvFrom receives a message from a socket.
+	//
+	// It's similar to SockRecv, but returns an additional SocketAddress.
+	//
+	// Note: This is similar to recvfrom in POSIX, though it also supports reading
+	// the data into multiple buffers in the manner of readv.
+	SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, flags RIFlags) (Size, ROFlags, SocketAddress, Errno)
 
 	// SockGetOptInt gets a socket option.
 	//

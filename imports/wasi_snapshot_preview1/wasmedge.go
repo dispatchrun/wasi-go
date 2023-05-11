@@ -35,6 +35,7 @@ var WasmEdgeV1 = Extension{
 //
 // TODO: support AF_UNIX addresses
 // TODO: support SO_LINGER, SO_RCVTIMEO, SO_SNDTIMEO, SO_BINDTODEVICE socket options
+// TODO: implement sock_getaddrinfo
 var WasmEdgeV2 = Extension{
 	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
 	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
@@ -112,7 +113,7 @@ func (m *Module) WasmEdgeSockSendTo(ctx context.Context, fd Int32, iovecs List[w
 		return Errno(wasi.EINVAL)
 	}
 	m.iovecs = iovecs.Append(m.iovecs[:0])
-	size, errno := s.SockSendTo(ctx, wasi.FD(fd), m.iovecs, socketAddr, wasi.SIFlags(flags))
+	size, errno := s.SockSendTo(ctx, wasi.FD(fd), m.iovecs, wasi.SIFlags(flags), socketAddr)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -120,14 +121,42 @@ func (m *Module) WasmEdgeSockSendTo(ctx context.Context, fd Int32, iovecs List[w
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) WasmEdgeV1SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[Uint8], iflags Uint32, nread Pointer[Uint32], oflags Pointer[Uint32]) Errno {
-	// TODO: implement sock_recv_from (v1)
-	return Errno(wasi.ENOSYS)
+func (m *Module) WasmEdgeV1SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[wasmEdgeAddress], iflags Uint32, nread Pointer[Int32], oflags Pointer[Int32]) Errno {
+	s, ok := m.WASI.(wasi.SocketsExtension)
+	if !ok {
+		return Errno(wasi.ENOSYS)
+	}
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	size, roflags, sa, errno := s.SockRecvFrom(ctx, wasi.FD(fd), m.iovecs, wasi.RIFlags(iflags))
+	if errno != wasi.ESUCCESS {
+		return Errno(errno)
+	}
+	if _, _, ok := m.wasmEdgeV1PutSocketAddress(addr.Load(), sa); !ok {
+		return Errno(wasi.EINVAL)
+	}
+	nread.Store(Int32(size))
+	oflags.Store(Int32(roflags))
+	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[Uint8], iflags Uint32, port Pointer[Uint32], nread Pointer[Uint32], oflags Pointer[Uint32]) Errno {
-	// TODO: implement sock_recv_from (v2)
-	return Errno(wasi.ENOSYS)
+func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[wasmEdgeAddress], iflags Uint32, port Pointer[Uint32], nread Pointer[Int32], oflags Pointer[Int32]) Errno {
+	s, ok := m.WASI.(wasi.SocketsExtension)
+	if !ok {
+		return Errno(wasi.ENOSYS)
+	}
+	m.iovecs = iovecs.Append(m.iovecs[:0])
+	size, roflags, sa, errno := s.SockRecvFrom(ctx, wasi.FD(fd), m.iovecs, wasi.RIFlags(iflags))
+	if errno != wasi.ESUCCESS {
+		return Errno(errno)
+	}
+	portint, ok := m.wasmEdgeV2PutSocketAddress(addr.Load(), sa)
+	if !ok {
+		return Errno(wasi.EINVAL)
+	}
+	port.Store(Uint32(portint))
+	nread.Store(Int32(size))
+	oflags.Store(Int32(roflags))
+	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
@@ -240,7 +269,6 @@ func (m *Module) WasmEdgeV2SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 }
 
 func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, nodePtr Pointer[Uint8], nodeLen Uint32, servicePtr Pointer[Uint8], serviceLen Uint32, hintsPtr Pointer[Uint8], resPtr Pointer[Uint8], maxResLength Uint32, resLengthPtr Pointer[Uint8]) Errno {
-	// TODO: implement sock_getaddrinfo
 	return Errno(wasi.ENOSYS)
 }
 
