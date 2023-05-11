@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -21,51 +22,7 @@ import (
 	"github.com/tetratelabs/wazero"
 )
 
-const Version = "devel"
-
-var (
-	envs             stringList
-	dirs             stringList
-	listens          stringList
-	dials            stringList
-	socketExt        string
-	pprofAddr        string
-	trace            bool
-	nonBlockingStdio bool
-	version          bool
-	help             bool
-	h                bool
-)
-
-func main() {
-	flag.Var(&envs, "env", "Environment variable to pass to the WASM module.")
-	flag.Var(&dirs, "dir", "Directory to pre-open.")
-	flag.Var(&listens, "tcplisten", "Socket to pre-open (and an address to listen on).")
-	flag.Var(&dials, "tcpdial", "Socket to pre-open (and an address to connect to).")
-	flag.StringVar(&socketExt, "sockets", "auto", "Enable a sockets extension.")
-	flag.StringVar(&pprofAddr, "pprof-addr", "", "Start a pprof server listening on the specified address.")
-	flag.BoolVar(&trace, "trace", false, "Trace WASI system calls.")
-	flag.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "Enable non-blocking stdio.")
-	flag.BoolVar(&version, "version", false, "Print the version and exit.")
-	flag.BoolVar(&help, "help", false, "Print usage information.")
-	flag.BoolVar(&h, "h", false, "Print usage information.")
-	flag.Parse()
-
-	if version {
-		fmt.Println("wasirun", Version)
-		os.Exit(0)
-	} else if h || help {
-		showUsage()
-		os.Exit(0)
-	}
-
-	if err := run(flag.Args()); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-func showUsage() {
+func printUsage() {
 	fmt.Printf(`wasirun - Run a WebAssembly module
 
 USAGE:
@@ -82,20 +39,20 @@ OPTIONS:
    --dir <DIR>
       Grant access to the specified host directory
 
-   --tcplisten <ADDR>
+   --listen <ADDR>
       Grant access to a socket listening on the specified address
 
-   --tcpdial <ADDR>
+   --dial <ADDR>
       Grant access to a socket connected to the specified address
 
    --env <NAME=VAL>
       Pass an environment variable to the module
 
    --sockets <NAME>
-      Enable a sockets extension, one of {none, wasmedge, path_open, auto}
+      Enable a sockets extension, either {none, wasmedge, path_open, auto}
 
    --pprof-addr <ADDR>
-      Start a pprof server listening on the specified address.
+      Start a pprof server listening on the specified address
 
    --trace
       Enable logging of system calls (like strace)
@@ -103,7 +60,7 @@ OPTIONS:
    --non-blocking-stdio
       Enable non-blocking stdio
 
-   --version
+   -v, --version
       Print the version and exit
 
    -h, --help
@@ -111,19 +68,62 @@ OPTIONS:
 `)
 }
 
-func run(args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("usage: wasirun [OPTIONS]... <MODULE> [--] [ARGS]...")
+var (
+	envs             stringList
+	dirs             stringList
+	listens          stringList
+	dials            stringList
+	socketExt        string
+	pprofAddr        string
+	trace            bool
+	nonBlockingStdio bool
+	version          bool
+)
+
+func main() {
+	flagSet := flag.NewFlagSet("wasirun", flag.ExitOnError)
+	flagSet.Usage = printUsage
+
+	flagSet.Var(&envs, "env", "")
+	flagSet.Var(&dirs, "dir", "")
+	flagSet.Var(&listens, "listen", "")
+	flagSet.Var(&dials, "dial", "")
+	flagSet.StringVar(&socketExt, "sockets", "auto", "")
+	flagSet.StringVar(&pprofAddr, "pprof-addr", "", "")
+	flagSet.BoolVar(&trace, "trace", false, "")
+	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
+	flagSet.BoolVar(&version, "version", false, "")
+	flagSet.BoolVar(&version, "v", false, "")
+	flagSet.Parse(os.Args[1:])
+
+	if version {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "(devel)" {
+			fmt.Println("wasirun", info.Main.Version)
+		} else {
+			fmt.Println("wasirun", "devel")
+		}
+		os.Exit(0)
 	}
 
-	wasmFile := args[0]
+	args := flagSet.Args()
+	if len(args) == 0 {
+		printUsage()
+		os.Exit(1)
+	}
+
+	if err := run(args[0], args[1:]); err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(wasmFile string, args []string) error {
 	wasmName := filepath.Base(wasmFile)
 	wasmCode, err := os.ReadFile(wasmFile)
 	if err != nil {
 		return fmt.Errorf("could not read WASM file '%s': %w", wasmFile, err)
 	}
 
-	args = args[1:]
 	if len(args) > 0 && args[0] == "--" {
 		args = args[1:]
 	}
