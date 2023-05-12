@@ -23,6 +23,14 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 	if b.name != "" {
 		name = b.name
 	}
+
+	stdin, stdout, stderr := b.stdin, b.stdout, b.stderr
+	if !b.customStdio {
+		stdin = syscall.Stdin
+		stdout = syscall.Stdout
+		stderr = syscall.Stderr
+	}
+
 	realtime := defaultRealtime
 	if b.realtime != nil {
 		realtime = b.realtime
@@ -39,6 +47,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 	if b.monotonicPrecision > 0 {
 		monotonicPrecision = b.monotonicPrecision
 	}
+
 	yield := defaultYield
 	if b.yield != nil {
 		yield = b.yield
@@ -86,9 +95,9 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 		fd   int
 		path string
 	}{
-		{syscall.Stdin, "/dev/stdin"},
-		{syscall.Stdout, "/dev/stdout"},
-		{syscall.Stderr, "/dev/stderr"},
+		{stdin, "/dev/stdin"},
+		{stdout, "/dev/stdout"},
+		{stderr, "/dev/stderr"},
 	} {
 		rights := wasi.FileRights
 		if descriptor.IsATTY(stdio.fd) {
@@ -98,15 +107,15 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 			FileType:   wasi.CharacterDeviceType,
 			RightsBase: rights,
 		}
+		newfd, err := dup(stdio.fd)
+		if err != nil {
+			return ctx, fmt.Errorf("unable to duplicate %s fd %d: %w", stdio.path, stdio.fd, err)
+		}
 		if b.nonBlockingStdio {
-			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
+			if err := syscall.SetNonblock(newfd, true); err != nil {
 				return ctx, fmt.Errorf("unable to put %s in non-blocking mode: %w", stdio.path, err)
 			}
 			stat.Flags |= wasi.NonBlock
-		}
-		newfd, err := dup(stdio.fd)
-		if err != nil {
-			return ctx, fmt.Errorf("unable to dup %s: %w", stdio.path, err)
 		}
 		system.Preopen(newfd, stdio.path, stat)
 	}
