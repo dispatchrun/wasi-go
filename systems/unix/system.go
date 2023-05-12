@@ -578,9 +578,7 @@ func (s *System) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Look
 	oflags := unix.O_CLOEXEC
 	if openFlags.Has(wasi.OpenDirectory) {
 		oflags |= unix.O_DIRECTORY
-		// Directories cannot have FDSeekRight (and possibly other rights).
-		// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/directory_seek.rs
-		rightsBase &^= wasi.FDSeekRight
+		rightsBase &= wasi.DirectoryRights
 	}
 	if openFlags.Has(wasi.OpenCreate) {
 		if !d.stat.RightsBase.Has(wasi.PathCreateFileRight) {
