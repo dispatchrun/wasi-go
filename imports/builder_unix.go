@@ -9,7 +9,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
-	"github.com/stealthrocket/wasi-go/internal/isatty"
+	"github.com/stealthrocket/wasi-go/internal/descriptor"
 	"github.com/stealthrocket/wasi-go/internal/sockets"
 	"github.com/stealthrocket/wasi-go/systems/unix"
 	"github.com/stealthrocket/wazergo"
@@ -86,7 +86,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		{syscall.Stderr, "/dev/stderr"},
 	} {
 		rights := wasi.FileRights
-		if isatty.IsATTY(stdio.fd) {
+		if descriptor.IsATTY(stdio.fd) {
 			rights = wasi.TTYRights
 		}
 		stat := wasi.FDStat{

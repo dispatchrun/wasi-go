@@ -1,4 +1,4 @@
-package isatty
+package descriptor
 
 import "golang.org/x/sys/unix"
 
