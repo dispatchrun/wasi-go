@@ -9,6 +9,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
+	"github.com/stealthrocket/wasi-go/internal/descriptor"
 	"github.com/stealthrocket/wasi-go/internal/sockets"
 	"github.com/stealthrocket/wasi-go/systems/unix"
 	"github.com/stealthrocket/wazergo"
@@ -84,9 +85,13 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		{syscall.Stdout, "/dev/stdout"},
 		{syscall.Stderr, "/dev/stderr"},
 	} {
+		rights := wasi.FileRights
+		if descriptor.IsATTY(stdio.fd) {
+			rights = wasi.TTYRights
+		}
 		stat := wasi.FDStat{
 			FileType:   wasi.CharacterDeviceType,
-			RightsBase: wasi.AllRights & ^(wasi.FDSeekRight | wasi.FDTellRight),
+			RightsBase: rights,
 		}
 		if b.nonBlockingStdio {
 			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
@@ -102,15 +107,16 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		if err != nil {
 			return ctx, fmt.Errorf("unable to preopen directory %q: %w", m.dir, err)
 		}
-
-		rights := wasi.AllRights
+		rightsBase := wasi.DirectoryRights
+		rightsInheriting := wasi.DirectoryRights | wasi.FileRights
 		if m.mode == 'r' {
-			rights &^= wasi.WriteRights
+			rightsBase &^= wasi.WriteRights
+			rightsInheriting &^= wasi.WriteRights
 		}
 		system.Preopen(fd, m.dir, wasi.FDStat{
 			FileType:         wasi.DirectoryType,
-			RightsBase:       rights,
-			RightsInheriting: rights,
+			RightsBase:       rightsBase,
+			RightsInheriting: rightsInheriting,
 		})
 	}
 
