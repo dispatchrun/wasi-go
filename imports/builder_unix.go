@@ -18,11 +18,19 @@ import (
 
 // Instantiate compiles and instantiates the WASI module and binds it to
 // the specified context.
-func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (context.Context, error) {
+func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2 context.Context, err error) {
 	name := defaultName
 	if b.name != "" {
 		name = b.name
 	}
+
+	stdin, stdout, stderr := b.stdin, b.stdout, b.stderr
+	if !b.customStdio {
+		stdin = syscall.Stdin
+		stdout = syscall.Stdout
+		stderr = syscall.Stderr
+	}
+
 	realtime := defaultRealtime
 	if b.realtime != nil {
 		realtime = b.realtime
@@ -39,6 +47,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 	if b.monotonicPrecision > 0 {
 		monotonicPrecision = b.monotonicPrecision
 	}
+
 	yield := defaultYield
 	if b.yield != nil {
 		yield = b.yield
@@ -68,6 +77,11 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		Rand:               rand,
 		Exit:               exit,
 	}
+	defer func() {
+		if err != nil {
+			system.Close(context.Background())
+		}
+	}()
 
 	if b.pathOpenSockets {
 		system = &unix.PathOpenSockets{System: system}
@@ -81,9 +95,9 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		fd   int
 		path string
 	}{
-		{syscall.Stdin, "/dev/stdin"},
-		{syscall.Stdout, "/dev/stdout"},
-		{syscall.Stderr, "/dev/stderr"},
+		{stdin, "/dev/stdin"},
+		{stdout, "/dev/stdout"},
+		{stderr, "/dev/stderr"},
 	} {
 		rights := wasi.FileRights
 		if descriptor.IsATTY(stdio.fd) {
@@ -93,13 +107,17 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 			FileType:   wasi.CharacterDeviceType,
 			RightsBase: rights,
 		}
+		newfd, err := dup(stdio.fd)
+		if err != nil {
+			return ctx, fmt.Errorf("unable to duplicate %s fd %d: %w", stdio.path, stdio.fd, err)
+		}
 		if b.nonBlockingStdio {
-			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
+			if err := syscall.SetNonblock(newfd, true); err != nil {
 				return ctx, fmt.Errorf("unable to put %s in non-blocking mode: %w", stdio.path, err)
 			}
 			stat.Flags |= wasi.NonBlock
 		}
-		system.Preopen(stdio.fd, stdio.path, stat)
+		system.Preopen(newfd, stdio.path, stat)
 	}
 
 	for _, m := range b.mounts {
@@ -125,7 +143,6 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		if err != nil {
 			return ctx, fmt.Errorf("unable to listen on %q: %w", addr, err)
 		}
-
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            wasi.NonBlock,
@@ -138,7 +155,6 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		if err != nil && err != sockets.EINPROGRESS {
 			return ctx, fmt.Errorf("unable to dial %q: %w", addr, err)
 		}
-
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:   wasi.SocketStreamType,
 			Flags:      wasi.NonBlock,
@@ -158,4 +174,16 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 	ctx = wazergo.WithModuleInstance(ctx, module)
 
 	return ctx, nil
+}
+
+func dup(fd int) (int, error) {
+	syscall.ForkLock.Lock()
+	defer syscall.ForkLock.Unlock()
+
+	newfd, err := syscall.Dup(fd)
+	if err != nil {
+		return -1, err
+	}
+	syscall.CloseOnExec(newfd)
+	return newfd, nil
 }

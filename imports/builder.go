@@ -19,6 +19,10 @@ type Builder struct {
 	mounts             []mount
 	listens            []string
 	dials              []string
+	customStdio        bool
+	stdin              int
+	stdout             int
+	stderr             int
 	realtime           func(context.Context) (uint64, error)
 	realtimePrecision  time.Duration
 	monotonic          func(context.Context) (uint64, error)
@@ -104,6 +108,19 @@ func (b *Builder) WithListens(listens ...string) *Builder {
 // the module. The connection sockets are added to the set of preopens.
 func (b *Builder) WithDials(dials ...string) *Builder {
 	b.dials = dials
+	return b
+}
+
+// WithStdio sets stdio file descriptors.
+//
+// Note that the file descriptors will be duplicated before the module takes
+// ownership. The caller is responsible for managing the specified
+// descriptors.
+func (b *Builder) WithStdio(stdin, stdout, stderr int) *Builder {
+	b.customStdio = true
+	b.stdin = stdin
+	b.stdout = stdout
+	b.stderr = stderr
 	return b
 }
 

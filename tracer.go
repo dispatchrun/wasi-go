@@ -794,8 +794,15 @@ func (t *Tracer) printEvent(e Event) {
 }
 
 func (t *Tracer) printFDStat(s FDStat) {
-	t.printf("{FileType:%s,Flags:%s,RightsBase:%s,RightsInheriting:%s})",
-		s.FileType, s.Flags, s.RightsBase, s.RightsInheriting)
+	t.printf("{FileType:%s", s.FileType)
+	if s.Flags != 0 {
+		t.printf(",Flags:%s", s.Flags)
+	}
+	t.printf(",RightsBase:%s", s.RightsBase)
+	if s.RightsInheriting != 0 {
+		t.printf(",RightsInheriting:%s", s.RightsInheriting)
+	}
+	t.printf("}")
 }
 
 func (t *Tracer) printFileStat(s FileStat) {

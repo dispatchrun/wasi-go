@@ -201,10 +201,25 @@ var rightsStrings = [...]string{
 }
 
 func (flags Rights) String() (s string) {
-	if flags == 0 {
+	switch {
+	case flags == 0:
 		return "Rights(0)"
-	} else if flags.Has(AllRights) {
+	case flags.Has(AllRights):
 		return "AllRights"
+	case flags == FileRights:
+		return "FileRights"
+	case flags == DirectoryRights:
+		return "DirectoryRights"
+	case flags == DirectoryRights|FileRights:
+		return "DirectoryRights|FileRights"
+	case flags == TTYRights:
+		return "TTYRights"
+	case flags == SockListenRights:
+		return "SockListenRights"
+	case flags == SockConnectionRights:
+		return "SockConnectionRights"
+	case flags == SockConnectionRights|SockListenRights:
+		return "SockConnectionRights|SockListenRights"
 	}
 	for i, name := range rightsStrings {
 		if !flags.Has(1 << i) {
