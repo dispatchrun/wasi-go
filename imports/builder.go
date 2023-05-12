@@ -195,7 +195,10 @@ func (b *Builder) WithNonBlockingStdio(enable bool) *Builder {
 
 // WithTracer enables the Tracer, and instructs it to write to the
 // specified io.Writer.
-func (b *Builder) WithTracer(w io.Writer) *Builder {
+func (b *Builder) WithTracer(enable bool, w io.Writer) *Builder {
+	if !enable {
+		w = nil
+	}
 	b.tracer = w
 	return b
 }

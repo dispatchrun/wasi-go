@@ -142,11 +142,8 @@ func run(wasmFile string, args []string) error {
 		WithListens(listens...).
 		WithDials(dials...).
 		WithNonBlockingStdio(nonBlockingStdio).
-		WithSocketsExtension(socketExt, wasmModule)
-
-	if trace {
-		builder = builder.WithTracer(os.Stderr)
-	}
+		WithSocketsExtension(socketExt, wasmModule).
+		WithTracer(trace, os.Stderr)
 
 	ctx, err = builder.Instantiate(ctx, runtime)
 	if err != nil {
