@@ -176,7 +176,7 @@ func (b *Builder) WithSocketsExtension(name string, module wazero.CompiledModule
 		switch {
 		case sockAcceptParamCount == 2:
 			b.socketsExtension = &wasi_snapshot_preview1.WasmEdgeV1
-		case hasSockOpen && sockAcceptParamCount == 3:
+		case hasSockOpen:
 			b.socketsExtension = &wasi_snapshot_preview1.WasmEdgeV2
 		}
 	default:
