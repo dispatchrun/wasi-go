@@ -177,6 +177,9 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 }
 
 func dup(fd int) (int, error) {
+	syscall.ForkLock.Lock()
+	defer syscall.ForkLock.Unlock()
+
 	newfd, err := syscall.Dup(fd)
 	if err != nil {
 		return -1, err
