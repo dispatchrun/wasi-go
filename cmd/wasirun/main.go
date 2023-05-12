@@ -2,23 +2,15 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
 	"flag"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
-	"syscall"
-	"time"
 
-	"github.com/stealthrocket/wasi-go"
-	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
-	"github.com/stealthrocket/wasi-go/internal/sockets"
-	"github.com/stealthrocket/wasi-go/systems/unix"
-	"github.com/stealthrocket/wazergo"
+	"github.com/stealthrocket/wasi-go/imports"
 	"github.com/tetratelabs/wazero"
 )
 
@@ -142,155 +134,27 @@ func run(wasmFile string, args []string) error {
 		return err
 	}
 
-	var system wasi.System = &unix.System{
-		Args:               append([]string{wasmName}, args...),
-		Environ:            envs,
-		Realtime:           realtime,
-		RealtimePrecision:  time.Microsecond,
-		Monotonic:          monotonic,
-		MonotonicPrecision: time.Nanosecond,
-		Yield:              yield,
-		Rand:               rand.Reader,
-		Exit:               exit,
+	builder := imports.NewBuilder().
+		WithName(wasmName).
+		WithArgs(args...).
+		WithEnv(envs...).
+		WithDirs(dirs...).
+		WithListens(listens...).
+		WithDials(dials...).
+		WithNonBlockingStdio(nonBlockingStdio).
+		WithSocketsExtension(socketExt, wasmModule).
+		WithTracer(trace, os.Stderr)
+
+	ctx, err = builder.Instantiate(ctx, runtime)
+	if err != nil {
+		return err
 	}
-
-	// Setup sockets extension.
-	var extensions []wasi_snapshot_preview1.Extension
-	switch socketExt {
-	case "none", "":
-		// no sockets extension
-	case "wasmedgev1":
-		extensions = append(extensions, wasi_snapshot_preview1.WasmEdgeV1)
-	case "wasmedgev2":
-		extensions = append(extensions, wasi_snapshot_preview1.WasmEdgeV2)
-	case "path_open":
-		system = &unix.PathOpenSockets{System: system}
-	case "auto":
-		functions := wasmModule.ImportedFunctions()
-		hasSockOpen := false
-		sockAcceptParamCount := 0
-		for _, f := range functions {
-			moduleName, name, ok := f.Import()
-			if !ok || moduleName != wasi_snapshot_preview1.HostModuleName {
-				continue
-			}
-			if name == "sock_open" {
-				hasSockOpen = true
-			} else if name == "sock_accept" {
-				sockAcceptParamCount = len(f.ParamTypes())
-			}
-		}
-		switch {
-		case sockAcceptParamCount == 2:
-			extensions = append(extensions, wasi_snapshot_preview1.WasmEdgeV1)
-		case hasSockOpen && sockAcceptParamCount == 3:
-			extensions = append(extensions, wasi_snapshot_preview1.WasmEdgeV2)
-		}
-	default:
-		return fmt.Errorf("unknown or unsupported socket extension: %s", socketExt)
-	}
-
-	if trace {
-		system = &wasi.Tracer{Writer: os.Stderr, System: system}
-	}
-
-	// Preopen stdio.
-	for _, stdio := range []struct {
-		fd   int
-		path string
-	}{
-		{syscall.Stdin, "/dev/stdin"},
-		{syscall.Stdout, "/dev/stdout"},
-		{syscall.Stderr, "/dev/stderr"},
-	} {
-		stat := wasi.FDStat{
-			FileType:   wasi.CharacterDeviceType,
-			RightsBase: wasi.AllRights & ^(wasi.FDSeekRight | wasi.FDTellRight),
-		}
-		if nonBlockingStdio {
-			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
-				return err
-			}
-			stat.Flags |= wasi.NonBlock
-		}
-		system.Preopen(stdio.fd, stdio.path, stat)
-	}
-
-	// Preopen directories.
-	for _, dir := range dirs {
-		fd, err := syscall.Open(dir, syscall.O_DIRECTORY, 0)
-		if err != nil {
-			return err
-		}
-		defer syscall.Close(fd)
-
-		system.Preopen(fd, dir, wasi.FDStat{
-			FileType:         wasi.DirectoryType,
-			RightsBase:       wasi.AllRights,
-			RightsInheriting: wasi.AllRights,
-		})
-	}
-
-	// Preopen sockets.
-	for _, addr := range listens {
-		fd, err := sockets.Listen(addr)
-		if err != nil {
-			return err
-		}
-		defer sockets.Close(fd)
-
-		system.Preopen(fd, addr, wasi.FDStat{
-			FileType:         wasi.SocketStreamType,
-			Flags:            wasi.NonBlock,
-			RightsBase:       wasi.SockListenRights,
-			RightsInheriting: wasi.SockConnectionRights,
-		})
-	}
-	for _, addr := range dials {
-		fd, err := sockets.Dial(addr)
-		if err != nil && err != sockets.EINPROGRESS {
-			return err
-		}
-		defer sockets.Close(fd)
-
-		system.Preopen(fd, addr, wasi.FDStat{
-			FileType:   wasi.SocketStreamType,
-			Flags:      wasi.NonBlock,
-			RightsBase: wasi.SockConnectionRights,
-		})
-	}
-
-	module := wazergo.MustInstantiate(ctx, runtime,
-		wasi_snapshot_preview1.NewHostModule(extensions...),
-		wasi_snapshot_preview1.WithWASI(system),
-	)
-	ctx = wazergo.WithModuleInstance(ctx, module)
 
 	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
 		return err
 	}
 	return instance.Close(ctx)
-}
-
-var epoch = time.Now()
-
-func realtime(context.Context) (uint64, error) {
-	return uint64(time.Now().UnixNano()), nil
-}
-
-func monotonic(context.Context) (uint64, error) {
-	return uint64(time.Since(epoch)), nil
-}
-
-func yield(ctx context.Context) error {
-	runtime.Gosched()
-	return nil
-}
-
-func exit(ctx context.Context, exitCode int) error {
-	os.Exit(exitCode)
-	return nil
 }
 
 type stringList []string
