@@ -18,7 +18,7 @@ import (
 
 // Instantiate compiles and instantiates the WASI module and binds it to
 // the specified context.
-func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (context.Context, error) {
+func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2 context.Context, err error) {
 	name := defaultName
 	if b.name != "" {
 		name = b.name
@@ -68,6 +68,11 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		Rand:               rand,
 		Exit:               exit,
 	}
+	defer func() {
+		if err != nil {
+			system.Close(context.Background())
+		}
+	}()
 
 	if b.pathOpenSockets {
 		system = &unix.PathOpenSockets{System: system}
@@ -99,7 +104,11 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 			}
 			stat.Flags |= wasi.NonBlock
 		}
-		system.Preopen(stdio.fd, stdio.path, stat)
+		newfd, err := dup(stdio.fd)
+		if err != nil {
+			return ctx, fmt.Errorf("unable to dup %s: %w", stdio.path, err)
+		}
+		system.Preopen(newfd, stdio.path, stat)
 	}
 
 	for _, m := range b.mounts {
@@ -125,7 +134,6 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		if err != nil {
 			return ctx, fmt.Errorf("unable to listen on %q: %w", addr, err)
 		}
-
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            wasi.NonBlock,
@@ -138,7 +146,6 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 		if err != nil && err != sockets.EINPROGRESS {
 			return ctx, fmt.Errorf("unable to dial %q: %w", addr, err)
 		}
-
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:   wasi.SocketStreamType,
 			Flags:      wasi.NonBlock,
@@ -158,4 +165,13 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (cont
 	ctx = wazergo.WithModuleInstance(ctx, module)
 
 	return ctx, nil
+}
+
+func dup(fd int) (int, error) {
+	newfd, err := syscall.Dup(fd)
+	if err != nil {
+		return -1, err
+	}
+	syscall.CloseOnExec(newfd)
+	return newfd, nil
 }

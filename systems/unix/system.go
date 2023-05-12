@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/stealthrocket/wasi-go"
@@ -292,8 +291,7 @@ func (s *System) FDFileStatGet(ctx context.Context, fd wasi.FD) (wasi.FileStat, 
 		return wasi.FileStat{}, makeErrno(err)
 	}
 	stat := makeFileStat(&sysStat)
-	switch f.fd {
-	case syscall.Stdin, syscall.Stdout, syscall.Stderr:
+	if fd <= 2 {
 		// Override stdio size/times.
 		// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/fd_filestat_get.rs
 		stat.Size = 0
