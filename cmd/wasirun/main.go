@@ -149,6 +149,9 @@ func run(wasmFile string, args []string) error {
 	}
 
 	ctx, err = builder.Instantiate(ctx, runtime)
+	if err != nil {
+		return err
+	}
 
 	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
