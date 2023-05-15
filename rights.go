@@ -136,18 +136,21 @@ const (
 	// WriteRights are rights related to writes.
 	WriteRights Rights = FDWriteRight | FDAllocateRight | PathFileStatSetSizeRight | FDDataSyncRight
 
+	syncRights     Rights = FDSyncRight | FDDataSyncRight
+	seekRights     Rights = FDSeekRight | FDTellRight
+	fileStatRights Rights = FDFileStatGetRight | FDFileStatSetSizeRight | FDFileStatSetTimesRight
+	pathRights     Rights = PathCreateDirectoryRight | PathCreateFileRight | PathLinkSourceRight | PathLinkTargetRight | PathOpenRight | PathReadLinkRight | PathRenameSourceRight | PathRenameTargetRight | PathFileStatGetRight | PathFileStatSetSizeRight | PathFileStatSetTimesRight | PathSymlinkRight | PathRemoveDirectoryRight | PathUnlinkFileRight
+
 	// FileRights are rights related to files.
-	// TODO: restrict FileRights
-	FileRights Rights = AllRights
+	FileRights Rights = syncRights | seekRights | fileStatRights | FDReadRight | FDStatSetFlagsRight | FDWriteRight | FDAdviseRight | FDAllocateRight | PollFDReadWriteRight
 
 	// DirectoryRights are rights related to directories.
-	// TODO: restrict DirectoryRights
 	// See https://github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/directory_seek.rs
-	DirectoryRights Rights = AllRights &^ (FDSeekRight)
+	DirectoryRights Rights = pathRights | syncRights | fileStatRights | FDStatSetFlagsRight | FDReadDirRight
 
 	// TTYRights are rights related to terminals.
 	// See https://github.com/WebAssembly/wasi-libc/blob/a6f871343/libc-bottom-half/sources/isatty.c
-	TTYRights = FileRights &^ (FDSeekRight | FDTellRight)
+	TTYRights = FileRights &^ seekRights
 
 	// SockListenRights are rights for listener sockets.
 	SockListenRights = SockAcceptRight | PollFDReadWriteRight | FDFileStatGetRight | FDStatSetFlagsRight
