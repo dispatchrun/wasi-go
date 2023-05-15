@@ -31,9 +31,9 @@ var WasmEdgeV1 = Extension{
 // WasmEdgeV2 is V2 of the WasmEdge sockets extension to WASI preview 1.
 //
 // Version 2 has a sock_accept function that's compatible with the WASI
-// preview 1 specification, and adds support for AF_UNIX addresses.
+// preview 1 specification. It widens addresses so that additional
+// address families could be supported in future (e.g. AF_UNIX).
 //
-// TODO: support AF_UNIX addresses
 // TODO: support SO_LINGER, SO_RCVTIMEO, SO_SNDTIMEO, SO_BINDTODEVICE socket options
 // TODO: implement sock_getaddrinfo
 var WasmEdgeV2 = Extension{
