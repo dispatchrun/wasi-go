@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"syscall"
 	"unsafe"
 
 	"github.com/stealthrocket/wasi-go"
@@ -14,6 +15,13 @@ func makeErrno(err error) wasi.Errno {
 	if err == nil {
 		return wasi.ESUCCESS
 	}
+	if err == syscall.EAGAIN {
+		return wasi.EAGAIN
+	}
+	return makeErrnoSlow(err)
+}
+
+func makeErrnoSlow(err error) wasi.Errno {
 	if err == context.Canceled {
 		return wasi.ECANCELED
 	}
