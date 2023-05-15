@@ -602,7 +602,11 @@ func (s *System) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.Look
 	if fdFlags.Has(wasi.Sync) {
 		oflags |= unix.O_SYNC
 	}
-	// TODO: handle O_RSYNC
+	if fdFlags.Has(wasi.RSync) {
+		// O_RSYNC is not widely supported, and in many cases is an
+		// alias for O_SYNC.
+		oflags |= unix.O_SYNC
+	}
 	if fdFlags.Has(wasi.NonBlock) {
 		oflags |= unix.O_NONBLOCK
 	}
