@@ -168,7 +168,7 @@ func fsync(fd int) error {
 }
 
 func lseek(fd int, offset int64, whence int) (int64, error) {
-	// TODO: there is an issue with unix.Seek where it returns random error
+	// Note: there is an issue with unix.Seek where it returns random error
 	// values for delta >= 2^32-1; syscall.Seek does not appear to suffer from
 	// this problem, nor does using unix.Syscall directly.
 	//
