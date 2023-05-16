@@ -4,6 +4,7 @@ package imports
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"syscall"
 
@@ -19,6 +20,10 @@ import (
 // Instantiate compiles and instantiates the WASI module and binds it to
 // the specified context.
 func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2 context.Context, err error) {
+	if len(b.errors) > 0 {
+		return ctx, errors.Join(b.errors...)
+	}
+
 	name := defaultName
 	if b.name != "" {
 		name = b.name
