@@ -35,6 +35,7 @@ type Builder struct {
 	pathOpenSockets    bool
 	nonBlockingStdio   bool
 	tracer             io.Writer
+	decorators         []wasi_snapshot_preview1.Decorator
 	errors             []error
 }
 
@@ -217,5 +218,11 @@ func (b *Builder) WithTracer(enable bool, w io.Writer) *Builder {
 		w = nil
 	}
 	b.tracer = w
+	return b
+}
+
+// WithDecorators sets the host module decorators.
+func (b *Builder) WithDecorators(decorators ...wasi_snapshot_preview1.Decorator) *Builder {
+	b.decorators = decorators
 	return b
 }

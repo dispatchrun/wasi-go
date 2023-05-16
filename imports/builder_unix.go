@@ -172,11 +172,14 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		extensions = append(extensions, *b.socketsExtension)
 	}
 
-	module := wazergo.MustInstantiate(ctx, runtime,
-		wasi_snapshot_preview1.NewHostModule(extensions...),
+	hostModule := wasi_snapshot_preview1.NewHostModule(extensions...)
+
+	instance := wazergo.MustInstantiate(ctx, runtime,
+		wazergo.Decorate(hostModule, b.decorators...),
 		wasi_snapshot_preview1.WithWASI(system),
 	)
-	ctx = wazergo.WithModuleInstance(ctx, module)
+
+	ctx = wazergo.WithModuleInstance(ctx, instance)
 
 	return ctx, system, nil
 }

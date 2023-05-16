@@ -112,6 +112,16 @@ func (f functions) Instantiate(ctx context.Context, opts ...Option) (*Module, er
 	return mod, nil
 }
 
+type Function = wazergo.Function[*Module]
+
+type Decorator = wazergo.Decorator[*Module]
+
+// DecoratorFunc is a helper used to create decorators from functions using type
+// inference to keep the syntax simple.
+func DecoratorFunc(fn func(string, Function) Function) Decorator {
+	return wazergo.DecoratorFunc(fn)
+}
+
 type Module struct {
 	WASI wasi.System
 
