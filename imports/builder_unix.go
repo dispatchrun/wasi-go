@@ -19,9 +19,9 @@ import (
 
 // Instantiate compiles and instantiates the WASI module and binds it to
 // the specified context.
-func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2 context.Context, err error) {
+func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxret context.Context, system wasi.System, err error) {
 	if len(b.errors) > 0 {
-		return ctx, errors.Join(b.errors...)
+		return ctx, nil, errors.Join(b.errors...)
 	}
 
 	name := defaultName
@@ -70,7 +70,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 		rand = b.rand
 	}
 
-	var system wasi.System = &unix.System{
+	system = &unix.System{
 		Args:               append([]string{name}, b.args...),
 		Environ:            b.env,
 		Realtime:           realtime,
@@ -114,11 +114,11 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 		}
 		newfd, err := dup(stdio.fd)
 		if err != nil {
-			return ctx, fmt.Errorf("unable to duplicate %s fd %d: %w", stdio.path, stdio.fd, err)
+			return ctx, nil, fmt.Errorf("unable to duplicate %s fd %d: %w", stdio.path, stdio.fd, err)
 		}
 		if b.nonBlockingStdio {
 			if err := syscall.SetNonblock(newfd, true); err != nil {
-				return ctx, fmt.Errorf("unable to put %s in non-blocking mode: %w", stdio.path, err)
+				return ctx, nil, fmt.Errorf("unable to put %s in non-blocking mode: %w", stdio.path, err)
 			}
 			stat.Flags |= wasi.NonBlock
 		}
@@ -128,7 +128,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 	for _, m := range b.mounts {
 		fd, err := syscall.Open(m.dir, syscall.O_DIRECTORY, 0)
 		if err != nil {
-			return ctx, fmt.Errorf("unable to preopen directory %q: %w", m.dir, err)
+			return ctx, nil, fmt.Errorf("unable to preopen directory %q: %w", m.dir, err)
 		}
 		rightsBase := wasi.DirectoryRights
 		rightsInheriting := wasi.DirectoryRights | wasi.FileRights
@@ -146,7 +146,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 	for _, addr := range b.listens {
 		fd, err := sockets.Listen(addr)
 		if err != nil {
-			return ctx, fmt.Errorf("unable to listen on %q: %w", addr, err)
+			return ctx, nil, fmt.Errorf("unable to listen on %q: %w", addr, err)
 		}
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
@@ -158,7 +158,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 	for _, addr := range b.dials {
 		fd, err := sockets.Dial(addr)
 		if err != nil && err != sockets.EINPROGRESS {
-			return ctx, fmt.Errorf("unable to dial %q: %w", addr, err)
+			return ctx, nil, fmt.Errorf("unable to dial %q: %w", addr, err)
 		}
 		system.Preopen(fd, addr, wasi.FDStat{
 			FileType:   wasi.SocketStreamType,
@@ -178,7 +178,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctx2
 	)
 	ctx = wazergo.WithModuleInstance(ctx, module)
 
-	return ctx, nil
+	return ctx, system, nil
 }
 
 func dup(fd int) (int, error) {
