@@ -15,12 +15,13 @@ type Tracer struct {
 var _ System = (*Tracer)(nil)
 var _ SocketsExtension = (*Tracer)(nil)
 
-func (t *Tracer) Preopen(hostfd int, path string, fdstat FDStat) {
+func (t *Tracer) Preopen(hostfd int, path string, fdstat FDStat) FD {
 	t.printf("Preopen(%d, %q, ", hostfd, path)
 	t.printFDStat(fdstat)
 	t.printf(") => ")
-	t.System.Preopen(hostfd, path, fdstat)
-	t.printf("ok\n")
+	fd := t.System.Preopen(hostfd, path, fdstat)
+	t.printf("%d\n", fd)
+	return fd
 }
 
 func (t *Tracer) Register(hostfd int, fdstat FDStat) FD {

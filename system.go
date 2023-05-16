@@ -11,7 +11,7 @@ import "context"
 type System interface {
 	// Preopen registers an open directory or socket as a "preopen", granting
 	// access to the WASM module.
-	Preopen(hostfd int, path string, fdstat FDStat)
+	Preopen(hostfd int, path string, fdstat FDStat) FD
 
 	// ArgsGet reads command-line argument data.
 	ArgsGet(ctx context.Context) ([]string, Errno)
