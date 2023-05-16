@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime/debug"
 
+	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports"
 	"github.com/tetratelabs/wazero"
 )
@@ -145,10 +146,12 @@ func run(wasmFile string, args []string) error {
 		WithSocketsExtension(socketExt, wasmModule).
 		WithTracer(trace, os.Stderr)
 
-	ctx, err = builder.Instantiate(ctx, runtime)
+	var system wasi.System
+	ctx, system, err = builder.Instantiate(ctx, runtime)
 	if err != nil {
 		return err
 	}
+	defer system.Close(ctx)
 
 	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
