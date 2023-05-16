@@ -24,7 +24,7 @@ const HostModuleName = "wasi_snapshot_preview1"
 // means that the implementation doesn't have to concern itself with ABI
 // details nor access the guest's memory.
 func NewHostModule(extensions ...Extension) wazergo.HostModule[*Module] {
-	var m functions
+	m := functions{}
 	for name, function := range preview1 {
 		function.Name = name
 		m[name] = function
