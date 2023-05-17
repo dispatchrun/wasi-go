@@ -13,6 +13,7 @@ import (
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports"
 	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/sys"
 )
 
 func printUsage() {
@@ -106,6 +107,9 @@ func main() {
 	}
 
 	if err := run(args[0], args[1:]); err != nil {
+		if exitErr, ok := err.(*sys.ExitError); ok {
+			os.Exit(int(exitErr.ExitCode()))
+		}
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}

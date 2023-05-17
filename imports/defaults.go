@@ -3,9 +3,10 @@ package imports
 import (
 	"context"
 	"crypto/rand"
-	"os"
 	"runtime"
 	"time"
+
+	"github.com/tetratelabs/wazero/sys"
 )
 
 const (
@@ -34,6 +35,5 @@ func defaultYield(ctx context.Context) error {
 var defaultRaise func(ctx context.Context, signal int) error = nil
 
 func defaultExit(ctx context.Context, exitCode int) error {
-	os.Exit(exitCode)
-	return nil
+	panic(sys.NewExitError(uint32(exitCode)))
 }
