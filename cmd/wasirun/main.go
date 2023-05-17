@@ -138,6 +138,7 @@ func run(wasmFile string, args []string) error {
 	if err != nil {
 		return err
 	}
+	defer wasmModule.Close(ctx)
 
 	builder := imports.NewBuilder().
 		WithName(wasmName).
