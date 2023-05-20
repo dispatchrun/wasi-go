@@ -96,6 +96,10 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		system = &wasi.Tracer{Writer: b.tracer, System: system}
 	}
 
+	for _, wrap := range b.wrappers {
+		system = wrap(system)
+	}
+
 	for _, stdio := range []struct {
 		fd   int
 		path string

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports/wasi_snapshot_preview1"
 	"github.com/tetratelabs/wazero"
 )
@@ -36,6 +37,7 @@ type Builder struct {
 	nonBlockingStdio   bool
 	tracer             io.Writer
 	decorators         []wasi_snapshot_preview1.Decorator
+	wrappers           []func(wasi.System) wasi.System
 	errors             []error
 }
 
@@ -224,5 +226,11 @@ func (b *Builder) WithTracer(enable bool, w io.Writer) *Builder {
 // WithDecorators sets the host module decorators.
 func (b *Builder) WithDecorators(decorators ...wasi_snapshot_preview1.Decorator) *Builder {
 	b.decorators = decorators
+	return b
+}
+
+// WithWrappers sets the wasi.System wrappers.
+func (b *Builder) WithWrappers(wrappers ...func(wasi.System) wasi.System) *Builder {
+	b.wrappers = wrappers
 	return b
 }
