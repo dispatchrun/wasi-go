@@ -141,8 +141,24 @@ func (s *System) lookupSocketFD(guestfd wasi.FD, rights wasi.Rights) (*fdinfo, w
 	}
 }
 
+func (s *System) ArgsSizesGet(ctx context.Context) (argCount, stringBytes int, errno wasi.Errno) {
+	argCount = len(s.Args)
+	for _, arg := range s.Args {
+		stringBytes += len(arg) + 1
+	}
+	return argCount, stringBytes, wasi.ESUCCESS
+}
+
 func (s *System) ArgsGet(ctx context.Context) ([]string, wasi.Errno) {
 	return s.Args, wasi.ESUCCESS
+}
+
+func (s *System) EnvironSizesGet(ctx context.Context) (envCount, stringBytes int, errno wasi.Errno) {
+	envCount = len(s.Environ)
+	for _, env := range s.Environ {
+		stringBytes += len(env) + 1
+	}
+	return envCount, stringBytes, wasi.ESUCCESS
 }
 
 func (s *System) EnvironGet(ctx context.Context) ([]string, wasi.Errno) {

@@ -146,11 +146,13 @@ func (m *Module) ArgsGet(ctx context.Context, argv Pointer[Uint32], buf Pointer[
 }
 
 func (m *Module) ArgsSizesGet(ctx context.Context, argc, bufLen Pointer[Int32]) Errno {
-	args, errno := m.WASI.ArgsGet(ctx)
+	argCount, stringBytes, errno := m.WASI.ArgsSizesGet(ctx)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	return m.countArgs(args, argc, bufLen)
+	argc.Store(Int32(argCount))
+	bufLen.Store(Int32(stringBytes))
+	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) EnvironGet(ctx context.Context, envv Pointer[Uint32], buf Pointer[Uint8]) Errno {
@@ -162,11 +164,13 @@ func (m *Module) EnvironGet(ctx context.Context, envv Pointer[Uint32], buf Point
 }
 
 func (m *Module) EnvironSizesGet(ctx context.Context, envc, bufLen Pointer[Int32]) Errno {
-	env, errno := m.WASI.EnvironGet(ctx)
+	envCount, stringBytes, errno := m.WASI.EnvironSizesGet(ctx)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	return m.countArgs(env, envc, bufLen)
+	envc.Store(Int32(envCount))
+	bufLen.Store(Int32(stringBytes))
+	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) storeArgs(args []string, argv Pointer[Uint32], buf Pointer[Uint8]) Errno {
@@ -183,16 +187,6 @@ func (m *Module) storeArgs(args []string, argv Pointer[Uint32], buf Pointer[Uint
 		argv.Index(i).Store(Uint32(offset))
 		offset += length
 	}
-	return Errno(wasi.ESUCCESS)
-}
-
-func (m *Module) countArgs(args []string, argc, bufLen Pointer[Int32]) Errno {
-	argc.Store(Int32(len(args)))
-	var size int
-	for _, arg := range args {
-		size += len(arg) + 1 // include null terminator
-	}
-	bufLen.Store(Int32(size))
 	return Errno(wasi.ESUCCESS)
 }
 

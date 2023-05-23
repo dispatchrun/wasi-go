@@ -3,18 +3,26 @@ package wasi
 import "context"
 
 // System is the WebAssembly System Interface (WASI).
-//
-// The functions here are higher-level than those found in the spec.
-// This is so that implementations don't have to concern themselves with
-// serialization details. For example, {args_get,args_sizes_get} can
-// both be implemented elsewhere using the higher-level ArgsGet.
 type System interface {
 	// Preopen registers an open directory or socket as a "preopen", granting
 	// access to the WASM module.
 	Preopen(hostfd int, path string, fdstat FDStat) FD
 
+	// ArgsSizesGet reads command-line argument data sizes.
+	//
+	// The implementation should return the number of args, and the number of
+	// bytes required to hold the strings (including terminating null bytes).
+	ArgsSizesGet(ctx context.Context) (argCount int, stringBytes int, errno Errno)
+
 	// ArgsGet reads command-line argument data.
 	ArgsGet(ctx context.Context) ([]string, Errno)
+
+	// EnvironSizesGet reads environment variable data sizes.
+	//
+	// The implementation should return the number of env variables, and the
+	// number of bytes required to hold the strings (including terminating
+	// null bytes).
+	EnvironSizesGet(ctx context.Context) (argCount int, stringBytes int, errno Errno)
 
 	// EnvironGet reads environment variable data.
 	//

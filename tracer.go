@@ -33,6 +33,18 @@ func (t *Tracer) Register(hostfd int, fdstat FDStat) FD {
 	return fd
 }
 
+func (t *Tracer) ArgsSizesGet(ctx context.Context) (int, int, Errno) {
+	t.printf("ArgsSizesGet() => ")
+	argCount, stringBytes, errno := t.System.ArgsSizesGet(ctx)
+	if errno == ESUCCESS {
+		t.printf("%d, %d", argCount, stringBytes)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return argCount, stringBytes, errno
+}
+
 func (t *Tracer) ArgsGet(ctx context.Context) ([]string, Errno) {
 	t.printf("ArgsGet() => ")
 	args, errno := t.System.ArgsGet(ctx)
@@ -43,6 +55,18 @@ func (t *Tracer) ArgsGet(ctx context.Context) ([]string, Errno) {
 	}
 	t.printf("\n")
 	return args, errno
+}
+
+func (t *Tracer) EnvironSizesGet(ctx context.Context) (int, int, Errno) {
+	t.printf("EnvironSizesGet() => ")
+	envCount, stringBytes, errno := t.System.EnvironSizesGet(ctx)
+	if errno == ESUCCESS {
+		t.printf("%d, %d", envCount, stringBytes)
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return envCount, stringBytes, errno
 }
 
 func (t *Tracer) EnvironGet(ctx context.Context) ([]string, Errno) {
