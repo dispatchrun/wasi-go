@@ -68,6 +68,7 @@ wasi-testsuite: testdata/.wasi-testsuite wasirun
 		   testdata/.wasi-testsuite/tests/c/testsuite \
 		   testdata/.wasi-testsuite/tests/rust/testsuite \
 		-r testdata/adapter.py
+	@rm -rf testdata/.wasi-testsuite/tests/rust/testsuite/fs-tests.dir/*.cleanup
 
 .gitmodules:
 	git submodule add --name wasi-libc -- \
