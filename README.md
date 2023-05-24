@@ -36,12 +36,18 @@ to create sockets, bind them to an address, listen for incoming connections
 and make outbound connections. This library supports a few of these sockets
 extensions.
 
+## Non-goals
+
+Windows Support, and virtual file system support. If you need these, consider
+using an alternative WASI implementation, such as the one bundled with the
+[wazero][wazero] runtime.
+
 ## Usage
 
 ### As a Command
 
 A `wasirun` command is provided for running WebAssembly modules that use WASI system calls.
-It bundles the WASI implementation from this library with the [wazero][wazero] runtime.
+It bundles the WASI implementation from this repository with the [wazero][wazero] runtime.
 
 ```
 $ go install github.com/stealthrocket/wasi-go/cmd/wasirun@latest
@@ -66,12 +72,12 @@ together, see the implementation of the [wasirun][wasirun] command.
 
 ### With Go
 
-As a Go implementation of WASI, we're naturally interested in Go's support for
-WebAssembly and WASI, and are championing the efforts to make Go a first class
-citizen in the ecosystem (along with Rust and Zig).
+As the providers of a Go implementation of WASI, we're naturally interested in
+Go's support for WebAssembly and WASI, and are championing the efforts to make
+Go a first class citizen in the ecosystem (along with Rust and Zig).
 
-Go v1.21 (scheduled for release in August 2023) has native support for WebAssembly
-and WASI:
+Go v1.21 (scheduled for release in August 2023) has native support for
+WebAssembly and WASI:
 
 ```go
 $ GOOS=wasip1 GOARCH=wasm go build -o app.wasm app.go
