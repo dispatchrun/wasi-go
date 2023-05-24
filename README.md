@@ -48,8 +48,8 @@ schedule goroutines / green threads while waiting for I/O.
 
 ## Non-Goals
 
-`wasi-go` does not aim to bea drop-in replacement for the `wasi_snapshot_preview1`
-package that ships within the [wazero][wazero] runtime. For example, the `wasi-go`
+`wasi-go` does not aim to be a drop-in replacement for the `wasi_snapshot_preview1`
+package that ships with the [wazero][wazero] runtime. For example, the `wasi-go`
 package does not build on Windows, nor does it allow customization of the file
 systems via a `fs.FS`.
 
