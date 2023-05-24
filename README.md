@@ -24,7 +24,7 @@ specification, enabling a wider range of applications to run as WebAssembly
 modules.
 
 This package intends to bring those extensions to [wazero][wazero], and more
-generally be a playground for exterimentation with cutting-edge WASI features.
+generally be a playground for experimentation with cutting-edge WASI features.
 
 :electric_plug: **Sockets**
 
