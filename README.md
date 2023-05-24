@@ -4,15 +4,40 @@
 
 # WASI
 
-The [WebAssembly][wasm] System Interface ([WASI][wasi]) is a set of system calls
+The [WebAssembly][wasm] System Interface ([WASI][wasi]) is a set of host imports
 that allow WebAssembly modules to interact with the outside world (e.g. perform
 I/O, read clocks).
 
 The WASI standard is under development. This repository provides a Go
 implementation of WASI [preview 1][preview1] for Unix systems, and a command
-to run WebAssembly modules that use WASI system calls.
+to run WebAssembly modules that use WASI host functions.
 
-## Goals
+## Motivation
+
+WASI preview 1 was cut before getting a fully capable socket API, and WASI as a
+standard is still a moving target.
+
+Some WebAssembly runtimes such as [wasmer][wasmer], [wasmedge][wasmedge], and
+[lunatic][lunatic] have taken the initiative to either extend WASI preview 1 or
+provide alternative solutions for capabilities that were missing from the core
+specification, enabling a wider range of applications to run as WebAssembly
+modules.
+
+This package intends to bring those extensions to [wazero][wazero], and more
+generally be a playground for exterimentation with cutting-edge WASI features.
+
+:electric_plug: **Sockets**
+
+This library provides all the socket capabilities specified in WASI preview 1,
+as well as a full support for a socket API which is ABI-compatible with the
+extensions implemented in [wasmedge][wasmedge].
+
+:battery: **Experimentation**
+
+The library separates the implementation of WASI from the WebAssembly runtime
+host module, so that implementations of the provided WASI interface don't have
+to worry about ABI concerns. The design makes it easy to wrap, augment and
+keep up with the evolving WASI specification.
 
 :zap: **Performance**
 
@@ -21,32 +46,18 @@ system calls. Non-blocking I/O is fully supported, allowing WebAssembly modules
 with an embedded scheduler (e.g. the Go runtime, or Rust Tokio scheduler) to
 schedule goroutines / green threads while waiting for I/O.
 
-:battery: **Extensibility**
+## Non-Goals
 
-The library separates the implementation of WASI from the WebAssembly runtime host
-module, so that implementations of the provided WASI interface don't have to
-worry about ABI concerns. The design makes it easy to wrap, augment and
-extend WASI.
-
-:electric_plug: **Sockets**
-
-WASI preview 1 was unfortunately sealed before sockets support was complete.
-Many WebAssembly runtimes extend WASI with system calls that allow the module
-to create sockets, bind them to an address, listen for incoming connections
-and make outbound connections. This library supports a few of these sockets
-extensions.
-
-## Non-goals
-
-Windows support, and virtual file system support. If you need these, consider
-using an alternative WASI implementation, such as the one bundled with the
-[wazero][wazero] runtime.
+`wasi-go` does not aim to bea drop-in replacement for the `wasi_snapshot_preview1`
+package that ships within the [wazero][wazero] runtime. For example, the `wasi-go`
+package does not build on Windows, nor does it allow customization of the file
+systems via a `fs.FS`.
 
 ## Usage
 
 ### As a Command
 
-A `wasirun` command is provided for running WebAssembly modules that use WASI system calls.
+A `wasirun` command is provided for running WebAssembly modules that use WASI host imports.
 It bundles the WASI implementation from this repository with the [wazero][wazero] runtime.
 
 ```console
@@ -89,6 +100,12 @@ To test this feature before release, use [`gotip`][gotip] in place of `go`.
 This repository bundles [a script][go-script] that can be used to skip the
 `go build` step.
 
+## Contributing
+
+Pull requests are welcome! Anything that is not a simple fix would probably
+benefit from being discussed in an issue first.
+
+Remember to be respectful and open minded!
 
 [wasm]: https://webassembly.org
 [wasi]: https://github.com/WebAssembly/WASI
@@ -103,3 +120,6 @@ This repository bundles [a script][go-script] that can be used to skip the
 [sockets-extension]: https://github.com/stealthrocket/wasi-go/blob/main/sockets_extension.go
 [gotip]: https://pkg.go.dev/golang.org/dl/gotip
 [go-script]: https://github.com/stealthrocket/wasi-go/blob/main/share/go_wasip1_wasm_exec
+[wasmer]: https://github.com/wasmerio/wasmer
+[wasmedge]: https://github.com/WasmEdge/WasmEdge
+[lunatic]: https://github.com/lunatic-solutions/lunatic
