@@ -38,7 +38,7 @@ extensions.
 
 ## Non-goals
 
-Windows Support, and virtual file system support. If you need these, consider
+Windows support, and virtual file system support. If you need these, consider
 using an alternative WASI implementation, such as the one bundled with the
 [wazero][wazero] runtime.
 
@@ -49,7 +49,7 @@ using an alternative WASI implementation, such as the one bundled with the
 A `wasirun` command is provided for running WebAssembly modules that use WASI system calls.
 It bundles the WASI implementation from this repository with the [wazero][wazero] runtime.
 
-```
+```console
 $ go install github.com/stealthrocket/wasi-go/cmd/wasirun@latest
 ```
 
@@ -79,7 +79,7 @@ Go a first class citizen in the ecosystem (along with Rust and Zig).
 Go v1.21 (scheduled for release in August 2023) has native support for
 WebAssembly and WASI:
 
-```go
+```console
 $ GOOS=wasip1 GOARCH=wasm go build -o app.wasm app.go
 $ wasirun app.wasm
 ```
