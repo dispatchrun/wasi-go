@@ -108,7 +108,7 @@ benefit from being discussed in an issue first.
 Remember to be respectful and open minded!
 
 [wasm]: https://webassembly.org
-[wasi]: https://github.com/WebAssembly/WASI
+[wasi]: https://wasi.dev
 [system]: https://github.com/stealthrocket/wasi-go/blob/main/system.go
 [unix-system]: https://github.com/stealthrocket/wasi-go/blob/main/systems/unix/system.go
 [host-module]: https://github.com/stealthrocket/wasi-go/blob/main/imports/wasi_snapshot_preview1/module.go
