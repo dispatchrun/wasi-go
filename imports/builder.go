@@ -179,26 +179,7 @@ func (b *Builder) WithSocketsExtension(name string, module wazero.CompiledModule
 		b.socketsExtension = nil
 		b.pathOpenSockets = true
 	case "auto":
-		functions := module.ImportedFunctions()
-		hasSockOpen := false
-		sockAcceptParamCount := 0
-		for _, f := range functions {
-			moduleName, name, ok := f.Import()
-			if !ok || moduleName != wasi_snapshot_preview1.HostModuleName {
-				continue
-			}
-			if name == "sock_open" {
-				hasSockOpen = true
-			} else if name == "sock_accept" {
-				sockAcceptParamCount = len(f.ParamTypes())
-			}
-		}
-		switch {
-		case sockAcceptParamCount == 2:
-			b.socketsExtension = &wasi_snapshot_preview1.WasmEdgeV1
-		case hasSockOpen:
-			b.socketsExtension = &wasi_snapshot_preview1.WasmEdgeV2
-		}
+		b.socketsExtension = DetectSocketsExtension(module)
 	default:
 		b.errors = append(b.errors, fmt.Errorf("invalid socket extension %q", name))
 	}
