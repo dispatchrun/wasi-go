@@ -5,6 +5,14 @@ import (
 	"github.com/tetratelabs/wazero"
 )
 
+// DetectExtensions detects extensions to WASI preview 1.
+func DetectExtensions(module wazero.CompiledModule) (ext []wasi_snapshot_preview1.Extension) {
+	if sockets := DetectSocketsExtension(module); sockets != nil {
+		ext = append(ext, *sockets)
+	}
+	return
+}
+
 // DetectSocketsExtension determines the sockets extension in
 // use by inspecting a WASM module's host imports.
 //
