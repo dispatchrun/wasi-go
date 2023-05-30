@@ -4,40 +4,33 @@
 
 # WASI
 
-The [WebAssembly][wasm] System Interface ([WASI][wasi]) is a set of host imports
-that allow WebAssembly modules to interact with the outside world (e.g. perform
-I/O, read clocks).
+The [WebAssembly][wasm] System Interface ([WASI][wasi]) is a set of standard
+system functions that allow WebAssembly modules to interact with the outside
+world (e.g. perform I/O, read clocks).
 
 The WASI standard is under development. This repository provides a Go
 implementation of WASI [preview 1][preview1] for Unix systems, and a command
-to run WebAssembly modules that use WASI host functions.
+to run WebAssembly modules that use WASI.
 
 ## Motivation
 
-WASI preview 1 was cut before getting a fully capable socket API, and WASI as a
-standard is still a moving target.
+WASI preview 1 was sealed without a complete socket API, and WASI as a standard
+is still a moving target.
 
-Some WebAssembly runtimes such as [wasmer][wasmer], [wasmedge][wasmedge], and
-[lunatic][lunatic] have taken the initiative to either extend WASI preview 1 or
-provide alternative solutions for capabilities that were missing from the core
-specification, enabling a wider range of applications to run as WebAssembly
-modules.
+Some WebAssembly runtimes have taken the initiative to either extend WASI
+preview 1 or provide alternative solutions for capabilities that were missing
+from the core specification, enabling a wider range of applications to run as
+WebAssembly modules.
 
-This package intends to bring those extensions to [wazero][wazero], and more
-generally be a playground for experimentation with cutting-edge WASI features.
+This package intends to bundle WASI preview 1 and these extensions with the
+[wazero][wazero] runtime, and more generally be a playground for
+experimentation with cutting-edge WASI features.
 
 :electric_plug: **Sockets**
 
 This library provides all the socket capabilities specified in WASI preview 1,
 as well as a full support for a socket API which is ABI-compatible with the
-extensions implemented in [wasmedge][wasmedge].
-
-:battery: **Experimentation**
-
-The library separates the implementation of WASI from the WebAssembly runtime
-host module, so that implementations of the provided WASI interface don't have
-to worry about ABI concerns. The design makes it easy to wrap, augment and
-keep up with the evolving WASI specification.
+extensions implemented in the [wasmedge][wasmedge] runtime.
 
 :zap: **Performance**
 
@@ -45,6 +38,13 @@ The provided implementation of WASI is a thin zero-allocation layer around OS
 system calls. Non-blocking I/O is fully supported, allowing WebAssembly modules
 with an embedded scheduler (e.g. the Go runtime, or Rust Tokio scheduler) to
 schedule goroutines / green threads while waiting for I/O.
+
+:battery: **Experimentation**
+
+The library separates the implementation of WASI from the WebAssembly runtime
+host module, so that implementations of the provided WASI interface don't have
+to worry about ABI concerns. The design makes it easy to wrap and augment WASI,
+and keep up with the evolving WASI specification.
 
 ## Non-Goals
 
