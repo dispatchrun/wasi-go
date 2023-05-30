@@ -91,8 +91,7 @@ Go v1.21, scheduled for release in August 2023, has native support for
 WebAssembly and WASI. To test these features before release, use [`gotip`][gotip]
 in place of `go`:
 
-```console
-$ cat hello.go
+```go
 package main
 
 import "fmt"
@@ -100,6 +99,9 @@ import "fmt"
 func main() {
 	fmt.Println("Hello, World!")
 }
+```
+
+```console
 $ GOOS=wasip1 GOARCH=wasm gotip build -o hello.wasm hello.go
 $ wasirun hello.wasm
 Hello, World!
