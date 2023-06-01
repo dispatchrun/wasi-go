@@ -550,16 +550,16 @@ func (t *Tracer) RandomGet(ctx context.Context, b []byte) Errno {
 	return errno
 }
 
-func (t *Tracer) SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, Errno) {
+func (t *Tracer) SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, SocketAddress, Errno) {
 	t.printf("SockAccept(%d, %s) => ", fd, flags)
-	newfd, errno := t.System.SockAccept(ctx, fd, flags)
+	newfd, addr, errno := t.System.SockAccept(ctx, fd, flags)
 	if errno == ESUCCESS {
-		t.printf("%d", newfd)
+		t.printf("%d, %s", newfd, addr)
 	} else {
 		t.printErrno(errno)
 	}
 	t.printf("\n")
-	return newfd, errno
+	return newfd, addr, errno
 }
 
 func (t *Tracer) SockShutdown(ctx context.Context, fd FD, flags SDFlags) Errno {
