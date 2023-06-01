@@ -285,8 +285,15 @@ type System interface {
 
 	// SockAccept accepts a new incoming connection.
 	//
+	// Although the method returns the address of the connecting entity, WASI
+	// preview 1 does not currently support passing the address to the calling
+	// WebAssembly module via the "sock_accept" host function call. This
+	// address is only used by implementations and wrappers of the System
+	// interface, and is discarded before returning control to the WebAssembly
+	// module.
+	//
 	// Note: This is similar to accept in POSIX.
-	SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, Errno)
+	SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, SocketAddress, Errno)
 
 	// SockRecv receives a message from a socket.
 	//

@@ -942,21 +942,25 @@ func (s *System) RandomGet(ctx context.Context, b []byte) wasi.Errno {
 	return wasi.ESUCCESS
 }
 
-func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) (wasi.FD, wasi.Errno) {
+func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) (wasi.FD, wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
-		return -1, errno
+		return -1, nil, errno
 	}
 	if (flags & ^wasi.NonBlock) != 0 {
-		return -1, wasi.EINVAL
+		return -1, nil, wasi.EINVAL
 	}
 	connflags := 0
 	if (flags & wasi.NonBlock) != 0 {
 		connflags |= unix.O_NONBLOCK
 	}
-	connfd, _, err := accept(socket.fd, connflags)
+	connfd, sa, err := accept(socket.fd, connflags)
 	if err != nil {
-		return -1, makeErrno(err)
+		return -1, nil, makeErrno(err)
+	}
+	addr, ok := s.fromUnixSockAddress(sa)
+	if !ok {
+		return -1, nil, wasi.ENOTSUP
 	}
 	guestfd := s.fds.Insert(fdinfo{
 		fd: connfd,
@@ -967,7 +971,7 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 			RightsInheriting: socket.stat.RightsInheriting,
 		},
 	})
-	return guestfd, wasi.ESUCCESS
+	return guestfd, addr, wasi.ESUCCESS
 }
 
 func (s *System) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.RIFlags) (wasi.Size, wasi.ROFlags, wasi.Errno) {
