@@ -987,14 +987,11 @@ func (s *System) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, 
 		sysIFlags |= unix.MSG_WAITALL
 	}
 	n, _, sysOFlags, _, err := unix.RecvmsgBuffers(socket.fd, makeIOVecs(iovecs), nil, sysIFlags)
-	if err != nil {
-		return 0, 0, makeErrno(err)
-	}
 	var roflags wasi.ROFlags
 	if (sysOFlags & unix.MSG_TRUNC) != 0 {
 		roflags |= wasi.RecvDataTruncated
 	}
-	return wasi.Size(n), roflags, wasi.ESUCCESS
+	return wasi.Size(n), roflags, makeErrno(err)
 }
 
 func (s *System) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.SIFlags) (wasi.Size, wasi.Errno) {
@@ -1135,18 +1132,19 @@ func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOV
 		sysIFlags |= unix.MSG_WAITALL
 	}
 	n, _, sysOFlags, sa, err := unix.RecvmsgBuffers(socket.fd, makeIOVecs(iovecs), nil, sysIFlags)
-	if err != nil {
-		return 0, 0, nil, makeErrno(err)
-	}
-	addr, ok := s.fromUnixSockAddress(sa)
-	if !ok {
-		return 0, 0, nil, wasi.ENOTSUP
+	var addr wasi.SocketAddress
+	if sa != nil {
+		var ok bool
+		addr, ok = s.fromUnixSockAddress(sa)
+		if !ok {
+			errno = wasi.ENOTSUP
+		}
 	}
 	var roflags wasi.ROFlags
 	if (sysOFlags & unix.MSG_TRUNC) != 0 {
 		roflags |= wasi.RecvDataTruncated
 	}
-	return wasi.Size(n), roflags, addr, wasi.ESUCCESS
+	return wasi.Size(n), roflags, addr, makeErrno(err)
 }
 
 func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (int, wasi.Errno) {
