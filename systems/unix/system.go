@@ -55,9 +55,12 @@ type System struct {
 	unixInet4 unix.SockaddrInet4
 	unixInet6 unix.SockaddrInet6
 	unixUnix  unix.SockaddrUnix
-	wasiInet4 wasi.Inet4Address
-	wasiInet6 wasi.Inet6Address
-	wasiUnix  wasi.UnixAddress
+	inet4Addr wasi.Inet4Address
+	inet4Peer wasi.Inet4Address
+	inet6Addr wasi.Inet6Address
+	inet6Peer wasi.Inet6Address
+	unixAddr  wasi.UnixAddress
+	unixPeer  wasi.UnixAddress
 
 	// shutfds are a pair of file descriptors allocated to the read and write
 	// ends of a pipe. They are used to asynchronously interrupting calls to
@@ -962,9 +965,9 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 	if err != nil {
 		return -1, nil, nil, makeErrno(err)
 	}
-	peer, ok := s.fromUnixSockAddress(sa)
+	peer, ok := s.makeRemoteSocketAddress(sa)
 	if !ok {
-		_ = unix.Close(connfd)
+		unix.Close(connfd)
 		return -1, nil, nil, wasi.ENOTSUP
 	}
 	guestfd := s.fds.Insert(fdinfo{
@@ -1144,7 +1147,7 @@ func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOV
 	var addr wasi.SocketAddress
 	if sa != nil {
 		var ok bool
-		addr, ok = s.fromUnixSockAddress(sa)
+		addr, ok = s.makeRemoteSocketAddress(sa)
 		if !ok {
 			errno = wasi.ENOTSUP
 		}
@@ -1278,7 +1281,7 @@ func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketA
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	addr, ok := s.fromUnixSockAddress(sa)
+	addr, ok := s.makeLocalSocketAddress(sa)
 	if !ok {
 		return nil, wasi.ENOTSUP
 	}
@@ -1294,7 +1297,7 @@ func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.Socket
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	addr, ok := s.fromUnixSockAddress(sa)
+	addr, ok := s.makeRemoteSocketAddress(sa)
 	if !ok {
 		return nil, wasi.ENOTSUP
 	}
@@ -1373,21 +1376,28 @@ func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, o
 	return sa, true
 }
 
-func (s *System) fromUnixSockAddress(sa unix.Sockaddr) (addr wasi.SocketAddress, ok bool) {
+func (s *System) makeLocalSocketAddress(sa unix.Sockaddr) (wasi.SocketAddress, bool) {
+	return s.makeSocketAddress(sa, &s.inet4Addr, &s.inet6Addr, &s.unixAddr)
+}
+
+func (s *System) makeRemoteSocketAddress(sa unix.Sockaddr) (wasi.SocketAddress, bool) {
+	return s.makeSocketAddress(sa, &s.inet4Peer, &s.inet6Peer, &s.unixPeer)
+}
+
+func (s *System) makeSocketAddress(sa unix.Sockaddr, in4 *wasi.Inet4Address, in6 *wasi.Inet6Address, un *wasi.UnixAddress) (wasi.SocketAddress, bool) {
 	switch t := sa.(type) {
 	case *unix.SockaddrInet4:
-		s.wasiInet4.Addr = t.Addr
-		s.wasiInet4.Port = t.Port
-		addr = &s.wasiInet4
+		in4.Addr = t.Addr
+		in4.Port = t.Port
+		return in4, true
 	case *unix.SockaddrInet6:
-		s.wasiInet6.Addr = t.Addr
-		s.wasiInet6.Port = t.Port
-		addr = &s.wasiInet6
+		in6.Addr = t.Addr
+		in6.Port = t.Port
+		return in6, true
 	case *unix.SockaddrUnix:
-		s.wasiUnix.Name = t.Name
-		addr = &s.wasiUnix
+		un.Name = t.Name
+		return un, true
 	default:
 		return nil, false
 	}
-	return addr, true
 }
