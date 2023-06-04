@@ -69,14 +69,14 @@ type SocketsExtension interface {
 	// Note: This is similar to getsockname in POSIX.
 	SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
 
-	// SockPeerAddress gets the address of the peer when the socket is a
+	// SockRemoteAddress gets the address of the peer when the socket is a
 	// connection.
 	//
 	// The returned address is only valid until the next call on this
 	// interface. Assume that any method may invalidate the address.
 	//
 	// Note: This is similar to getpeername in POSIX.
-	SockPeerAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
+	SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
 }
 
 // Port is a port.

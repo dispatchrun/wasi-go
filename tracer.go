@@ -754,13 +754,13 @@ func (t *Tracer) SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Er
 	return addr, errno
 }
 
-func (t *Tracer) SockPeerAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
+func (t *Tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
 		return nil, ENOSYS
 	}
-	t.printf("SockPeerAddress(%d) => ", fd)
-	addr, errno := s.SockPeerAddress(ctx, fd)
+	t.printf("SockRemoteAddress(%d) => ", fd)
+	addr, errno := s.SockRemoteAddress(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("%s", addr)
 	} else {

@@ -1098,7 +1098,7 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAd
 	if !ok {
 		return nil, wasi.EINVAL
 	}
-	peer, errno := s.SockPeerAddress(ctx, fd)
+	peer, errno := s.SockRemoteAddress(ctx, fd)
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
@@ -1285,7 +1285,7 @@ func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketA
 	return addr, wasi.ESUCCESS
 }
 
-func (s *System) SockPeerAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
+func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return nil, errno

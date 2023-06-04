@@ -239,7 +239,7 @@ func (m *Module) WasmEdgeV1SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
-	sa, errno := s.SockPeerAddress(ctx, wasi.FD(fd))
+	sa, errno := s.SockRemoteAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -257,7 +257,7 @@ func (m *Module) WasmEdgeV2SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
-	sa, errno := s.SockPeerAddress(ctx, wasi.FD(fd))
+	sa, errno := s.SockRemoteAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
