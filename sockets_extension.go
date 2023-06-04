@@ -2,6 +2,7 @@ package wasi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -88,6 +89,11 @@ type SocketAddress interface {
 	sockaddr()
 }
 
+// These interfaces are declared in encoding/json and gopkg.in/yaml.v3,
+// but we redeclare them here to avoid taking a dependency on those packages.
+type jsonMarshaler interface{ MarshalJSON() ([]byte, error) }
+type yamlMarshaler interface{ MarshalYAML() (any, error) }
+
 type Inet4Address struct {
 	Port int
 	Addr [4]byte
@@ -95,11 +101,26 @@ type Inet4Address struct {
 
 func (a *Inet4Address) sockaddr() {}
 
-func (a *Inet4Address) Network() string { return "ip4" }
+func (a *Inet4Address) Network() string {
+	return "ip4"
+}
 
 func (a *Inet4Address) String() string {
-	return fmt.Sprintf("%s:%d", net.IP(a.Addr[:]), a.Port)
+	return fmt.Sprintf(`%d.%d.%d.%d:%d`, a.Addr[0], a.Addr[1], a.Addr[2], a.Addr[3], a.Port)
 }
+
+func (a *Inet4Address) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%d.%d.%d.%d:%d"`, a.Addr[0], a.Addr[1], a.Addr[2], a.Addr[3], a.Port)), nil
+}
+
+func (a *Inet4Address) MarshalYAML() (any, error) {
+	return a.String(), nil
+}
+
+var (
+	_ jsonMarshaler = (*Inet4Address)(nil)
+	_ yamlMarshaler = (*Inet4Address)(nil)
+)
 
 type Inet6Address struct {
 	Port int
@@ -108,11 +129,26 @@ type Inet6Address struct {
 
 func (a *Inet6Address) sockaddr() {}
 
-func (a *Inet6Address) Network() string { return "ip6" }
+func (a *Inet6Address) Network() string {
+	return "ip6"
+}
 
 func (a *Inet6Address) String() string {
 	return net.JoinHostPort(net.IP(a.Addr[:]).String(), strconv.Itoa(a.Port))
 }
+
+func (a *Inet6Address) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + a.String() + `"`), nil
+}
+
+func (a *Inet6Address) MarshalYAML() (any, error) {
+	return a.String(), nil
+}
+
+var (
+	_ jsonMarshaler = (*Inet6Address)(nil)
+	_ yamlMarshaler = (*Inet6Address)(nil)
+)
 
 type UnixAddress struct {
 	Name string
@@ -120,11 +156,26 @@ type UnixAddress struct {
 
 func (a *UnixAddress) sockaddr() {}
 
-func (a *UnixAddress) Network() string { return "unix" }
+func (a *UnixAddress) Network() string {
+	return "unix"
+}
 
 func (a *UnixAddress) String() string {
 	return a.Name
 }
+
+func (a *UnixAddress) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.Name)
+}
+
+func (a *UnixAddress) MarshalYAML() (any, error) {
+	return a.Name, nil
+}
+
+var (
+	_ jsonMarshaler = (*UnixAddress)(nil)
+	_ yamlMarshaler = (*UnixAddress)(nil)
+)
 
 // ProtocolFamily is a socket protocol family.
 type ProtocolFamily int32
