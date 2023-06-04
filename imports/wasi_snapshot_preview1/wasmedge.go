@@ -92,7 +92,8 @@ func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(s.SockConnect(ctx, wasi.FD(fd), socketAddr))
+	_, errno := s.SockConnect(ctx, wasi.FD(fd), socketAddr)
+	return Errno(errno)
 }
 
 func (m *Module) WasmEdgeSockListen(ctx context.Context, fd Int32, backlog Int32) Errno {

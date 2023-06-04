@@ -22,12 +22,13 @@ type SocketsExtension interface {
 	// Note: This is similar to bind in POSIX.
 	SockBind(ctx context.Context, fd FD, addr SocketAddress) Errno
 
-	// SockConnect connects a socket to an address.
+	// SockConnect connects a socket to an address, returning the local socket
+	// address that the connection was made from.
 	//
 	// The implementation must not retain the socket address.
 	//
 	// Note: This is similar to connect in POSIX.
-	SockConnect(ctx context.Context, fd FD, addr SocketAddress) Errno
+	SockConnect(ctx context.Context, fd FD, addr SocketAddress) (SocketAddress, Errno)
 
 	// SockListen allows the socket to accept connections with SockAccept.
 	//

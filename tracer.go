@@ -550,16 +550,16 @@ func (t *Tracer) RandomGet(ctx context.Context, b []byte) Errno {
 	return errno
 }
 
-func (t *Tracer) SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, SocketAddress, Errno) {
+func (t *Tracer) SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, SocketAddress, SocketAddress, Errno) {
 	t.printf("SockAccept(%d, %s) => ", fd, flags)
-	newfd, addr, errno := t.System.SockAccept(ctx, fd, flags)
+	newfd, peer, addr, errno := t.System.SockAccept(ctx, fd, flags)
 	if errno == ESUCCESS {
-		t.printf("%d, %s", newfd, addr)
+		t.printf("%d, %s > %s", newfd, peer, addr)
 	} else {
 		t.printErrno(errno)
 	}
 	t.printf("\n")
-	return newfd, addr, errno
+	return newfd, peer, addr, errno
 }
 
 func (t *Tracer) SockShutdown(ctx context.Context, fd FD, flags SDFlags) Errno {
@@ -636,20 +636,20 @@ func (t *Tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress) Errno 
 	return errno
 }
 
-func (t *Tracer) SockConnect(ctx context.Context, fd FD, addr SocketAddress) Errno {
+func (t *Tracer) SockConnect(ctx context.Context, fd FD, peer SocketAddress) (SocketAddress, Errno) {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
-		return ENOSYS
+		return nil, ENOSYS
 	}
-	t.printf("SockConnect(%d, %s) => ", fd, addr)
-	errno := s.SockConnect(ctx, fd, addr)
+	t.printf("SockConnect(%d, %s) => ", fd, peer)
+	addr, errno := s.SockConnect(ctx, fd, peer)
 	if errno == ESUCCESS {
-		t.printf("ok")
+		t.printf("%s", addr)
 	} else {
 		t.printErrno(errno)
 	}
 	t.printf("\n")
-	return errno
+	return addr, errno
 }
 
 func (t *Tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
