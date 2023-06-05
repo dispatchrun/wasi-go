@@ -17,17 +17,23 @@ type SocketsExtension interface {
 
 	// SockBind binds a socket to an address.
 	//
+	// The method returns the address that the socket has been bound to, which
+	// may differ from the one passed as argument. For example, in cases where
+	// the caller used an address with port 0, and the system is responsible for
+	// selecting a free port to bind the socket to.
+	//
 	// The implementation must not retain the socket address.
 	//
 	// Note: This is similar to bind in POSIX.
-	SockBind(ctx context.Context, fd FD, addr SocketAddress) Errno
+	SockBind(ctx context.Context, fd FD, addr SocketAddress) (SocketAddress, Errno)
 
-	// SockConnect connects a socket to an address.
+	// SockConnect connects a socket to an address, returning the local socket
+	// address that the connection was made from.
 	//
 	// The implementation must not retain the socket address.
 	//
 	// Note: This is similar to connect in POSIX.
-	SockConnect(ctx context.Context, fd FD, addr SocketAddress) Errno
+	SockConnect(ctx context.Context, fd FD, addr SocketAddress) (SocketAddress, Errno)
 
 	// SockListen allows the socket to accept connections with SockAccept.
 	//
@@ -68,14 +74,14 @@ type SocketsExtension interface {
 	// Note: This is similar to getsockname in POSIX.
 	SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
 
-	// SockPeerAddress gets the address of the peer when the socket is a
+	// SockRemoteAddress gets the address of the peer when the socket is a
 	// connection.
 	//
 	// The returned address is only valid until the next call on this
 	// interface. Assume that any method may invalidate the address.
 	//
 	// Note: This is similar to getpeername in POSIX.
-	SockPeerAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
+	SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
 }
 
 // Port is a port.

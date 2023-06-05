@@ -80,7 +80,8 @@ func (m *Module) WasmEdgeSockBind(ctx context.Context, fd Int32, addr Pointer[wa
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(s.SockBind(ctx, wasi.FD(fd), socketAddr))
+	_, errno := s.SockBind(ctx, wasi.FD(fd), socketAddr)
+	return Errno(errno)
 }
 
 func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Uint32) Errno {
@@ -92,7 +93,8 @@ func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(s.SockConnect(ctx, wasi.FD(fd), socketAddr))
+	_, errno := s.SockConnect(ctx, wasi.FD(fd), socketAddr)
+	return Errno(errno)
 }
 
 func (m *Module) WasmEdgeSockListen(ctx context.Context, fd Int32, backlog Int32) Errno {
@@ -238,7 +240,7 @@ func (m *Module) WasmEdgeV1SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
-	sa, errno := s.SockPeerAddress(ctx, wasi.FD(fd))
+	sa, errno := s.SockRemoteAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -256,7 +258,7 @@ func (m *Module) WasmEdgeV2SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
-	sa, errno := s.SockPeerAddress(ctx, wasi.FD(fd))
+	sa, errno := s.SockRemoteAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}

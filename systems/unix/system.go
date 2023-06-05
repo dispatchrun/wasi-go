@@ -55,9 +55,12 @@ type System struct {
 	unixInet4 unix.SockaddrInet4
 	unixInet6 unix.SockaddrInet6
 	unixUnix  unix.SockaddrUnix
-	wasiInet4 wasi.Inet4Address
-	wasiInet6 wasi.Inet6Address
-	wasiUnix  wasi.UnixAddress
+	inet4Addr wasi.Inet4Address
+	inet4Peer wasi.Inet4Address
+	inet6Addr wasi.Inet6Address
+	inet6Peer wasi.Inet6Address
+	unixAddr  wasi.UnixAddress
+	unixPeer  wasi.UnixAddress
 
 	// shutfds are a pair of file descriptors allocated to the read and write
 	// ends of a pipe. They are used to asynchronously interrupting calls to
@@ -942,13 +945,17 @@ func (s *System) RandomGet(ctx context.Context, b []byte) wasi.Errno {
 	return wasi.ESUCCESS
 }
 
-func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) (wasi.FD, wasi.SocketAddress, wasi.Errno) {
+func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags) (wasi.FD, wasi.SocketAddress, wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
-		return -1, nil, errno
+		return -1, nil, nil, errno
 	}
 	if (flags & ^wasi.NonBlock) != 0 {
-		return -1, nil, wasi.EINVAL
+		return -1, nil, nil, wasi.EINVAL
+	}
+	addr, errno := s.SockLocalAddress(ctx, fd)
+	if errno != wasi.ESUCCESS {
+		return -1, nil, nil, errno
 	}
 	connflags := 0
 	if (flags & wasi.NonBlock) != 0 {
@@ -956,11 +963,12 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 	}
 	connfd, sa, err := accept(socket.fd, connflags)
 	if err != nil {
-		return -1, nil, makeErrno(err)
+		return -1, nil, nil, makeErrno(err)
 	}
-	addr, ok := s.fromUnixSockAddress(sa)
+	peer, ok := s.makeRemoteSocketAddress(sa)
 	if !ok {
-		return -1, nil, wasi.ENOTSUP
+		unix.Close(connfd)
+		return -1, nil, nil, wasi.ENOTSUP
 	}
 	guestfd := s.fds.Insert(fdinfo{
 		fd: connfd,
@@ -971,7 +979,7 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 			RightsInheriting: socket.stat.RightsInheriting,
 		},
 	})
-	return guestfd, addr, wasi.ESUCCESS
+	return guestfd, peer, addr, wasi.ESUCCESS
 }
 
 func (s *System) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.RIFlags) (wasi.Size, wasi.ROFlags, wasi.Errno) {
@@ -1071,30 +1079,36 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	return guestfd, wasi.ESUCCESS
 }
 
-func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) wasi.Errno {
+func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) (wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
-		return errno
+		return nil, errno
 	}
 	sa, ok := s.toUnixSockAddress(addr)
 	if !ok {
-		return wasi.EINVAL
+		return nil, wasi.EINVAL
 	}
-	err := unix.Bind(socket.fd, sa)
-	return makeErrno(err)
+	if err := unix.Bind(socket.fd, sa); err != nil {
+		return nil, makeErrno(err)
+	}
+	return s.SockLocalAddress(ctx, fd)
 }
 
-func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) wasi.Errno {
+func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) (wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
-		return errno
+		return nil, errno
 	}
 	sa, ok := s.toUnixSockAddress(addr)
 	if !ok {
-		return wasi.EINVAL
+		return nil, wasi.EINVAL
+	}
+	peer, errno := s.SockRemoteAddress(ctx, fd)
+	if errno != wasi.ESUCCESS {
+		return nil, errno
 	}
 	err := unix.Connect(socket.fd, sa)
-	return makeErrno(err)
+	return peer, makeErrno(err)
 }
 
 func (s *System) SockListen(ctx context.Context, fd wasi.FD, backlog int) wasi.Errno {
@@ -1135,7 +1149,7 @@ func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOV
 	var addr wasi.SocketAddress
 	if sa != nil {
 		var ok bool
-		addr, ok = s.fromUnixSockAddress(sa)
+		addr, ok = s.makeRemoteSocketAddress(sa)
 		if !ok {
 			errno = wasi.ENOTSUP
 		}
@@ -1269,14 +1283,14 @@ func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketA
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	addr, ok := s.fromUnixSockAddress(sa)
+	addr, ok := s.makeLocalSocketAddress(sa)
 	if !ok {
 		return nil, wasi.ENOTSUP
 	}
 	return addr, wasi.ESUCCESS
 }
 
-func (s *System) SockPeerAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
+func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return nil, errno
@@ -1285,7 +1299,7 @@ func (s *System) SockPeerAddress(ctx context.Context, fd wasi.FD) (wasi.SocketAd
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	addr, ok := s.fromUnixSockAddress(sa)
+	addr, ok := s.makeRemoteSocketAddress(sa)
 	if !ok {
 		return nil, wasi.ENOTSUP
 	}
@@ -1364,21 +1378,28 @@ func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, o
 	return sa, true
 }
 
-func (s *System) fromUnixSockAddress(sa unix.Sockaddr) (addr wasi.SocketAddress, ok bool) {
+func (s *System) makeLocalSocketAddress(sa unix.Sockaddr) (wasi.SocketAddress, bool) {
+	return s.makeSocketAddress(sa, &s.inet4Addr, &s.inet6Addr, &s.unixAddr)
+}
+
+func (s *System) makeRemoteSocketAddress(sa unix.Sockaddr) (wasi.SocketAddress, bool) {
+	return s.makeSocketAddress(sa, &s.inet4Peer, &s.inet6Peer, &s.unixPeer)
+}
+
+func (s *System) makeSocketAddress(sa unix.Sockaddr, in4 *wasi.Inet4Address, in6 *wasi.Inet6Address, un *wasi.UnixAddress) (wasi.SocketAddress, bool) {
 	switch t := sa.(type) {
 	case *unix.SockaddrInet4:
-		s.wasiInet4.Addr = t.Addr
-		s.wasiInet4.Port = t.Port
-		addr = &s.wasiInet4
+		in4.Addr = t.Addr
+		in4.Port = t.Port
+		return in4, true
 	case *unix.SockaddrInet6:
-		s.wasiInet6.Addr = t.Addr
-		s.wasiInet6.Port = t.Port
-		addr = &s.wasiInet6
+		in6.Addr = t.Addr
+		in6.Port = t.Port
+		return in6, true
 	case *unix.SockaddrUnix:
-		s.wasiUnix.Name = t.Name
-		addr = &s.wasiUnix
+		un.Name = t.Name
+		return un, true
 	default:
 		return nil, false
 	}
-	return addr, true
 }

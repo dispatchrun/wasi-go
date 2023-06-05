@@ -474,7 +474,7 @@ func (m *Module) RandomGet(ctx context.Context, buf Bytes) Errno {
 }
 
 func (m *Module) SockAccept(ctx context.Context, fd Int32, flags Int32, connfd Pointer[Int32]) Errno {
-	result, _, errno := m.WASI.SockAccept(ctx, wasi.FD(fd), wasi.FDFlags(flags))
+	result, _, _, errno := m.WASI.SockAccept(ctx, wasi.FD(fd), wasi.FDFlags(flags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
