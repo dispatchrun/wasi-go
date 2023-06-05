@@ -80,7 +80,8 @@ func (m *Module) WasmEdgeSockBind(ctx context.Context, fd Int32, addr Pointer[wa
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(s.SockBind(ctx, wasi.FD(fd), socketAddr))
+	_, errno := s.SockBind(ctx, wasi.FD(fd), socketAddr)
+	return Errno(errno)
 }
 
 func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Uint32) Errno {

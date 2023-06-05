@@ -1079,17 +1079,19 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	return guestfd, wasi.ESUCCESS
 }
 
-func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) wasi.Errno {
+func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) (wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, wasi.SockAcceptRight)
 	if errno != wasi.ESUCCESS {
-		return errno
+		return nil, errno
 	}
 	sa, ok := s.toUnixSockAddress(addr)
 	if !ok {
-		return wasi.EINVAL
+		return nil, wasi.EINVAL
 	}
-	err := unix.Bind(socket.fd, sa)
-	return makeErrno(err)
+	if err := unix.Bind(socket.fd, sa); err != nil {
+		return nil, makeErrno(err)
+	}
+	return s.SockLocalAddress(ctx, fd)
 }
 
 func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) (wasi.SocketAddress, wasi.Errno) {
