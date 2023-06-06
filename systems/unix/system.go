@@ -1094,21 +1094,24 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 	return s.SockLocalAddress(ctx, fd)
 }
 
-func (s *System) SockConnect(ctx context.Context, fd wasi.FD, addr wasi.SocketAddress) (wasi.SocketAddress, wasi.Errno) {
+func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAddress) (wasi.SocketAddress, wasi.Errno) {
 	socket, errno := s.lookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	sa, ok := s.toUnixSockAddress(addr)
+	sa, ok := s.toUnixSockAddress(peer)
 	if !ok {
 		return nil, wasi.EINVAL
 	}
-	peer, errno := s.SockRemoteAddress(ctx, fd)
+	err := unix.Connect(socket.fd, sa)
+	if err != nil && err != unix.EINPROGRESS {
+		return nil, makeErrno(err)
+	}
+	addr, errno := s.SockLocalAddress(ctx, fd)
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	err := unix.Connect(socket.fd, sa)
-	return peer, makeErrno(err)
+	return addr, makeErrno(err)
 }
 
 func (s *System) SockListen(ctx context.Context, fd wasi.FD, backlog int) wasi.Errno {
