@@ -10,7 +10,7 @@ import (
 
 const (
 	__UTIME_NOW  = unix.UTIME_NOW
-	__UTIME_OMIT = unix.UTIME_OMMIT
+	__UTIME_OMIT = unix.UTIME_OMIT
 )
 
 func accept(socket, flags int) (int, unix.Sockaddr, error) {
