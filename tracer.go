@@ -643,7 +643,9 @@ func (t *Tracer) SockConnect(ctx context.Context, fd FD, peer SocketAddress) (So
 	}
 	t.printf("SockConnect(%d, %s) => ", fd, peer)
 	addr, errno := s.SockConnect(ctx, fd, peer)
-	if errno == ESUCCESS {
+	if errno == EINPROGRESS {
+		t.printf("%s (EINPROGRESS)", addr)
+	} else if errno == ESUCCESS {
 		t.printf("%s", addr)
 	} else {
 		t.printErrno(errno)
