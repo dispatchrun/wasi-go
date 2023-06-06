@@ -4,7 +4,6 @@ import (
 	"context"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/stealthrocket/wasi-go/internal/descriptor"
 )
@@ -28,7 +27,7 @@ type File[T any] interface {
 
 	FDFileStatSetSize(ctx context.Context, size FileSize) Errno
 
-	FDFileStatSetTimes(ctx context.Context, accessTime, modifyTime Timestamp) Errno
+	FDFileStatSetTimes(ctx context.Context, accessTime, modifyTime Timestamp, flags FSTFlags) Errno
 
 	FDPread(ctx context.Context, iovecs []IOVec, offset FileSize) (Size, Errno)
 
@@ -48,7 +47,7 @@ type File[T any] interface {
 
 	PathFileStatGet(ctx context.Context, flags LookupFlags, path string) (FileStat, Errno)
 
-	PathFileStatSetTimes(ctx context.Context, lookupFlags LookupFlags, path string, accessTime, modifyTime Timestamp) Errno
+	PathFileStatSetTimes(ctx context.Context, lookupFlags LookupFlags, path string, accessTime, modifyTime Timestamp, flags FSTFlags) Errno
 
 	PathLink(ctx context.Context, flags LookupFlags, oldPath string, newFile T, newPath string) Errno
 
@@ -317,33 +316,7 @@ func (t *FileTable[T]) FDFileStatSetTimes(ctx context.Context, fd FD, accessTime
 	if errno != ESUCCESS {
 		return errno
 	}
-	if flags.Has(AccessTimeNow) || flags.Has(ModifyTimeNow) {
-		timestamp := Timestamp(time.Now().UnixNano())
-		if flags.Has(AccessTimeNow) {
-			accessTime = timestamp
-		}
-		if flags.Has(ModifyTimeNow) {
-			modifyTime = timestamp
-		}
-	}
-	changeAccessTime := flags.Has(AccessTime) || flags.Has(AccessTimeNow)
-	changeModifyTime := flags.Has(ModifyTime) || flags.Has(ModifyTimeNow)
-	if !changeAccessTime && !changeModifyTime {
-		return ESUCCESS
-	}
-	if !changeAccessTime || !changeModifyTime {
-		stat, errno := f.file.FDFileStatGet(ctx)
-		if errno != ESUCCESS {
-			return errno
-		}
-		if !changeAccessTime {
-			accessTime = stat.AccessTime
-		}
-		if !changeAccessTime {
-			modifyTime = stat.ModifyTime
-		}
-	}
-	return f.file.FDFileStatSetTimes(ctx, accessTime, modifyTime)
+	return f.file.FDFileStatSetTimes(ctx, accessTime, modifyTime, flags)
 }
 
 func (t *FileTable[T]) FDPreStatGet(ctx context.Context, fd FD) (PreStat, Errno) {
@@ -493,33 +466,7 @@ func (t *FileTable[T]) PathFileStatSetTimes(ctx context.Context, fd FD, lookupFl
 	if errno != ESUCCESS {
 		return errno
 	}
-	if fstFlags.Has(AccessTimeNow) || fstFlags.Has(ModifyTimeNow) {
-		timestamp := Timestamp(time.Now().UnixNano())
-		if fstFlags.Has(AccessTimeNow) {
-			accessTime = timestamp
-		}
-		if fstFlags.Has(ModifyTimeNow) {
-			modifyTime = timestamp
-		}
-	}
-	changeAccessTime := fstFlags.Has(AccessTime) || fstFlags.Has(AccessTimeNow)
-	changeModifyTime := fstFlags.Has(ModifyTime) || fstFlags.Has(ModifyTimeNow)
-	if !changeAccessTime && !changeModifyTime {
-		return ESUCCESS
-	}
-	if !changeAccessTime || !changeModifyTime {
-		stat, errno := d.file.PathFileStatGet(ctx, lookupFlags, path)
-		if errno != ESUCCESS {
-			return errno
-		}
-		if !changeAccessTime {
-			accessTime = stat.AccessTime
-		}
-		if !changeModifyTime {
-			modifyTime = stat.ModifyTime
-		}
-	}
-	return d.file.PathFileStatSetTimes(ctx, lookupFlags, path, accessTime, modifyTime)
+	return d.file.PathFileStatSetTimes(ctx, lookupFlags, path, accessTime, modifyTime, fstFlags)
 }
 
 func (t *FileTable[T]) PathLink(ctx context.Context, fd FD, flags LookupFlags, oldPath string, newFD FD, newPath string) Errno {

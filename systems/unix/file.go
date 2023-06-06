@@ -62,11 +62,26 @@ func (fd FD) FDFileStatSetSize(ctx context.Context, size wasi.FileSize) wasi.Err
 	return makeErrno(err)
 }
 
-func (fd FD) FDFileStatSetTimes(ctx context.Context, accessTime, modifyTime wasi.Timestamp) wasi.Errno {
-	err := futimens(int(fd), &[2]unix.Timespec{
-		0: unix.NsecToTimespec(int64(accessTime)),
-		1: unix.NsecToTimespec(int64(modifyTime)),
-	})
+func (fd FD) FDFileStatSetTimes(ctx context.Context, accessTime, modifyTime wasi.Timestamp, flags wasi.FSTFlags) wasi.Errno {
+	ts := [2]unix.Timespec{
+		{Nsec: __UTIME_OMIT},
+		{Nsec: __UTIME_OMIT},
+	}
+	if flags.Has(wasi.AccessTime) {
+		if flags.Has(wasi.AccessTimeNow) {
+			ts[0] = unix.Timespec{Nsec: __UTIME_NOW}
+		} else {
+			ts[0] = unix.NsecToTimespec(int64(accessTime))
+		}
+	}
+	if flags.Has(wasi.ModifyTime) {
+		if flags.Has(wasi.ModifyTimeNow) {
+			ts[1] = unix.Timespec{Nsec: __UTIME_NOW}
+		} else {
+			ts[1] = unix.NsecToTimespec(int64(modifyTime))
+		}
+	}
+	err := futimens(int(fd), &ts)
 	return makeErrno(err)
 }
 
@@ -130,14 +145,28 @@ func (fd FD) PathFileStatGet(ctx context.Context, flags wasi.LookupFlags, path s
 	return makeFileStat(&sysStat), makeErrno(err)
 }
 
-func (fd FD) PathFileStatSetTimes(ctx context.Context, lookupFlags wasi.LookupFlags, path string, accessTime, modifyTime wasi.Timestamp) wasi.Errno {
+func (fd FD) PathFileStatSetTimes(ctx context.Context, lookupFlags wasi.LookupFlags, path string, accessTime, modifyTime wasi.Timestamp, fstFlags wasi.FSTFlags) wasi.Errno {
 	var sysFlags int
 	if !lookupFlags.Has(wasi.SymlinkFollow) {
 		sysFlags |= unix.AT_SYMLINK_NOFOLLOW
 	}
 	ts := [2]unix.Timespec{
-		0: unix.NsecToTimespec(int64(accessTime)),
-		1: unix.NsecToTimespec(int64(modifyTime)),
+		{Nsec: __UTIME_OMIT},
+		{Nsec: __UTIME_OMIT},
+	}
+	if fstFlags.Has(wasi.AccessTime) {
+		if fstFlags.Has(wasi.AccessTimeNow) {
+			ts[0] = unix.Timespec{Nsec: __UTIME_NOW}
+		} else {
+			ts[0] = unix.NsecToTimespec(int64(accessTime))
+		}
+	}
+	if fstFlags.Has(wasi.ModifyTime) {
+		if fstFlags.Has(wasi.ModifyTimeNow) {
+			ts[1] = unix.Timespec{Nsec: __UTIME_NOW}
+		} else {
+			ts[1] = unix.NsecToTimespec(int64(modifyTime))
+		}
 	}
 	err := unix.UtimesNanoAt(int(fd), path, ts[:], sysFlags)
 	return makeErrno(err)
