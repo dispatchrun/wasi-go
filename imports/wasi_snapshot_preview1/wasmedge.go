@@ -209,11 +209,11 @@ func (m *Module) WasmEdgeV1SockLocalAddr(ctx context.Context, fd Int32, addr Poi
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	portint, pf, ok := m.wasmEdgeV1PutSocketAddress(addr.Load(), sa)
+	portint, at, ok := m.wasmEdgeV1PutSocketAddress(addr.Load(), sa)
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	addrType.Store(Uint32(pf))
+	addrType.Store(Uint32(at))
 	port.Store(Uint32(portint))
 	return Errno(wasi.ESUCCESS)
 }
@@ -244,11 +244,11 @@ func (m *Module) WasmEdgeV1SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	portint, pf, ok := m.wasmEdgeV1PutSocketAddress(addr.Load(), sa)
+	portint, at, ok := m.wasmEdgeV1PutSocketAddress(addr.Load(), sa)
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	addrType.Store(Uint32(pf))
+	addrType.Store(Uint32(at))
 	port.Store(Uint32(portint))
 	return Errno(wasi.ESUCCESS)
 }
@@ -300,7 +300,7 @@ func (m *Module) wasmEdgeGetSocketAddress(b wasmEdgeAddress, port int) (sa wasi.
 	return
 }
 
-func (m *Module) wasmEdgeV1PutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAddress) (port int, pf wasi.ProtocolFamily, ok bool) {
+func (m *Module) wasmEdgeV1PutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAddress) (port, addressType int, ok bool) {
 	if len(b) != 16 {
 		return
 	}
@@ -308,13 +308,13 @@ func (m *Module) wasmEdgeV1PutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAdd
 	case *wasi.Inet4Address:
 		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet))
 		copy(b, t.Addr[:])
-		pf = wasi.Inet
+		addressType = 4
 		port = t.Port
 		ok = true
 	case *wasi.Inet6Address:
 		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet6))
 		copy(b, t.Addr[:])
-		pf = wasi.Inet6
+		addressType = 6
 		port = t.Port
 		ok = true
 	}
