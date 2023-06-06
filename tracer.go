@@ -15,24 +15,6 @@ type Tracer struct {
 var _ System = (*Tracer)(nil)
 var _ SocketsExtension = (*Tracer)(nil)
 
-func (t *Tracer) Preopen(hostfd int, path string, fdstat FDStat) FD {
-	t.printf("Preopen(%d, %q, ", hostfd, path)
-	t.printFDStat(fdstat)
-	t.printf(") => ")
-	fd := t.System.Preopen(hostfd, path, fdstat)
-	t.printf("%d\n", fd)
-	return fd
-}
-
-func (t *Tracer) Register(hostfd int, fdstat FDStat) FD {
-	t.printf("Register(%d, ", hostfd)
-	t.printFDStat(fdstat)
-	t.printf(") => ")
-	fd := t.System.Register(hostfd, fdstat)
-	t.printf("%d\n", fd)
-	return fd
-}
-
 func (t *Tracer) ArgsSizesGet(ctx context.Context) (int, int, Errno) {
 	t.printf("ArgsSizesGet() => ")
 	argCount, stringBytes, errno := t.System.ArgsSizesGet(ctx)
@@ -415,16 +397,16 @@ func (t *Tracer) PathOpen(ctx context.Context, fd FD, dirFlags LookupFlags, path
 	return fd, errno
 }
 
-func (t *Tracer) PathReadLink(ctx context.Context, fd FD, path string, buffer []byte) ([]byte, Errno) {
+func (t *Tracer) PathReadLink(ctx context.Context, fd FD, path string, buffer []byte) (int, Errno) {
 	t.printf("PathReadLink(%d, %q, [%d]byte) => ", fd, path, len(buffer))
-	result, errno := t.System.PathReadLink(ctx, fd, path, buffer)
+	n, errno := t.System.PathReadLink(ctx, fd, path, buffer)
 	if errno == ESUCCESS {
-		t.printBytes(result)
+		t.printBytes(buffer[:n])
 	} else {
 		t.printErrno(errno)
 	}
 	t.printf("\n")
-	return result, errno
+	return n, errno
 }
 
 func (t *Tracer) PathRemoveDirectory(ctx context.Context, fd FD, path string) Errno {

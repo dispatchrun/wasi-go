@@ -55,22 +55,22 @@ func TestWASIP1(t *testing.T) {
 				return nil, nil, err
 			}
 
-			s.Preopen(stdin, "/dev/stdin", wasi.FDStat{
+			s.Preopen(unix.FD(stdin), "/dev/stdin", wasi.FDStat{
 				FileType:   wasi.CharacterDeviceType,
 				RightsBase: wasi.AllRights,
 			})
 
-			s.Preopen(stdout, "/dev/stdout", wasi.FDStat{
+			s.Preopen(unix.FD(stdout), "/dev/stdout", wasi.FDStat{
 				FileType:   wasi.CharacterDeviceType,
 				RightsBase: wasi.AllRights,
 			})
 
-			s.Preopen(stderr, "/dev/stderr", wasi.FDStat{
+			s.Preopen(unix.FD(stderr), "/dev/stderr", wasi.FDStat{
 				FileType:   wasi.CharacterDeviceType,
 				RightsBase: wasi.AllRights,
 			})
 
-			s.Preopen(root, "/", wasi.FDStat{
+			s.Preopen(unix.FD(root), "/", wasi.FDStat{
 				FileType:         wasi.DirectoryType,
 				RightsBase:       wasi.AllRights,
 				RightsInheriting: wasi.AllRights,
@@ -213,8 +213,8 @@ func testSystem(f func(context.Context, *unix.System)) {
 	if err != nil {
 		panic(err)
 	}
-	p.Preopen(int(r.Fd()), "fd0", wasi.FDStat{RightsBase: wasi.AllRights})
-	p.Preopen(int(w.Fd()), "fd1", wasi.FDStat{RightsBase: wasi.AllRights})
+	p.Preopen(unix.FD(r.Fd()), "fd0", wasi.FDStat{RightsBase: wasi.AllRights})
+	p.Preopen(unix.FD(w.Fd()), "fd1", wasi.FDStat{RightsBase: wasi.AllRights})
 
 	f(ctx, p)
 }

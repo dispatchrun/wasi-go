@@ -70,7 +70,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		rand = b.rand
 	}
 
-	system = &unix.System{
+	unixSystem := &unix.System{
 		Args:               append([]string{name}, b.args...),
 		Environ:            b.env,
 		Realtime:           realtime,
@@ -82,6 +82,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		Rand:               rand,
 		Exit:               exit,
 	}
+	system = unixSystem
 	defer func() {
 		if err != nil {
 			system.Close(context.Background())
@@ -89,13 +90,11 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 	}()
 
 	if b.pathOpenSockets {
-		system = &unix.PathOpenSockets{System: system}
+		system = &unix.PathOpenSockets{System: unixSystem}
 	}
-
 	if b.tracer != nil {
 		system = &wasi.Tracer{Writer: b.tracer, System: system}
 	}
-
 	for _, wrap := range b.wrappers {
 		system = wrap(system)
 	}
@@ -126,7 +125,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 			}
 			stat.Flags |= wasi.NonBlock
 		}
-		system.Preopen(newfd, stdio.path, stat)
+		unixSystem.Preopen(unix.FD(newfd), stdio.path, stat)
 	}
 
 	for _, m := range b.mounts {
@@ -140,7 +139,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 			rightsBase &^= wasi.WriteRights
 			rightsInheriting &^= wasi.WriteRights
 		}
-		system.Preopen(fd, m.dir, wasi.FDStat{
+		unixSystem.Preopen(unix.FD(fd), m.dir, wasi.FDStat{
 			FileType:         wasi.DirectoryType,
 			RightsBase:       rightsBase,
 			RightsInheriting: rightsInheriting,
@@ -152,7 +151,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		if err != nil {
 			return ctx, nil, fmt.Errorf("unable to listen on %q: %w", addr, err)
 		}
-		system.Preopen(fd, addr, wasi.FDStat{
+		unixSystem.Preopen(unix.FD(fd), addr, wasi.FDStat{
 			FileType:         wasi.SocketStreamType,
 			Flags:            wasi.NonBlock,
 			RightsBase:       wasi.SockListenRights,
@@ -164,7 +163,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		if err != nil && err != sockets.EINPROGRESS {
 			return ctx, nil, fmt.Errorf("unable to dial %q: %w", addr, err)
 		}
-		system.Preopen(fd, addr, wasi.FDStat{
+		unixSystem.Preopen(unix.FD(fd), addr, wasi.FDStat{
 			FileType:   wasi.SocketStreamType,
 			Flags:      wasi.NonBlock,
 			RightsBase: wasi.SockConnectionRights,

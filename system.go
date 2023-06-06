@@ -4,10 +4,6 @@ import "context"
 
 // System is the WebAssembly System Interface (WASI).
 type System interface {
-	// Preopen registers an open directory or socket as a "preopen", granting
-	// access to the WASM module.
-	Preopen(hostfd int, path string, fdstat FDStat) FD
-
 	// ArgsSizesGet reads command-line argument data sizes.
 	//
 	// The implementation should return the number of args, and the number of
@@ -219,12 +215,13 @@ type System interface {
 
 	// PathReadLink reads the contents of a symbolic link.
 	//
-	// The implementation must read the path into the specified buffer and then
-	// return it. If the buffer is not large enough to hold the contents of the
-	// symbolic link, the implementation must return ERANGE.
+	// The implementation must read the path into the specified buffer and
+	// returns the number of bytes written. If the buffer is not large enough
+	// to hold the contents of the symbolic link, the implementation must
+	// return ERANGE.
 	//
 	// Note: This is similar to readlinkat in POSIX.
-	PathReadLink(ctx context.Context, fd FD, path string, buffer []byte) ([]byte, Errno)
+	PathReadLink(ctx context.Context, fd FD, path string, buffer []byte) (int, Errno)
 
 	// PathRemoveDirectory removes a directory.
 	//
@@ -324,8 +321,4 @@ type System interface {
 
 	// Close closes the System.
 	Close(ctx context.Context) error
-
-	// Register is a lower-level variant of Preopen that registers a file
-	// descriptor.
-	Register(hostfd int, fdstat FDStat) FD
 }

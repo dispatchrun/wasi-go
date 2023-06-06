@@ -8,6 +8,11 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+const (
+	__UTIME_NOW  = unix.UTIME_NOW
+	__UTIME_OMIT = unix.UTIME_OMIT
+)
+
 func accept(socket, flags int) (int, unix.Sockaddr, error) {
 	return unix.Accept4(socket, flags|unix.O_CLOEXEC)
 }
