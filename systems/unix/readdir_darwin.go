@@ -24,17 +24,18 @@ type dirbuf struct {
 	buffer *[bufferSize]byte
 	offset int
 	length int
+	fd     int
 	cookie wasi.DirCookie
 	basep  uintptr
 }
 
-func (d *dirbuf) readDirEntries(fd int, entries []wasi.DirEntry, cookie wasi.DirCookie, bufferSizeBytes int) (int, error) {
+func (d *dirbuf) readDirEntries(entries []wasi.DirEntry, cookie wasi.DirCookie, bufferSizeBytes int) (int, error) {
 	if d.buffer == nil {
 		d.buffer = new([bufferSize]byte)
 	}
 
 	if cookie < d.cookie {
-		if _, err := syscall.Seek(fd, 0, 0); err != nil {
+		if _, err := syscall.Seek(d.fd, 0, 0); err != nil {
 			return 0, err
 		}
 		d.offset = 0
@@ -53,7 +54,7 @@ func (d *dirbuf) readDirEntries(fd int, entries []wasi.DirEntry, cookie wasi.Dir
 			if numEntries > 0 {
 				return numEntries, nil
 			}
-			n, err := syscall.Getdirentries(fd, d.buffer[:], &d.basep)
+			n, err := syscall.Getdirentries(d.fd, d.buffer[:], &d.basep)
 			if err != nil {
 				return numEntries, err
 			}

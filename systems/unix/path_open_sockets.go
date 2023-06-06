@@ -26,7 +26,7 @@ import (
 // - nodelay=<0|1>:   Set TCP_NODELAY. Default is 1.
 // - reuseaddr=<0|1>: Set SO_REUSEADDR. Default is 1.
 // - backlog=<N>:     Set the listen(2) backlog. Default is 128.
-type PathOpenSockets struct{ wasi.System }
+type PathOpenSockets struct{ *System }
 
 func (p *PathOpenSockets) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags wasi.LookupFlags, path string, openFlags wasi.OpenFlags, rightsBase, rightsInheriting wasi.Rights, fdFlags wasi.FDFlags) (wasi.FD, wasi.Errno) {
 	addr, op, ok := parseURI(path)
@@ -48,7 +48,7 @@ func (p *PathOpenSockets) PathOpen(ctx context.Context, fd wasi.FD, lookupFlags 
 			return -1, errno
 		}
 	}
-	return p.Register(sockfd, wasi.FDStat{
+	return p.Register(FD(sockfd), wasi.FDStat{
 		FileType:         wasi.SocketStreamType,
 		Flags:            fdFlags,
 		RightsBase:       rightsBase,

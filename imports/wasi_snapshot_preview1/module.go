@@ -409,11 +409,11 @@ func (m *Module) PathOpen(ctx context.Context, fd Int32, dirFlags Int32, path St
 }
 
 func (m *Module) PathReadLink(ctx context.Context, fd Int32, path String, buf Bytes, nwritten Pointer[Int32]) Errno {
-	result, errno := m.WASI.PathReadLink(ctx, wasi.FD(fd), string(path), buf)
+	n, errno := m.WASI.PathReadLink(ctx, wasi.FD(fd), string(path), buf)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	nwritten.Store(Int32(len(result)))
+	nwritten.Store(Int32(n))
 	return Errno(wasi.ESUCCESS)
 }
 
