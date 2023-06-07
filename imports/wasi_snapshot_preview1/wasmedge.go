@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"unsafe"
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wazergo"
@@ -25,7 +26,7 @@ var WasmEdgeV1 = Extension{
 	"sock_setsockopt":   wazergo.F5((*Module).WasmEdgeSockSetOpt),
 	"sock_getlocaladdr": wazergo.F4((*Module).WasmEdgeV1SockLocalAddr),
 	"sock_getpeeraddr":  wazergo.F4((*Module).WasmEdgeV1SockPeerAddr),
-	"sock_getaddrinfo":  wazergo.F8((*Module).WasmEdgeSockAddrInfo),
+	"sock_getaddrinfo":  wazergo.F6((*Module).WasmEdgeSockAddrInfo),
 }
 
 // WasmEdgeV2 is V2 of the WasmEdge sockets extension to WASI preview 1.
@@ -33,9 +34,6 @@ var WasmEdgeV1 = Extension{
 // Version 2 has a sock_accept function that's compatible with the WASI
 // preview 1 specification. It widens addresses so that additional
 // address families could be supported in future (e.g. AF_UNIX).
-//
-// TODO: support SO_LINGER, SO_RCVTIMEO, SO_SNDTIMEO, SO_BINDTODEVICE socket options
-// TODO: implement sock_getaddrinfo
 var WasmEdgeV2 = Extension{
 	"sock_open":         wazergo.F3((*Module).WasmEdgeSockOpen),
 	"sock_bind":         wazergo.F3((*Module).WasmEdgeSockBind),
@@ -47,7 +45,7 @@ var WasmEdgeV2 = Extension{
 	"sock_setsockopt":   wazergo.F5((*Module).WasmEdgeSockSetOpt),
 	"sock_getlocaladdr": wazergo.F3((*Module).WasmEdgeV2SockLocalAddr),
 	"sock_getpeeraddr":  wazergo.F3((*Module).WasmEdgeV2SockPeerAddr),
-	"sock_getaddrinfo":  wazergo.F8((*Module).WasmEdgeSockAddrInfo),
+	"sock_getaddrinfo":  wazergo.F6((*Module).WasmEdgeSockAddrInfo),
 }
 
 func (m *Module) WasmEdgeV1SockAccept(ctx context.Context, fd Int32, connfd Pointer[Int32]) Errno {
@@ -270,8 +268,36 @@ func (m *Module) WasmEdgeV2SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, nodePtr Pointer[Uint8], nodeLen Uint32, servicePtr Pointer[Uint8], serviceLen Uint32, hintsPtr Pointer[Uint8], resPtr Pointer[Uint8], maxResLength Uint32, resLengthPtr Pointer[Uint8]) Errno {
-	return Errno(wasi.ENOSYS)
+func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, node String, service String, hintsPtr Pointer[wasmEdgeAddressInfo], resPtr Pointer[wasmEdgeAddressInfo], maxResLength Uint32, resLengthPtr Pointer[Uint32]) Errno {
+	s, ok := m.WASI.(wasi.SocketsExtension)
+	if !ok {
+		return Errno(wasi.ENOSYS)
+	}
+	// WasmEdge appends null bytes. Remove them.
+	if len(node) > 0 && node[len(node)-1] == 0 {
+		node = node[:len(node)-1]
+	}
+	if len(service) > 0 && service[len(service)-1] == 0 {
+		service = service[:len(service)-1]
+	}
+	var hints *wasi.AddressInfo
+	if hintsPtr.Offset() != 0 {
+		rawhints := hintsPtr.Load()
+		hints = &m.addrhint
+		hints.Flags = wasi.AddressInfoFlags(rawhints.Flags)
+		hints.Family = wasi.ProtocolFamily(rawhints.Family)
+		hints.SocketType = wasi.SocketType(rawhints.SocketType)
+		hints.Protocol = wasi.Protocol(rawhints.Protocol)
+	}
+	n, errno := s.SockAddressInfo(ctx, string(node), string(service), hints, m.addrinfo[:0])
+	if errno != wasi.ESUCCESS {
+		return Errno(errno)
+	}
+	// TODO: write sock_getaddrinfo results
+	results := m.addrinfo[:n]
+	_ = results
+	panic("not implemented")
+	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) wasmEdgeGetSocketAddress(b wasmEdgeAddress, port int) (sa wasi.SocketAddress, ok bool) {
@@ -358,4 +384,32 @@ func (arg wasmEdgeAddress) StoreObject(memory api.Memory, object []byte) {
 
 func (arg wasmEdgeAddress) FormatObject(w io.Writer, memory api.Memory, object []byte) {
 	Bytes(arg.LoadObject(memory, object)).Format(w)
+}
+
+type wasmEdgeAddressInfo struct {
+	Flags               uint16
+	Family              uint8
+	SocketType          uint8
+	Protocol            uint32
+	AddressLength       uint32
+	Address             uint32
+	CanonicalName       uint32
+	CanonicalNameLength uint32
+	Next                uint32
+}
+
+func (a wasmEdgeAddressInfo) ObjectSize() int {
+	return int(unsafe.Sizeof(wasmEdgeAddressInfo{}))
+}
+
+func (a wasmEdgeAddressInfo) LoadObject(_ api.Memory, b []byte) wasmEdgeAddressInfo {
+	return UnsafeLoadObject[wasmEdgeAddressInfo](b)
+}
+
+func (a wasmEdgeAddressInfo) StoreObject(_ api.Memory, b []byte) {
+	UnsafeStoreObject(b, a)
+}
+
+func (a wasmEdgeAddressInfo) FormatObject(w io.Writer, _ api.Memory, b []byte) {
+	Format(w, a.LoadObject(nil, b))
 }

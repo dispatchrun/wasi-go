@@ -135,6 +135,8 @@ type Module struct {
 	inet4addr wasi.Inet4Address
 	inet6addr wasi.Inet6Address
 	unixaddr  wasi.UnixAddress
+	addrhint  wasi.AddressInfo
+	addrinfo  []wasi.AddressInfo
 }
 
 func (m *Module) ArgsGet(ctx context.Context, argv Pointer[Uint32], buf Pointer[Uint8]) Errno {

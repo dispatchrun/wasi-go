@@ -82,6 +82,15 @@ type SocketsExtension interface {
 	//
 	// Note: This is similar to getpeername in POSIX.
 	SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
+
+	// SockAddressInfo get a list of IP addresses and port numbers for a
+	// host name and service.
+	//
+	// The function writes to the provided results slice, and returns a count
+	// indicating how many results were written.
+	//
+	// Note: This is similar to getaddrinfo in POSIX.
+	SockAddressInfo(ctx context.Context, node, service string, hint *AddressInfo, results []AddressInfo) (int, Errno)
 }
 
 // Port is a port.
@@ -315,4 +324,59 @@ func (so SocketOption) String() string {
 	default:
 		return fmt.Sprintf("SocketOption(%d)", so)
 	}
+}
+
+// AddressInfo is information about an address.
+type AddressInfo struct {
+	Flags         AddressInfoFlags
+	Family        ProtocolFamily
+	SocketType    SocketType
+	Protocol      Protocol
+	Address       SocketAddress
+	CanonicalName string
+}
+
+// AddressInfoFlags are AddressInfo flags.
+type AddressInfoFlags uint16
+
+const (
+	Passive AddressInfoFlags = 1 << iota
+	CanonicalName
+	NumericHost
+	NumericService
+	V4Mapped
+	QueryAll
+	AddressConfigured
+)
+
+// Has is true if the flag is set. If multiple flags are specified, Has returns
+// true if all flags are set.
+func (flags AddressInfoFlags) Has(f AddressInfoFlags) bool {
+	return (flags & f) == f
+}
+
+var addressInfoFlagsStrings = [...]string{
+	"Passive",
+	"CanonicalName",
+	"NumericHost",
+	"NumericService",
+	"V4Mapped",
+	"QueryAll",
+	"AddressConfigured",
+}
+
+func (flags AddressInfoFlags) String() (s string) {
+	for i, name := range addressInfoFlagsStrings {
+		if !flags.Has(1 << i) {
+			continue
+		}
+		if len(s) > 0 {
+			s += "|"
+		}
+		s += name
+	}
+	if len(s) == 0 {
+		return fmt.Sprintf("AddressInfoFlags(%d)", flags)
+	}
+	return
 }

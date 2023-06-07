@@ -754,6 +754,35 @@ func (t *Tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, E
 	return addr, errno
 }
 
+func (t *Tracer) SockAddressInfo(ctx context.Context, node, service string, hint *AddressInfo, results []AddressInfo) (int, Errno) {
+	s, ok := t.System.(SocketsExtension)
+	if !ok {
+		return 0, ENOSYS
+	}
+	t.printf("SockAddressInfo(%s, %s, ", node, service)
+	if hint != nil {
+		t.printAddressInfo(hint)
+	} else {
+		t.printf("hint=nil")
+	}
+	t.printf(") => ")
+	n, errno := s.SockAddressInfo(ctx, node, service, hint, results)
+	if errno == ESUCCESS {
+		t.printf("[")
+		for i := range results[:n] {
+			if i > 0 {
+				t.printf(", ")
+			}
+			t.printAddressInfo(&results[i])
+		}
+		t.printf("]")
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return n, errno
+}
+
 func (t *Tracer) Close(ctx context.Context) error {
 	t.printf("Close() => ")
 	err := t.System.Close(ctx)
@@ -862,6 +891,21 @@ func (t *Tracer) printDirEntries(dirEntries []DirEntry, bufferSizeBytes int) {
 		if bufferSizeBytes < 0 {
 			t.printf(",Partial")
 		}
+	}
+	t.printf("}")
+}
+
+func (t *Tracer) printAddressInfo(a *AddressInfo) {
+	t.printf("{")
+	if a.Flags != 0 {
+		t.printf("Flags:%s,", a.Flags)
+	}
+	t.printf("Family:%s,SocketType:%s,Protocol:%s", a.Family, a.SocketType, a.Protocol)
+	if a.Address != nil {
+		t.printf(",Address:%s", a.Address)
+	}
+	if a.CanonicalName != "" {
+		t.printf(",CanonicalName:%q", a.CanonicalName)
 	}
 	t.printf("}")
 }

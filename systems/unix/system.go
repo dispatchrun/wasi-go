@@ -700,6 +700,10 @@ func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.Socket
 	return addr, wasi.ESUCCESS
 }
 
+func (s *System) SockAddressInfo(ctx context.Context, node, service string, hint *wasi.AddressInfo, results []wasi.AddressInfo) (int, wasi.Errno) {
+	panic("not implemented")
+}
+
 func (s *System) Close(ctx context.Context) error {
 	err := s.FileTable.Close(ctx)
 
