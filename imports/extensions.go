@@ -21,6 +21,8 @@ func DetectSocketsExtension(module wazero.CompiledModule) *wasi_snapshot_preview
 	functions := module.ImportedFunctions()
 	hasWasmEdgeSockets := false
 	sockAcceptParamCount := 0
+	sockLocalAddrParamCount := 0
+	sockPeerAddrParamCount := 0
 	for _, f := range functions {
 		moduleName, name, ok := f.Import()
 		if !ok || moduleName != wasi_snapshot_preview1.HostModuleName {
@@ -31,17 +33,24 @@ func DetectSocketsExtension(module wazero.CompiledModule) *wasi_snapshot_preview
 			"sock_send_to", "sock_recv_from", "sock_getsockopt", "sock_setsockopt",
 			"sock_getlocaladdr", "sock_getpeeraddr", "sock_getaddrinfo":
 			hasWasmEdgeSockets = true
+		}
+		switch name {
 		case "sock_accept":
-			hasWasmEdgeSockets = true
 			sockAcceptParamCount = len(f.ParamTypes())
+		case "sock_getlocaladdr":
+			sockLocalAddrParamCount = len(f.ParamTypes())
+		case "sock_getpeeraddr":
+			sockPeerAddrParamCount = len(f.ParamTypes())
 		}
 	}
-	switch {
-	case hasWasmEdgeSockets && sockAcceptParamCount == 2:
-		return &wasi_snapshot_preview1.WasmEdgeV1
-	case hasWasmEdgeSockets:
-		return &wasi_snapshot_preview1.WasmEdgeV2
-	default:
-		return nil
+	if hasWasmEdgeSockets || sockAcceptParamCount == 2 {
+		if sockAcceptParamCount == 2 ||
+			sockLocalAddrParamCount == 4 ||
+			sockPeerAddrParamCount == 4 {
+			return &wasi_snapshot_preview1.WasmEdgeV1
+		} else {
+			return &wasi_snapshot_preview1.WasmEdgeV2
+		}
 	}
+	return nil
 }
