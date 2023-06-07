@@ -289,7 +289,10 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, node String, service 
 		hints.SocketType = wasi.SocketType(rawhints.SocketType)
 		hints.Protocol = wasi.Protocol(rawhints.Protocol)
 	}
-	n, errno := s.SockAddressInfo(ctx, string(node), string(service), hints, m.addrinfo[:0])
+	if int(maxResLength) > cap(m.addrinfo) {
+		m.addrinfo = make([]wasi.AddressInfo, int(maxResLength))
+	}
+	n, errno := s.SockAddressInfo(ctx, string(node), string(service), hints, m.addrinfo[:maxResLength])
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}

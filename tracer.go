@@ -765,7 +765,7 @@ func (t *Tracer) SockAddressInfo(ctx context.Context, node, service string, hint
 	} else {
 		t.printf("hint=nil")
 	}
-	t.printf(") => ")
+	t.printf(", [%d]AddressInfo) => ", len(results))
 	n, errno := s.SockAddressInfo(ctx, node, service, hint, results)
 	if errno == ESUCCESS {
 		t.printf("[")
