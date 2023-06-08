@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"syscall"
 
 	"github.com/stealthrocket/wasi-go"
@@ -29,11 +30,9 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		name = b.name
 	}
 
-	stdin, stdout, stderr := b.stdin, b.stdout, b.stderr
-	if !b.customStdio {
-		stdin = syscall.Stdin
-		stdout = syscall.Stdout
-		stderr = syscall.Stderr
+	stdin, stdout, stderr := -1, -1, -1
+	if b.customStdio {
+		stdin, stdout, stderr = b.stdin, b.stdout, b.stderr
 	}
 
 	realtime := defaultRealtime
@@ -101,12 +100,22 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 
 	for _, stdio := range []struct {
 		fd   int
+		open int
 		path string
 	}{
-		{stdin, "/dev/stdin"},
-		{stdout, "/dev/stdout"},
-		{stderr, "/dev/stderr"},
+		{stdin, syscall.O_RDONLY, "/dev/stdin"},
+		{stdout, syscall.O_WRONLY, "/dev/stdout"},
+		{stderr, syscall.O_WRONLY, "/dev/stderr"},
 	} {
+		var err error
+		if stdio.fd < 0 {
+			stdio.fd, err = syscall.Open(stdio.path, stdio.open, 0)
+		} else {
+			stdio.fd, err = dup(stdio.fd)
+		}
+		if err != nil {
+			return ctx, nil, fmt.Errorf("unable to create %s: %w", strings.TrimPrefix("/dev/", stdio.path), err)
+		}
 		rights := wasi.FileRights
 		if descriptor.IsATTY(stdio.fd) {
 			rights = wasi.TTYRights
@@ -115,17 +124,13 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 			FileType:   wasi.CharacterDeviceType,
 			RightsBase: rights,
 		}
-		newfd, err := dup(stdio.fd)
-		if err != nil {
-			return ctx, nil, fmt.Errorf("unable to duplicate %s fd %d: %w", stdio.path, stdio.fd, err)
-		}
 		if b.nonBlockingStdio {
-			if err := syscall.SetNonblock(newfd, true); err != nil {
+			if err := syscall.SetNonblock(stdio.fd, true); err != nil {
 				return ctx, nil, fmt.Errorf("unable to put %s in non-blocking mode: %w", stdio.path, err)
 			}
 			stat.Flags |= wasi.NonBlock
 		}
-		unixSystem.Preopen(unix.FD(newfd), stdio.path, stat)
+		unixSystem.Preopen(unix.FD(stdio.fd), stdio.path, stat)
 	}
 
 	for _, m := range b.mounts {
@@ -183,7 +188,6 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 	)
 
 	ctx = wazergo.WithModuleInstance(ctx, instance)
-
 	return ctx, system, nil
 }
 

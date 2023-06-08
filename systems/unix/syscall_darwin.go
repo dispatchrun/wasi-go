@@ -68,6 +68,8 @@ func pipeCloseOnExec(fds []int) error {
 func closePipe(fds []int) {
 	unix.Close(fds[1])
 	unix.Close(fds[0])
+	fds[0] = -1
+	fds[1] = -1
 }
 
 const (

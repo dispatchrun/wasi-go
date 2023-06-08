@@ -29,7 +29,7 @@ func Socket(rawAddr string) (u *url.URL, sa syscall.Sockaddr, fd int, err error)
 	}
 	defer func() {
 		if err != nil {
-			syscall.Close(fd)
+			Close(fd)
 			fd = -1
 		}
 	}()

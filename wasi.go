@@ -218,6 +218,9 @@ func (t *FileTable[T]) FDClose(ctx context.Context, fd FD) Errno {
 	if errno != ESUCCESS {
 		return errno
 	}
+	// We capture the file before removing the table entry because f is a
+	// pointer into the table and gets erased when the descriptor is deleted.
+	file := f.file
 	t.files.Delete(fd)
 	// Note: closing pre-opens is allowed.
 	// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/close_preopen.rs
@@ -226,7 +229,7 @@ func (t *FileTable[T]) FDClose(ctx context.Context, fd FD) Errno {
 		delete(t.dirs, fd)
 		dir.FDCloseDir(ctx)
 	}
-	return f.file.FDClose(ctx)
+	return file.FDClose(ctx)
 }
 
 func (t *FileTable[T]) FDDataSync(ctx context.Context, fd FD) Errno {

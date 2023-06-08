@@ -791,7 +791,7 @@ func (t *Tracer) printSubscription(s Subscription) {
 func (t *Tracer) printEvent(e Event) {
 	t.printf("{EventType:%s,UserData:%#x", e.EventType, e.UserData)
 	if e.Errno != 0 {
-		t.printf(",Errno:%s", e.Errno.Name())
+		t.printf(",Errno:%s}", e.Errno.Name())
 	}
 	if e.EventType != ClockEvent {
 		fdrw := e.FDReadWrite
