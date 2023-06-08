@@ -116,9 +116,9 @@ func (b *Builder) WithDials(dials ...string) *Builder {
 
 // WithStdio sets stdio file descriptors.
 //
-// Note that the file descriptors will be duplicated before the module takes
-// ownership. The caller is responsible for managing the specified
-// descriptors.
+// Note that the builder takes ownership of the file descriptors, it might
+// change their state such as making them non-blocking and will close them
+// when they are not needed anymore.
 func (b *Builder) WithStdio(stdin, stdout, stderr int) *Builder {
 	b.customStdio = true
 	b.stdin = stdin

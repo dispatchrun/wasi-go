@@ -13,17 +13,17 @@ func Dial(rawAddr string) (int, error) {
 	opt := addr.Query()
 	noDelay := intopt(opt, "nodelay", 1)
 	if err = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_NODELAY, noDelay); err != nil {
-		syscall.Close(fd)
+		Close(fd)
 		return -1, err
 	}
 	nonBlock := boolopt(opt, "nonblock", true)
 	if err := syscall.SetNonblock(fd, nonBlock); err != nil {
-		syscall.Close(fd)
+		Close(fd)
 		return -1, err
 	}
 	err = syscall.Connect(fd, sa)
 	if err != nil && err != EINPROGRESS {
-		syscall.Close(fd)
+		Close(fd)
 		return -1, err
 	}
 	return fd, err
