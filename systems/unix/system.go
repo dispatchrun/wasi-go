@@ -3,6 +3,8 @@ package unix
 import (
 	"context"
 	"io"
+	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -428,9 +430,9 @@ func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlag
 func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketType wasi.SocketType, protocol wasi.Protocol, rightsBase, rightsInheriting wasi.Rights) (wasi.FD, wasi.Errno) {
 	var sysDomain int
 	switch pf {
-	case wasi.Inet:
+	case wasi.InetFamily:
 		sysDomain = unix.AF_INET
-	case wasi.Inet6:
+	case wasi.Inet6Family:
 		sysDomain = unix.AF_INET6
 	default:
 		return -1, wasi.EINVAL
@@ -700,8 +702,123 @@ func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.Socket
 	return addr, wasi.ESUCCESS
 }
 
-func (s *System) SockAddressInfo(ctx context.Context, node, service string, hint *wasi.AddressInfo, results []wasi.AddressInfo) (int, wasi.Errno) {
-	panic("not implemented")
+func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint wasi.AddressInfo, results []wasi.AddressInfo) (int, wasi.Errno) {
+	if cap(results) == 0 {
+		return 0, wasi.EINVAL
+	}
+	// TODO: support AI_ADDRCONFIG, AI_CANONNAME, AI_V4MAPPED, AI_V4MAPPED_CFG, AI_ALL
+
+	var network string
+	f, p, t := hint.Family, hint.Protocol, hint.SocketType
+	switch {
+	case t == wasi.StreamSocket && p != wasi.UDPProtocol:
+		switch f {
+		case wasi.UnspecifiedFamily:
+			network = "tcp"
+		case wasi.InetFamily:
+			network = "tcp4"
+		case wasi.Inet6Family:
+			network = "tcp6"
+		default:
+			return 0, wasi.ENOTSUP // EAI_FAMILY
+		}
+	case t == wasi.DatagramSocket && p != wasi.TCPProtocol:
+		switch f {
+		case wasi.UnspecifiedFamily:
+			network = "udp"
+		case wasi.InetFamily:
+			network = "udp4"
+		case wasi.Inet6Family:
+			network = "udp6"
+		default:
+			return 0, wasi.ENOTSUP // EAI_FAMILY
+		}
+	case t == wasi.AnySocket:
+		switch f {
+		case wasi.UnspecifiedFamily:
+			network = "ip"
+		case wasi.InetFamily:
+			network = "ip4"
+		case wasi.Inet6Family:
+			network = "ip6"
+		default:
+			return 0, wasi.ENOTSUP // EAI_FAMILY
+		}
+	default:
+		return 0, wasi.ENOTSUP // EAI_SOCKTYPE / EAI_PROTOCOL
+	}
+
+	var port int
+	var err error
+	if hint.Flags.Has(wasi.NumericService) {
+		port, err = strconv.Atoi(service)
+	} else {
+		port, err = net.LookupPort(network, service)
+	}
+	if err != nil || port < 0 || port > 65535 {
+		return 0, wasi.EINVAL // EAI_NONAME / EAI_SERVICE
+	}
+
+	var ip net.IP
+	if hint.Flags.Has(wasi.NumericHost) {
+		ip = net.ParseIP(name)
+		if ip == nil {
+			return 0, wasi.EINVAL
+		}
+	} else if name == "" {
+		if !hint.Flags.Has(wasi.Passive) {
+			return 0, wasi.EINVAL
+		}
+		if hint.Family == wasi.Inet6Family {
+			ip = net.IPv6zero
+		} else {
+			ip = net.IPv4zero
+		}
+	}
+	if ip != nil {
+		results = results[:1]
+		results[0] = wasi.AddressInfo{}
+		if ipv4 := ip.To4(); ipv4 != nil {
+			s.inet4Addr.Port = port
+			copy(s.inet4Addr.Addr[:], ipv4)
+			results[0].Address = &s.inet4Addr
+		} else {
+			s.inet6Addr.Port = port
+			copy(s.inet6Addr.Addr[:], ip)
+			results[0].Address = &s.inet6Addr
+		}
+		return 1, wasi.ESUCCESS
+	}
+
+	ips, err := net.LookupIP(name)
+	if err != nil {
+		return 0, wasi.ECANCELED // TODO: better errors on name resolution failure
+	}
+
+	if len(ips) > cap(results) {
+		ips = ips[:cap(results)]
+	}
+	results = results[:0]
+	for _, ip := range ips {
+		var addr wasi.AddressInfo
+		if ipv4 := ip.To4(); ipv4 != nil {
+			if hint.Family == wasi.Inet6Family {
+				continue
+			}
+			inet4Addr := wasi.Inet4Address{Port: port}
+			copy(inet4Addr.Addr[:], ip)
+			addr.Address = &inet4Addr
+		} else {
+			if hint.Family == wasi.InetFamily {
+				continue
+			}
+			inet6Addr := wasi.Inet6Address{Port: port}
+			copy(inet6Addr.Addr[:], ip)
+			addr.Address = &inet6Addr
+		}
+		results = append(results, addr)
+	}
+	return len(results), wasi.ESUCCESS
 }
 
 func (s *System) Close(ctx context.Context) error {

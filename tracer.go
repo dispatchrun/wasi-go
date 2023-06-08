@@ -754,26 +754,22 @@ func (t *Tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, E
 	return addr, errno
 }
 
-func (t *Tracer) SockAddressInfo(ctx context.Context, node, service string, hint *AddressInfo, results []AddressInfo) (int, Errno) {
+func (t *Tracer) SockAddressInfo(ctx context.Context, name, service string, hint AddressInfo, results []AddressInfo) (int, Errno) {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
 		return 0, ENOSYS
 	}
-	t.printf("SockAddressInfo(%s, %s, ", node, service)
-	if hint != nil {
-		t.printAddressInfo(hint)
-	} else {
-		t.printf("hint=nil")
-	}
+	t.printf("SockAddressInfo(%s, %s, ", name, service)
+	t.printAddressInfo(hint)
 	t.printf(", [%d]AddressInfo) => ", len(results))
-	n, errno := s.SockAddressInfo(ctx, node, service, hint, results)
+	n, errno := s.SockAddressInfo(ctx, name, service, hint, results)
 	if errno == ESUCCESS {
 		t.printf("[")
 		for i := range results[:n] {
 			if i > 0 {
 				t.printf(", ")
 			}
-			t.printAddressInfo(&results[i])
+			t.printAddressInfo(results[i])
 		}
 		t.printf("]")
 	} else {
@@ -895,7 +891,7 @@ func (t *Tracer) printDirEntries(dirEntries []DirEntry, bufferSizeBytes int) {
 	t.printf("}")
 }
 
-func (t *Tracer) printAddressInfo(a *AddressInfo) {
+func (t *Tracer) printAddressInfo(a AddressInfo) {
 	t.printf("{")
 	if a.Flags != 0 {
 		t.printf("Flags:%s,", a.Flags)

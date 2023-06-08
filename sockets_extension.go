@@ -86,11 +86,15 @@ type SocketsExtension interface {
 	// SockAddressInfo get a list of IP addresses and port numbers for a
 	// host name and service.
 	//
-	// The function writes to the provided results slice, and returns a count
-	// indicating how many results were written.
+	// The function populates the AddressInfo.Address fields of the provided
+	// results slice, and returns a count indicating how many results were
+	// written.
+	//
+	// The returned addresses are only valid until the next call on this
+	// interface. Assume that any method may invalidate the addresses.
 	//
 	// Note: This is similar to getaddrinfo in POSIX.
-	SockAddressInfo(ctx context.Context, node, service string, hint *AddressInfo, results []AddressInfo) (int, Errno)
+	SockAddressInfo(ctx context.Context, name, service string, hint AddressInfo, results []AddressInfo) (int, Errno)
 }
 
 // Port is a port.
@@ -196,17 +200,19 @@ var (
 type ProtocolFamily int32
 
 const (
-	_ ProtocolFamily = iota
-	Inet
-	Inet6
+	UnspecifiedFamily ProtocolFamily = iota
+	InetFamily
+	Inet6Family
 )
 
 func (pf ProtocolFamily) String() string {
 	switch pf {
-	case Inet:
-		return "Inet"
-	case Inet6:
-		return "Inet6"
+	case UnspecifiedFamily:
+		return "UnspecifiedFamily"
+	case InetFamily:
+		return "InetFamily"
+	case Inet6Family:
+		return "Inet6Family"
 	default:
 		return fmt.Sprintf("ProtocolFamily(%d)", pf)
 	}
@@ -238,13 +244,15 @@ func (p Protocol) String() string {
 type SocketType int32
 
 const (
-	_ SocketType = iota
+	AnySocket SocketType = iota
 	DatagramSocket
 	StreamSocket
 )
 
 func (st SocketType) String() string {
 	switch st {
+	case AnySocket:
+		return "AnySocket"
 	case DatagramSocket:
 		return "DatagramSocket"
 	case StreamSocket:
@@ -353,6 +361,11 @@ const (
 // true if all flags are set.
 func (flags AddressInfoFlags) Has(f AddressInfoFlags) bool {
 	return (flags & f) == f
+}
+
+// HasAny is true if any of the specified flags are set.
+func (flags AddressInfoFlags) HasAny(f AddressInfoFlags) bool {
+	return (flags & f) != 0
 }
 
 var addressInfoFlagsStrings = [...]string{

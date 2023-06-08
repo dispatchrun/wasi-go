@@ -268,47 +268,118 @@ func (m *Module) WasmEdgeV2SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, node String, service String, hintsPtr Pointer[wasmEdgeAddressInfo], resPtr Pointer[wasmEdgeAddressInfo], maxResLength Uint32, resLengthPtr Pointer[Uint32]) Errno {
+func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service String, hintsPtr Pointer[wasmEdgeAddressInfo], resPtrPtr Pointer[Pointer[wasmEdgeAddressInfo]], maxResLength Uint32, resLengthPtr Pointer[Uint32]) Errno {
 	s, ok := m.WASI.(wasi.SocketsExtension)
 	if !ok {
 		return Errno(wasi.ENOSYS)
 	}
+	if len(name) == 0 && len(service) == 0 || maxResLength == 1 {
+		return Errno(wasi.EINVAL)
+	}
 	// WasmEdge appends null bytes. Remove them.
-	if len(node) > 0 && node[len(node)-1] == 0 {
-		node = node[:len(node)-1]
+	if len(name) > 0 && name[len(name)-1] == 0 {
+		name = name[:len(name)-1]
 	}
 	if len(service) > 0 && service[len(service)-1] == 0 {
 		service = service[:len(service)-1]
 	}
-	var hints *wasi.AddressInfo
-	if hintsPtr.Offset() != 0 {
-		rawhints := hintsPtr.Load()
-		hints = &m.addrhint
-		hints.Flags = wasi.AddressInfoFlags(rawhints.Flags)
-		hints.Family = wasi.ProtocolFamily(rawhints.Family)
-		hints.SocketType = wasi.SocketType(rawhints.SocketType)
-		hints.Protocol = wasi.Protocol(rawhints.Protocol)
-	}
+	var hints wasi.AddressInfo
+	rawhints := hintsPtr.Load()
+	hints.Flags = wasi.AddressInfoFlags(rawhints.Flags)
+	hints.Family = wasi.ProtocolFamily(rawhints.Family)
+	hints.SocketType = wasi.SocketType(rawhints.SocketType)
+	hints.Protocol = wasi.Protocol(rawhints.Protocol)
+
 	if int(maxResLength) > cap(m.addrinfo) {
 		m.addrinfo = make([]wasi.AddressInfo, int(maxResLength))
 	}
-	n, errno := s.SockAddressInfo(ctx, string(node), string(service), hints, m.addrinfo[:maxResLength])
+	n, errno := s.SockAddressInfo(ctx, string(name), string(service), hints, m.addrinfo[:maxResLength])
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
+	} else if n == 0 {
+		resLengthPtr.Store(0)
+		return Errno(wasi.ESUCCESS)
 	}
-	// TODO: write sock_getaddrinfo results
+
+	// This is a very poorly designed interface. The results pointer points to
+	// an addrinfo style struct, and you're supposed to treat it as a linked
+	// list? The socket address isn't a sockaddr style struct, but rather a
+	// pointer to some other struct which has a length and some more indirection
+	// (github.com/second-state/wasmedge_wasi_socket/blob/7e49c11/src/socket.rs#L78).
+	// We have no idea here how much space the guest has allocated for socket
+	// addresses and canonical names.
+	// There's an addrlen (github.com/second-state/wasmedge_wasi_socket/blob/7e49c11/src/socket.rs#L112)
+	// field, but it isn't set by the WasmEdge sockets lib. It's not clear
+	// whether that's the length of the object that addr points to, or whether
+	// object always points to a WasiSockaddr. If it's the latter, WasiSockaddr
+	// has its own sa_data_len field? Why is sa_data_len=14 but the sockets lib
+	// allocates 26 bytes of space (github.com/second-state/wasmedge_wasi_socket/blob/7e49c11/src/socket.rs#L172)?
+	// Same thing with the canonical name. The sockets lib allocates 30 bytes of space,
+	// but then doesn't set ai_canonnamelen... Argh.
+	mem := resPtrPtr.Memory()
+	resPtr := resPtrPtr.Load()
 	results := m.addrinfo[:n]
-	_ = results
-	panic("not implemented")
+	count := 0
+	for {
+		res := resPtr.Load()
+		if res.Address == 0 {
+			return Errno(wasi.EFAULT)
+		}
+		addrDataFamily, ok := mem.Read(res.Address, 1)
+		if !ok {
+			return Errno(wasi.EFAULT)
+		}
+		addrDataLen, ok := mem.ReadUint32Le(res.Address + 4)
+		if !ok {
+			return Errno(wasi.EFAULT)
+		}
+		// WasmEdge lies.
+		if addrDataLen == 14 {
+			addrDataLen = 26
+		}
+		addrDataPtr, ok := mem.ReadUint32Le(res.Address + 8)
+		if !ok {
+			return Errno(wasi.EFAULT)
+		}
+		addrData, ok := mem.Read(addrDataPtr, addrDataLen)
+		if !ok {
+			return Errno(wasi.EFAULT)
+		}
+		switch addr := results[0].Address.(type) {
+		case *wasi.Inet4Address:
+			if len(addrData) < 6 {
+				return Errno(wasi.EFAULT)
+			}
+			binary.BigEndian.PutUint16(addrData, uint16(addr.Port))
+			copy(addrData[2:], addr.Addr[:])
+			addrDataFamily[0] = uint8(wasi.InetFamily)
+		case *wasi.Inet6Address:
+			if len(addrData) < 18 {
+				return Errno(wasi.EFAULT)
+			}
+			binary.BigEndian.PutUint16(addrData, uint16(addr.Port))
+			copy(addrData[2:], addr.Addr[:])
+			addrDataFamily[0] = uint8(wasi.Inet6Family)
+		}
+		res.CanonicalNameLength = 0 // Not yet supported
+		resPtr.Store(res)
+		count++
+		results = results[1:]
+		if res.Next == 0 || len(results) == 0 {
+			break
+		}
+		resPtr = Ptr[wasmEdgeAddressInfo](resPtr.Memory(), res.Next)
+	}
+	resLengthPtr.Store(Uint32(count))
 	return Errno(wasi.ESUCCESS)
 }
 
 func (m *Module) wasmEdgeGetSocketAddress(b wasmEdgeAddress, port int) (sa wasi.SocketAddress, ok bool) {
 	if len(b) == 128 {
 		switch wasi.ProtocolFamily(binary.LittleEndian.Uint16(b)) {
-		case wasi.Inet:
+		case wasi.InetFamily:
 			b = b[2:6]
-		case wasi.Inet6:
+		case wasi.Inet6Family:
 			b = b[2:18]
 		default:
 			return // not implemented
@@ -335,13 +406,13 @@ func (m *Module) wasmEdgeV1PutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAdd
 	}
 	switch t := sa.(type) {
 	case *wasi.Inet4Address:
-		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet))
+		binary.LittleEndian.PutUint16(b, uint16(wasi.InetFamily))
 		copy(b, t.Addr[:])
 		addressType = 4
 		port = t.Port
 		ok = true
 	case *wasi.Inet6Address:
-		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet6))
+		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet6Family))
 		copy(b, t.Addr[:])
 		addressType = 6
 		port = t.Port
@@ -356,12 +427,12 @@ func (m *Module) wasmEdgeV2PutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAdd
 	}
 	switch t := sa.(type) {
 	case *wasi.Inet4Address:
-		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet))
+		binary.LittleEndian.PutUint16(b, uint16(wasi.InetFamily))
 		copy(b[2:], t.Addr[:])
 		port = t.Port
 		ok = true
 	case *wasi.Inet6Address:
-		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet6))
+		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet6Family))
 		copy(b[2:], t.Addr[:])
 		port = t.Port
 		ok = true

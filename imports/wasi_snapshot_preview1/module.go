@@ -135,7 +135,6 @@ type Module struct {
 	inet4addr wasi.Inet4Address
 	inet6addr wasi.Inet6Address
 	unixaddr  wasi.UnixAddress
-	addrhint  wasi.AddressInfo
 	addrinfo  []wasi.AddressInfo
 }
 
