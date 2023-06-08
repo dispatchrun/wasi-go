@@ -2,6 +2,7 @@ package unix_test
 
 import (
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -199,6 +200,63 @@ func TestSystemPollMissingMonotonicClock(t *testing.T) {
 			Errno:     wasi.ENOSYS,
 		}) {
 			t.Errorf("poll_oneoff: wrong event (0): %+v", events[0])
+		}
+	})
+}
+
+func TestSockAddressInfo(t *testing.T) {
+	testSystem(func(ctx context.Context, s *unix.System) {
+		results := make([]wasi.AddressInfo, 64)
+		tcp4Hint := wasi.AddressInfo{Family: wasi.InetFamily, SocketType: wasi.StreamSocket, Protocol: wasi.TCPProtocol}
+
+		// Lookup :http. It's probably 80, but let's be sure.
+		httpPort, err := net.LookupPort("tcp", "http")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Test name resolution (example.com => $IP) and port resolution (http => 80).
+		n, errno := s.SockAddressInfo(ctx, "example.com", "http", tcp4Hint, results)
+		if n <= 0 || errno != wasi.ESUCCESS {
+			t.Fatalf("SockAddressInfo => %d, %s", n, errno)
+		}
+		var port int
+		switch a := results[0].Address.(type) {
+		case *wasi.Inet4Address:
+			port = a.Port
+		case *wasi.Inet6Address:
+			port = a.Port
+		default:
+			t.Fatalf("unexpected address: %#v", a)
+		}
+		if port != httpPort {
+			t.Fatalf("unexpected port: got %d, expect %d", port, httpPort)
+		}
+
+		// Test AI_NUMERICHOST and AI_NUMERICSERV.
+		numericHint := tcp4Hint
+		numericHint.Flags |= wasi.NumericHost | wasi.NumericService
+		n, errno = s.SockAddressInfo(ctx, "1.2.3.4", "56", numericHint, results)
+		if n != 1 || errno != wasi.ESUCCESS {
+			t.Fatalf("SockAddressInfo => %d, %s", n, errno)
+		}
+		if ipv4, ok := results[0].Address.(*wasi.Inet4Address); !ok {
+			t.Fatalf("unexpected result: %#v", results[n])
+		} else if host := ipv4.String(); host != "1.2.3.4:56" {
+			t.Fatalf("unexpected result: %s", host)
+		}
+
+		// Test AI_PASSIVE.
+		passiveHint := tcp4Hint
+		passiveHint.Flags |= wasi.Passive
+		n, errno = s.SockAddressInfo(ctx, "", "80", passiveHint, results)
+		if n != 1 || errno != wasi.ESUCCESS {
+			t.Fatalf("SockAddressInfo => %d, %s", n, errno)
+		}
+		if ipv4, ok := results[0].Address.(*wasi.Inet4Address); !ok {
+			t.Fatalf("unexpected result: %#v", results[n])
+		} else if host := ipv4.String(); host != "0.0.0.0:80" {
+			t.Fatalf("unexpected result: %s", host)
 		}
 	})
 }

@@ -82,6 +82,19 @@ type SocketsExtension interface {
 	//
 	// Note: This is similar to getpeername in POSIX.
 	SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
+
+	// SockAddressInfo get a list of IP addresses and port numbers for a
+	// host name and service.
+	//
+	// The function populates the AddressInfo.Address fields of the provided
+	// results slice, and returns a count indicating how many results were
+	// written.
+	//
+	// The returned addresses are only valid until the next call on this
+	// interface. Assume that any method may invalidate the addresses.
+	//
+	// Note: This is similar to getaddrinfo in POSIX.
+	SockAddressInfo(ctx context.Context, name, service string, hints AddressInfo, results []AddressInfo) (int, Errno)
 }
 
 // Port is a port.
@@ -187,17 +200,19 @@ var (
 type ProtocolFamily int32
 
 const (
-	_ ProtocolFamily = iota
-	Inet
-	Inet6
+	UnspecifiedFamily ProtocolFamily = iota
+	InetFamily
+	Inet6Family
 )
 
 func (pf ProtocolFamily) String() string {
 	switch pf {
-	case Inet:
-		return "Inet"
-	case Inet6:
-		return "Inet6"
+	case UnspecifiedFamily:
+		return "UnspecifiedFamily"
+	case InetFamily:
+		return "InetFamily"
+	case Inet6Family:
+		return "Inet6Family"
 	default:
 		return fmt.Sprintf("ProtocolFamily(%d)", pf)
 	}
@@ -229,13 +244,15 @@ func (p Protocol) String() string {
 type SocketType int32
 
 const (
-	_ SocketType = iota
+	AnySocket SocketType = iota
 	DatagramSocket
 	StreamSocket
 )
 
 func (st SocketType) String() string {
 	switch st {
+	case AnySocket:
+		return "AnySocket"
 	case DatagramSocket:
 		return "DatagramSocket"
 	case StreamSocket:
@@ -315,4 +332,64 @@ func (so SocketOption) String() string {
 	default:
 		return fmt.Sprintf("SocketOption(%d)", so)
 	}
+}
+
+// AddressInfo is information about an address.
+type AddressInfo struct {
+	Flags         AddressInfoFlags
+	Family        ProtocolFamily
+	SocketType    SocketType
+	Protocol      Protocol
+	Address       SocketAddress
+	CanonicalName string
+}
+
+// AddressInfoFlags are AddressInfo flags.
+type AddressInfoFlags uint16
+
+const (
+	Passive AddressInfoFlags = 1 << iota
+	CanonicalName
+	NumericHost
+	NumericService
+	V4Mapped
+	QueryAll
+	AddressConfigured
+)
+
+// Has is true if the flag is set. If multiple flags are specified, Has returns
+// true if all flags are set.
+func (flags AddressInfoFlags) Has(f AddressInfoFlags) bool {
+	return (flags & f) == f
+}
+
+// HasAny is true if any of the specified flags are set.
+func (flags AddressInfoFlags) HasAny(f AddressInfoFlags) bool {
+	return (flags & f) != 0
+}
+
+var addressInfoFlagsStrings = [...]string{
+	"Passive",
+	"CanonicalName",
+	"NumericHost",
+	"NumericService",
+	"V4Mapped",
+	"QueryAll",
+	"AddressConfigured",
+}
+
+func (flags AddressInfoFlags) String() (s string) {
+	for i, name := range addressInfoFlagsStrings {
+		if !flags.Has(1 << i) {
+			continue
+		}
+		if len(s) > 0 {
+			s += "|"
+		}
+		s += name
+	}
+	if len(s) == 0 {
+		return fmt.Sprintf("AddressInfoFlags(%d)", flags)
+	}
+	return
 }
