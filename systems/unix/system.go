@@ -557,17 +557,17 @@ func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOV
 	return wasi.Size(n), roflags, addr, makeErrno(err)
 }
 
-func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (int, wasi.Errno) {
+func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (wasi.SocketOptionValue, wasi.Errno) {
 	socket, _, errno := s.LookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
-		return 0, errno
+		return nil, errno
 	}
 	var sysLevel int
 	switch level {
 	case wasi.SocketLevel:
 		sysLevel = unix.SOL_SOCKET
 	default:
-		return 0, wasi.EINVAL
+		return nil, wasi.EINVAL
 	}
 	var sysOption int
 	switch option {
@@ -593,16 +593,22 @@ func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		sysOption = unix.SO_RCVLOWAT
 	case wasi.QueryAcceptConnections:
 		sysOption = unix.SO_ACCEPTCONN
-	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
-		// These accept struct linger / struct timeval.
-		return 0, wasi.EINVAL
+	case wasi.Linger:
+		// This returns a struct linger value.
+		return nil, wasi.ENOTSUP // TODO: implement SO_LINGER
+	case wasi.RecvTimeout, wasi.SendTimeout:
+		// These return a struct timeval value.
+		return nil, wasi.ENOTSUP // TODO: implement SO_RCVTIMEO, SO_SNDTIMEO
+	case wasi.BindToDevice:
+		// This returns a string value.
+		return nil, wasi.ENOTSUP // TODO: implement SO_BINDTODEVICE
 	default:
-		return 0, wasi.EINVAL
+		return nil, wasi.EINVAL
 	}
 
 	value, err := unix.GetsockoptInt(int(socket), sysLevel, sysOption)
 	if err != nil {
-		return 0, makeErrno(err)
+		return nil, makeErrno(err)
 	}
 
 	errno = wasi.ESUCCESS
@@ -621,10 +627,10 @@ func (s *System) SockGetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		value = int(makeErrno(unix.Errno(value)))
 	}
 
-	return value, errno
+	return wasi.IntValue(value), errno
 }
 
-func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption, value int) wasi.Errno {
+func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption, value wasi.SocketOptionValue) wasi.Errno {
 	socket, _, errno := s.LookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
@@ -660,13 +666,23 @@ func (s *System) SockSetOptInt(ctx context.Context, fd wasi.FD, level wasi.Socke
 		sysOption = unix.SO_RCVLOWAT
 	case wasi.QueryAcceptConnections:
 		sysOption = unix.SO_ACCEPTCONN
-	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
-		// These accept struct linger / struct timeval.
-		return wasi.EINVAL
+	case wasi.Linger:
+		// This accepts a struct linger value.
+		return wasi.ENOTSUP // TODO: implement SO_LINGER
+	case wasi.RecvTimeout, wasi.SendTimeout:
+		// These accept a struct timeval value.
+		return wasi.ENOTSUP // TODO: implement SO_RCVTIMEO, SO_SNDTIMEO
+	case wasi.BindToDevice:
+		// This accepts a string value.
+		return wasi.ENOTSUP // TODO: implement SO_BINDTODEVICE
 	default:
 		return wasi.EINVAL
 	}
-	err := unix.SetsockoptInt(int(socket), sysLevel, sysOption, value)
+	intval, ok := value.(wasi.IntValue)
+	if !ok {
+		return wasi.EINVAL
+	}
+	err := unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
 	return makeErrno(err)
 }
 

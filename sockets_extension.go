@@ -56,15 +56,15 @@ type SocketsExtension interface {
 	// the data into multiple buffers in the manner of readv.
 	SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, flags RIFlags) (Size, ROFlags, SocketAddress, Errno)
 
-	// SockGetOptInt gets a socket option.
+	// SockGetOpt gets a socket option.
 	//
 	// Note: This is similar to getsockopt in POSIX.
-	SockGetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (int, Errno)
+	SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (SocketOptionValue, Errno)
 
-	// SockSetOptInt sets a socket option.
+	// SockSetOpt sets a socket option.
 	//
 	// Note: This is similar to setsockopt in POSIX.
-	SockSetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value int) Errno
+	SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value SocketOptionValue) Errno
 
 	// SockLocalAddress gets the local address of the socket.
 	//
@@ -297,6 +297,7 @@ const (
 	RecvTimeout
 	SendTimeout
 	QueryAcceptConnections
+	BindToDevice
 )
 
 func (so SocketOption) String() string {
@@ -329,6 +330,8 @@ func (so SocketOption) String() string {
 		return "SendTimeout"
 	case QueryAcceptConnections:
 		return "QueryAcceptConnections"
+	case BindToDevice:
+		return "BindToDevice"
 	default:
 		return fmt.Sprintf("SocketOption(%d)", so)
 	}
@@ -392,4 +395,20 @@ func (flags AddressInfoFlags) String() (s string) {
 		return fmt.Sprintf("AddressInfoFlags(%d)", flags)
 	}
 	return
+}
+
+// SocketOptionValue is a socket option value.
+type SocketOptionValue interface {
+	String() string
+
+	sockopt()
+}
+
+// IntValue is an integer value.
+type IntValue int
+
+func (IntValue) sockopt() {}
+
+func (i IntValue) String() string {
+	return strconv.Itoa(int(i))
 }

@@ -690,13 +690,13 @@ func (t *Tracer) SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, iflags
 	return n, oflags, addr, errno
 }
 
-func (t *Tracer) SockGetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (int, Errno) {
+func (t *Tracer) SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (SocketOptionValue, Errno) {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
-		return 0, ENOSYS
+		return nil, ENOSYS
 	}
-	t.printf("SockGetOptInt(%d, %s, %s) => ", fd, level, option)
-	value, errno := s.SockGetOptInt(ctx, fd, level, option)
+	t.printf("SockGetOpt(%d, %s, %s) => ", fd, level, option)
+	value, errno := s.SockGetOpt(ctx, fd, level, option)
 	if errno == ESUCCESS {
 		t.printf("%d", value)
 	} else {
@@ -706,13 +706,13 @@ func (t *Tracer) SockGetOptInt(ctx context.Context, fd FD, level SocketOptionLev
 	return value, errno
 }
 
-func (t *Tracer) SockSetOptInt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value int) Errno {
+func (t *Tracer) SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value SocketOptionValue) Errno {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
 		return ENOSYS
 	}
-	t.printf("SockSetOptInt(%d, %s, %s, %d) => ", fd, level, option, value)
-	errno := s.SockSetOptInt(ctx, fd, level, option, value)
+	t.printf("SockSetOpt(%d, %s, %s, %d) => ", fd, level, option, value)
+	errno := s.SockSetOpt(ctx, fd, level, option, value)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
