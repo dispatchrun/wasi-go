@@ -266,10 +266,7 @@ func (addr wasixAddrPort) StoreObject(memory api.Memory, object []byte) {
 func (addr wasixAddrPort) FormatObject(w io.Writer, memory api.Memory, object []byte) {
 }
 
-type wasixOptionTimestamp struct {
-	tag       uint8
-	timestamp wasi.Timestamp
-}
+type wasixOptionTimestamp []byte
 
 func (ts wasixOptionTimestamp) ObjectSize() int {
 	return 0
