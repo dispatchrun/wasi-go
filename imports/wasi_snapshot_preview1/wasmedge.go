@@ -325,6 +325,7 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 		if res.Address == 0 {
 			return Errno(wasi.EFAULT)
 		}
+		res.AddressLength = 16 // sizeof(WasiSockaddr)
 		addrDataFamily, ok := mem.Read(res.Address, 1)
 		if !ok {
 			return Errno(wasi.EFAULT)
@@ -353,6 +354,7 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 			binary.BigEndian.PutUint16(addrData, uint16(addr.Port))
 			copy(addrData[2:], addr.Addr[:])
 			addrDataFamily[0] = uint8(wasi.InetFamily)
+			// mem.WriteUint32Le(res.Address+4, 6) // WasmEdge writes 16?
 		case *wasi.Inet6Address:
 			if len(addrData) < 18 {
 				return Errno(wasi.EFAULT)
@@ -360,6 +362,7 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 			binary.BigEndian.PutUint16(addrData, uint16(addr.Port))
 			copy(addrData[2:], addr.Addr[:])
 			addrDataFamily[0] = uint8(wasi.Inet6Family)
+			// mem.WriteUint32Le(res.Address+4, 18) // WasmEdge writes 26?
 		}
 		res.CanonicalNameLength = 0 // Not yet supported
 		resPtr.Store(res)
