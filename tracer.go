@@ -754,15 +754,15 @@ func (t *Tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, E
 	return addr, errno
 }
 
-func (t *Tracer) SockAddressInfo(ctx context.Context, name, service string, hint AddressInfo, results []AddressInfo) (int, Errno) {
+func (t *Tracer) SockAddressInfo(ctx context.Context, name, service string, hints AddressInfo, results []AddressInfo) (int, Errno) {
 	s, ok := t.System.(SocketsExtension)
 	if !ok {
 		return 0, ENOSYS
 	}
 	t.printf("SockAddressInfo(%s, %s, ", name, service)
-	t.printAddressInfo(hint)
+	t.printAddressInfo(hints)
 	t.printf(", [%d]AddressInfo) => ", len(results))
-	n, errno := s.SockAddressInfo(ctx, name, service, hint, results)
+	n, errno := s.SockAddressInfo(ctx, name, service, hints, results)
 	if errno == ESUCCESS {
 		t.printf("[")
 		for i := range results[:n] {

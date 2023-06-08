@@ -702,14 +702,14 @@ func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.Socket
 	return addr, wasi.ESUCCESS
 }
 
-func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint wasi.AddressInfo, results []wasi.AddressInfo) (int, wasi.Errno) {
+func (s *System) SockAddressInfo(ctx context.Context, name, service string, hints wasi.AddressInfo, results []wasi.AddressInfo) (int, wasi.Errno) {
 	if cap(results) == 0 {
 		return 0, wasi.EINVAL
 	}
 	// TODO: support AI_ADDRCONFIG, AI_CANONNAME, AI_V4MAPPED, AI_V4MAPPED_CFG, AI_ALL
 
 	var network string
-	f, p, t := hint.Family, hint.Protocol, hint.SocketType
+	f, p, t := hints.Family, hints.Protocol, hints.SocketType
 	switch {
 	case t == wasi.StreamSocket && p != wasi.UDPProtocol:
 		switch f {
@@ -750,7 +750,7 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 
 	var port int
 	var err error
-	if hint.Flags.Has(wasi.NumericService) {
+	if hints.Flags.Has(wasi.NumericService) {
 		port, err = strconv.Atoi(service)
 	} else {
 		port, err = net.LookupPort(network, service)
@@ -760,16 +760,16 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 	}
 
 	var ip net.IP
-	if hint.Flags.Has(wasi.NumericHost) {
+	if hints.Flags.Has(wasi.NumericHost) {
 		ip = net.ParseIP(name)
 		if ip == nil {
 			return 0, wasi.EINVAL
 		}
 	} else if name == "" {
-		if !hint.Flags.Has(wasi.Passive) {
+		if !hints.Flags.Has(wasi.Passive) {
 			return 0, wasi.EINVAL
 		}
-		if hint.Family == wasi.Inet6Family {
+		if hints.Family == wasi.Inet6Family {
 			ip = net.IPv6zero
 		} else {
 			ip = net.IPv4zero
@@ -802,14 +802,14 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 	for _, ip := range ips {
 		var addr wasi.AddressInfo
 		if ipv4 := ip.To4(); ipv4 != nil {
-			if hint.Family == wasi.Inet6Family {
+			if hints.Family == wasi.Inet6Family {
 				continue
 			}
 			inet4Addr := wasi.Inet4Address{Port: port}
 			copy(inet4Addr.Addr[:], ip)
 			addr.Address = &inet4Addr
 		} else {
-			if hint.Family == wasi.InetFamily {
+			if hints.Family == wasi.InetFamily {
 				continue
 			}
 			inet6Addr := wasi.Inet6Address{Port: port}

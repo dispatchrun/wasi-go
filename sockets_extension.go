@@ -94,7 +94,7 @@ type SocketsExtension interface {
 	// interface. Assume that any method may invalidate the addresses.
 	//
 	// Note: This is similar to getaddrinfo in POSIX.
-	SockAddressInfo(ctx context.Context, name, service string, hint AddressInfo, results []AddressInfo) (int, Errno)
+	SockAddressInfo(ctx context.Context, name, service string, hints AddressInfo, results []AddressInfo) (int, Errno)
 }
 
 // Port is a port.
