@@ -166,14 +166,14 @@ func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, 
 	}
 	// Only int options are supported for now.
 	switch wasi.SocketOption(option) {
-	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
-		// These accept struct linger / struct timeval.
+	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout, wasi.BindToDevice:
+		// These accept struct linger / struct timeval / string.
 		return Errno(wasi.ENOTSUP)
 	}
 	if valueLen != 4 {
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(s.SockSetOptInt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), int(value.Load())))
+	return Errno(s.SockSetOpt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), wasi.IntValue(value.Load())))
 }
 
 func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
@@ -183,18 +183,22 @@ func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, 
 	}
 	// Only int options are supported for now.
 	switch wasi.SocketOption(option) {
-	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout:
-		// These accept struct linger / struct timeval.
+	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout, wasi.BindToDevice:
+		// These accept struct linger / struct timeval / string.
 		return Errno(wasi.ENOTSUP)
 	}
 	if valueLen != 4 {
 		return Errno(wasi.EINVAL)
 	}
-	result, errno := s.SockGetOptInt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option))
+	result, errno := s.SockGetOpt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
-	value.Store(Int32(result))
+	intval, ok := result.(wasi.IntValue)
+	if !ok {
+		return Errno(wasi.EINVAL)
+	}
+	value.Store(Int32(intval))
 	return Errno(wasi.ESUCCESS)
 }
 
