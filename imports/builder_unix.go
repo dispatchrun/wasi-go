@@ -109,6 +109,8 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		var err error
 		if stdio.fd < 0 {
 			stdio.fd, err = syscall.Open(stdio.path, stdio.open, 0)
+		} else {
+			stdio.fd, err = dup(stdio.fd)
 		}
 		if err != nil {
 			return ctx, nil, fmt.Errorf("unable to duplicate %s fd %d: %w", stdio.path, stdio.fd, err)
@@ -186,4 +188,16 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 
 	ctx = wazergo.WithModuleInstance(ctx, instance)
 	return ctx, system, nil
+}
+
+func dup(fd int) (int, error) {
+	syscall.ForkLock.Lock()
+	defer syscall.ForkLock.Unlock()
+
+	newfd, err := syscall.Dup(fd)
+	if err != nil {
+		return -1, err
+	}
+	syscall.CloseOnExec(newfd)
+	return newfd, nil
 }
