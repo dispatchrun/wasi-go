@@ -55,13 +55,9 @@ func (m *Module) WasmEdgeV1SockAccept(ctx context.Context, fd Int32, connfd Poin
 }
 
 func (m *Module) WasmEdgeSockOpen(ctx context.Context, family Int32, sockType Int32, openfd Pointer[Int32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	rightsBase := wasi.SockListenRights | wasi.SockConnectionRights
 	rightsInheriting := wasi.SockConnectionRights
-	result, errno := s.SockOpen(ctx, wasi.ProtocolFamily(family), wasi.SocketType(sockType), wasi.IPProtocol, rightsBase, rightsInheriting)
+	result, errno := m.WASI.SockOpen(ctx, wasi.ProtocolFamily(family), wasi.SocketType(sockType), wasi.IPProtocol, rightsBase, rightsInheriting)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -70,50 +66,34 @@ func (m *Module) WasmEdgeSockOpen(ctx context.Context, family Int32, sockType In
 }
 
 func (m *Module) WasmEdgeSockBind(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Uint32) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	socketAddr, ok := m.wasmEdgeGetSocketAddress(addr.Load(), int(port))
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	_, errno := s.SockBind(ctx, wasi.FD(fd), socketAddr)
+	_, errno := m.WASI.SockBind(ctx, wasi.FD(fd), socketAddr)
 	return Errno(errno)
 }
 
 func (m *Module) WasmEdgeSockConnect(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Uint32) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	socketAddr, ok := m.wasmEdgeGetSocketAddress(addr.Load(), int(port))
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
-	_, errno := s.SockConnect(ctx, wasi.FD(fd), socketAddr)
+	_, errno := m.WASI.SockConnect(ctx, wasi.FD(fd), socketAddr)
 	return Errno(errno)
 }
 
 func (m *Module) WasmEdgeSockListen(ctx context.Context, fd Int32, backlog Int32) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
-	return Errno(s.SockListen(ctx, wasi.FD(fd), int(backlog)))
+	return Errno(m.WASI.SockListen(ctx, wasi.FD(fd), int(backlog)))
 }
 
 func (m *Module) WasmEdgeSockSendTo(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[wasmEdgeAddress], port Int32, flags Uint32, nwritten Pointer[Int32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	socketAddr, ok := m.wasmEdgeGetSocketAddress(addr.Load(), int(port))
 	if !ok {
 		return Errno(wasi.EINVAL)
 	}
 	m.iovecs = iovecs.Append(m.iovecs[:0])
-	size, errno := s.SockSendTo(ctx, wasi.FD(fd), m.iovecs, wasi.SIFlags(flags), socketAddr)
+	size, errno := m.WASI.SockSendTo(ctx, wasi.FD(fd), m.iovecs, wasi.SIFlags(flags), socketAddr)
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -122,12 +102,8 @@ func (m *Module) WasmEdgeSockSendTo(ctx context.Context, fd Int32, iovecs List[w
 }
 
 func (m *Module) WasmEdgeV1SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[wasmEdgeAddress], iflags Uint32, nread Pointer[Int32], oflags Pointer[Int32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	m.iovecs = iovecs.Append(m.iovecs[:0])
-	size, roflags, sa, errno := s.SockRecvFrom(ctx, wasi.FD(fd), m.iovecs, wasi.RIFlags(iflags))
+	size, roflags, sa, errno := m.WASI.SockRecvFrom(ctx, wasi.FD(fd), m.iovecs, wasi.RIFlags(iflags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -140,12 +116,8 @@ func (m *Module) WasmEdgeV1SockRecvFrom(ctx context.Context, fd Int32, iovecs Li
 }
 
 func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs List[wasi.IOVec], addr Pointer[wasmEdgeAddress], iflags Uint32, port Pointer[Uint32], nread Pointer[Int32], oflags Pointer[Int32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	m.iovecs = iovecs.Append(m.iovecs[:0])
-	size, roflags, sa, errno := s.SockRecvFrom(ctx, wasi.FD(fd), m.iovecs, wasi.RIFlags(iflags))
+	size, roflags, sa, errno := m.WASI.SockRecvFrom(ctx, wasi.FD(fd), m.iovecs, wasi.RIFlags(iflags))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -160,10 +132,6 @@ func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs Li
 }
 
 func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	// Only int options are supported for now.
 	switch wasi.SocketOption(option) {
 	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout, wasi.BindToDevice:
@@ -173,14 +141,10 @@ func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, 
 	if valueLen != 4 {
 		return Errno(wasi.EINVAL)
 	}
-	return Errno(s.SockSetOpt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), wasi.IntValue(value.Load())))
+	return Errno(m.WASI.SockSetOpt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), wasi.IntValue(value.Load())))
 }
 
 func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	// Only int options are supported for now.
 	switch wasi.SocketOption(option) {
 	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout, wasi.BindToDevice:
@@ -190,7 +154,7 @@ func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, 
 	if valueLen != 4 {
 		return Errno(wasi.EINVAL)
 	}
-	result, errno := s.SockGetOpt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option))
+	result, errno := m.WASI.SockGetOpt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -203,11 +167,7 @@ func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, 
 }
 
 func (m *Module) WasmEdgeV1SockLocalAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], addrType Pointer[Uint32], port Pointer[Uint32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
-	sa, errno := s.SockLocalAddress(ctx, wasi.FD(fd))
+	sa, errno := m.WASI.SockLocalAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -221,11 +181,7 @@ func (m *Module) WasmEdgeV1SockLocalAddr(ctx context.Context, fd Int32, addr Poi
 }
 
 func (m *Module) WasmEdgeV2SockLocalAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
-	sa, errno := s.SockLocalAddress(ctx, wasi.FD(fd))
+	sa, errno := m.WASI.SockLocalAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -238,11 +194,7 @@ func (m *Module) WasmEdgeV2SockLocalAddr(ctx context.Context, fd Int32, addr Poi
 }
 
 func (m *Module) WasmEdgeV1SockPeerAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], addrType Pointer[Uint32], port Pointer[Uint32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
-	sa, errno := s.SockRemoteAddress(ctx, wasi.FD(fd))
+	sa, errno := m.WASI.SockRemoteAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -256,11 +208,7 @@ func (m *Module) WasmEdgeV1SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 }
 
 func (m *Module) WasmEdgeV2SockPeerAddr(ctx context.Context, fd Int32, addr Pointer[wasmEdgeAddress], port Pointer[Uint32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
-	sa, errno := s.SockRemoteAddress(ctx, wasi.FD(fd))
+	sa, errno := m.WASI.SockRemoteAddress(ctx, wasi.FD(fd))
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	}
@@ -273,10 +221,6 @@ func (m *Module) WasmEdgeV2SockPeerAddr(ctx context.Context, fd Int32, addr Poin
 }
 
 func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service String, hintsPtr Pointer[wasmEdgeAddressInfo], resPtrPtr Pointer[Pointer[wasmEdgeAddressInfo]], maxResLength Uint32, resLengthPtr Pointer[Uint32]) Errno {
-	s, ok := m.WASI.(wasi.SocketsExtension)
-	if !ok {
-		return Errno(wasi.ENOSYS)
-	}
 	if len(name) == 0 && len(service) == 0 || maxResLength == 1 {
 		return Errno(wasi.EINVAL)
 	}
@@ -297,7 +241,7 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 	if int(maxResLength) > cap(m.addrinfo) {
 		m.addrinfo = make([]wasi.AddressInfo, int(maxResLength))
 	}
-	n, errno := s.SockAddressInfo(ctx, string(name), string(service), hints, m.addrinfo[:maxResLength])
+	n, errno := m.WASI.SockAddressInfo(ctx, string(name), string(service), hints, m.addrinfo[:maxResLength])
 	if errno != wasi.ESUCCESS {
 		return Errno(errno)
 	} else if n == 0 {

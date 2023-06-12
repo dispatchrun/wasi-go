@@ -1,6 +1,8 @@
 package wasi
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // RIFlags are flags provided to SockRecv.
 type RIFlags uint16
