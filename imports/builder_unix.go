@@ -92,7 +92,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		system = &unix.PathOpenSockets{System: unixSystem}
 	}
 	if b.tracer != nil {
-		system = &wasi.Tracer{Writer: b.tracer, System: system}
+		system = wasi.Trace(b.tracer, system)
 	}
 	for _, wrap := range b.wrappers {
 		system = wrap(system)

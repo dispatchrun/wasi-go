@@ -6,18 +6,22 @@ import (
 	"io"
 )
 
-// Tracer wraps a System to log calls.
-type Tracer struct {
-	Writer io.Writer
-	System
+// Trace wraps a System to log all calls to its methods in a human-readable
+// format to the given io.Writer.
+func Trace(w io.Writer, s System) System {
+	return &tracer{writer: w, system: s}
 }
 
-var _ System = (*Tracer)(nil)
-var _ SocketsExtension = (*Tracer)(nil)
+type tracer struct {
+	writer io.Writer
+	system System
+}
 
-func (t *Tracer) ArgsSizesGet(ctx context.Context) (int, int, Errno) {
+var _ SocketsExtension = (*tracer)(nil)
+
+func (t *tracer) ArgsSizesGet(ctx context.Context) (int, int, Errno) {
 	t.printf("ArgsSizesGet() => ")
-	argCount, stringBytes, errno := t.System.ArgsSizesGet(ctx)
+	argCount, stringBytes, errno := t.system.ArgsSizesGet(ctx)
 	if errno == ESUCCESS {
 		t.printf("%d, %d", argCount, stringBytes)
 	} else {
@@ -27,9 +31,9 @@ func (t *Tracer) ArgsSizesGet(ctx context.Context) (int, int, Errno) {
 	return argCount, stringBytes, errno
 }
 
-func (t *Tracer) ArgsGet(ctx context.Context) ([]string, Errno) {
+func (t *tracer) ArgsGet(ctx context.Context) ([]string, Errno) {
 	t.printf("ArgsGet() => ")
-	args, errno := t.System.ArgsGet(ctx)
+	args, errno := t.system.ArgsGet(ctx)
 	if errno == ESUCCESS {
 		t.printf("%q", args)
 	} else {
@@ -39,9 +43,9 @@ func (t *Tracer) ArgsGet(ctx context.Context) ([]string, Errno) {
 	return args, errno
 }
 
-func (t *Tracer) EnvironSizesGet(ctx context.Context) (int, int, Errno) {
+func (t *tracer) EnvironSizesGet(ctx context.Context) (int, int, Errno) {
 	t.printf("EnvironSizesGet() => ")
-	envCount, stringBytes, errno := t.System.EnvironSizesGet(ctx)
+	envCount, stringBytes, errno := t.system.EnvironSizesGet(ctx)
 	if errno == ESUCCESS {
 		t.printf("%d, %d", envCount, stringBytes)
 	} else {
@@ -51,9 +55,9 @@ func (t *Tracer) EnvironSizesGet(ctx context.Context) (int, int, Errno) {
 	return envCount, stringBytes, errno
 }
 
-func (t *Tracer) EnvironGet(ctx context.Context) ([]string, Errno) {
+func (t *tracer) EnvironGet(ctx context.Context) ([]string, Errno) {
 	t.printf("EnvironGet() => ")
-	environ, errno := t.System.EnvironGet(ctx)
+	environ, errno := t.system.EnvironGet(ctx)
 	if errno == ESUCCESS {
 		t.printf("%q", environ)
 	} else {
@@ -63,9 +67,9 @@ func (t *Tracer) EnvironGet(ctx context.Context) ([]string, Errno) {
 	return environ, errno
 }
 
-func (t *Tracer) ClockResGet(ctx context.Context, id ClockID) (Timestamp, Errno) {
+func (t *tracer) ClockResGet(ctx context.Context, id ClockID) (Timestamp, Errno) {
 	t.printf("ClockResGet(%d) => ", id)
-	precision, errno := t.System.ClockResGet(ctx, id)
+	precision, errno := t.system.ClockResGet(ctx, id)
 	if errno == ESUCCESS {
 		t.printf("%d", precision)
 	} else {
@@ -75,9 +79,9 @@ func (t *Tracer) ClockResGet(ctx context.Context, id ClockID) (Timestamp, Errno)
 	return precision, errno
 }
 
-func (t *Tracer) ClockTimeGet(ctx context.Context, id ClockID, precision Timestamp) (Timestamp, Errno) {
+func (t *tracer) ClockTimeGet(ctx context.Context, id ClockID, precision Timestamp) (Timestamp, Errno) {
 	t.printf("ClockTimeGet(%d, %d) => ", id, precision)
-	timestamp, errno := t.System.ClockTimeGet(ctx, id, precision)
+	timestamp, errno := t.system.ClockTimeGet(ctx, id, precision)
 	if errno == ESUCCESS {
 		t.printf("%d", timestamp)
 	} else {
@@ -87,9 +91,9 @@ func (t *Tracer) ClockTimeGet(ctx context.Context, id ClockID, precision Timesta
 	return timestamp, errno
 }
 
-func (t *Tracer) FDAdvise(ctx context.Context, fd FD, offset, length FileSize, advice Advice) Errno {
+func (t *tracer) FDAdvise(ctx context.Context, fd FD, offset, length FileSize, advice Advice) Errno {
 	t.printf("FDAdvise(%d, %d, %d, %s) => ", fd, offset, length, advice)
-	errno := t.System.FDAdvise(ctx, fd, offset, length, advice)
+	errno := t.system.FDAdvise(ctx, fd, offset, length, advice)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -99,9 +103,9 @@ func (t *Tracer) FDAdvise(ctx context.Context, fd FD, offset, length FileSize, a
 	return errno
 }
 
-func (t *Tracer) FDAllocate(ctx context.Context, fd FD, offset, length FileSize) Errno {
+func (t *tracer) FDAllocate(ctx context.Context, fd FD, offset, length FileSize) Errno {
 	t.printf("FDAllocate(%d, %d, %d) => ", fd, offset, length)
-	errno := t.System.FDAllocate(ctx, fd, offset, length)
+	errno := t.system.FDAllocate(ctx, fd, offset, length)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -111,9 +115,9 @@ func (t *Tracer) FDAllocate(ctx context.Context, fd FD, offset, length FileSize)
 	return errno
 }
 
-func (t *Tracer) FDClose(ctx context.Context, fd FD) Errno {
+func (t *tracer) FDClose(ctx context.Context, fd FD) Errno {
 	t.printf("FDClose(%d) => ", fd)
-	errno := t.System.FDClose(ctx, fd)
+	errno := t.system.FDClose(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -123,9 +127,9 @@ func (t *Tracer) FDClose(ctx context.Context, fd FD) Errno {
 	return errno
 }
 
-func (t *Tracer) FDDataSync(ctx context.Context, fd FD) Errno {
+func (t *tracer) FDDataSync(ctx context.Context, fd FD) Errno {
 	t.printf("FDDataSync(%d) => ", fd)
-	errno := t.System.FDDataSync(ctx, fd)
+	errno := t.system.FDDataSync(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -135,9 +139,9 @@ func (t *Tracer) FDDataSync(ctx context.Context, fd FD) Errno {
 	return errno
 }
 
-func (t *Tracer) FDStatGet(ctx context.Context, fd FD) (FDStat, Errno) {
+func (t *tracer) FDStatGet(ctx context.Context, fd FD) (FDStat, Errno) {
 	t.printf("FDStatGet(%d) => ", fd)
-	fdstat, errno := t.System.FDStatGet(ctx, fd)
+	fdstat, errno := t.system.FDStatGet(ctx, fd)
 	if errno == ESUCCESS {
 		t.printFDStat(fdstat)
 	} else {
@@ -147,9 +151,9 @@ func (t *Tracer) FDStatGet(ctx context.Context, fd FD) (FDStat, Errno) {
 	return fdstat, errno
 }
 
-func (t *Tracer) FDStatSetFlags(ctx context.Context, fd FD, flags FDFlags) Errno {
+func (t *tracer) FDStatSetFlags(ctx context.Context, fd FD, flags FDFlags) Errno {
 	t.printf("FDStatSetFlags(%d, %s) => ", fd, flags)
-	errno := t.System.FDStatSetFlags(ctx, fd, flags)
+	errno := t.system.FDStatSetFlags(ctx, fd, flags)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -159,9 +163,21 @@ func (t *Tracer) FDStatSetFlags(ctx context.Context, fd FD, flags FDFlags) Errno
 	return errno
 }
 
-func (t *Tracer) FDFileStatGet(ctx context.Context, fd FD) (FileStat, Errno) {
+func (t *tracer) FDStatSetRights(ctx context.Context, fd FD, rightsBase, rightsInheriting Rights) Errno {
+	t.printf("FDStatSetRights(%d, %s, %s) => ", fd, rightsBase, rightsInheriting)
+	errno := t.system.FDStatSetRights(ctx, fd, rightsBase, rightsInheriting)
+	if errno == ESUCCESS {
+		t.printf("ok")
+	} else {
+		t.printErrno(errno)
+	}
+	t.printf("\n")
+	return errno
+}
+
+func (t *tracer) FDFileStatGet(ctx context.Context, fd FD) (FileStat, Errno) {
 	t.printf("FDFileStatGet(%d) => ", fd)
-	filestat, errno := t.System.FDFileStatGet(ctx, fd)
+	filestat, errno := t.system.FDFileStatGet(ctx, fd)
 	if errno == ESUCCESS {
 		t.printFileStat(filestat)
 	} else {
@@ -171,9 +187,9 @@ func (t *Tracer) FDFileStatGet(ctx context.Context, fd FD) (FileStat, Errno) {
 	return filestat, errno
 }
 
-func (t *Tracer) FDFileStatSetSize(ctx context.Context, fd FD, size FileSize) Errno {
+func (t *tracer) FDFileStatSetSize(ctx context.Context, fd FD, size FileSize) Errno {
 	t.printf("FDFileStatSetSize(%d, %d) => ", fd, size)
-	errno := t.System.FDFileStatSetSize(ctx, fd, size)
+	errno := t.system.FDFileStatSetSize(ctx, fd, size)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -183,9 +199,9 @@ func (t *Tracer) FDFileStatSetSize(ctx context.Context, fd FD, size FileSize) Er
 	return errno
 }
 
-func (t *Tracer) FDFileStatSetTimes(ctx context.Context, fd FD, accessTime, modifyTime Timestamp, flags FSTFlags) Errno {
+func (t *tracer) FDFileStatSetTimes(ctx context.Context, fd FD, accessTime, modifyTime Timestamp, flags FSTFlags) Errno {
 	t.printf("FDFileStatSetTimes(%d, %d, %d, %s) => ", fd, accessTime, modifyTime, flags)
-	errno := t.System.FDFileStatSetTimes(ctx, fd, accessTime, modifyTime, flags)
+	errno := t.system.FDFileStatSetTimes(ctx, fd, accessTime, modifyTime, flags)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -195,11 +211,11 @@ func (t *Tracer) FDFileStatSetTimes(ctx context.Context, fd FD, accessTime, modi
 	return errno
 }
 
-func (t *Tracer) FDPread(ctx context.Context, fd FD, iovecs []IOVec, offset FileSize) (Size, Errno) {
+func (t *tracer) FDPread(ctx context.Context, fd FD, iovecs []IOVec, offset FileSize) (Size, Errno) {
 	t.printf("FDPread(%d, ", fd)
 	t.printIOVecsProto(iovecs)
 	t.printf("%d) => ", offset)
-	n, errno := t.System.FDPread(ctx, fd, iovecs, offset)
+	n, errno := t.system.FDPread(ctx, fd, iovecs, offset)
 	if errno == ESUCCESS {
 		t.printf("[%d]byte: ", n)
 		t.printIOVecs(iovecs, int(n))
@@ -210,9 +226,9 @@ func (t *Tracer) FDPread(ctx context.Context, fd FD, iovecs []IOVec, offset File
 	return n, errno
 }
 
-func (t *Tracer) FDPreStatGet(ctx context.Context, fd FD) (PreStat, Errno) {
+func (t *tracer) FDPreStatGet(ctx context.Context, fd FD) (PreStat, Errno) {
 	t.printf("FDPreStatGet(%d) => ", fd)
-	prestat, errno := t.System.FDPreStatGet(ctx, fd)
+	prestat, errno := t.system.FDPreStatGet(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("{Type:%s,PreStatDir.NameLength:%d}", prestat.Type, prestat.PreStatDir.NameLength)
 	} else {
@@ -222,9 +238,9 @@ func (t *Tracer) FDPreStatGet(ctx context.Context, fd FD) (PreStat, Errno) {
 	return prestat, errno
 }
 
-func (t *Tracer) FDPreStatDirName(ctx context.Context, fd FD) (string, Errno) {
+func (t *tracer) FDPreStatDirName(ctx context.Context, fd FD) (string, Errno) {
 	t.printf("FDPreStatDirName(%d) => ", fd)
-	name, errno := t.System.FDPreStatDirName(ctx, fd)
+	name, errno := t.system.FDPreStatDirName(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("%q", name)
 	} else {
@@ -234,11 +250,11 @@ func (t *Tracer) FDPreStatDirName(ctx context.Context, fd FD) (string, Errno) {
 	return name, errno
 }
 
-func (t *Tracer) FDPwrite(ctx context.Context, fd FD, iovecs []IOVec, offset FileSize) (Size, Errno) {
+func (t *tracer) FDPwrite(ctx context.Context, fd FD, iovecs []IOVec, offset FileSize) (Size, Errno) {
 	t.printf("FDPwrite(%d, ", fd)
 	t.printIOVecs(iovecs, -1)
 	t.printf(", %d) => ", offset)
-	n, errno := t.System.FDPwrite(ctx, fd, iovecs, offset)
+	n, errno := t.system.FDPwrite(ctx, fd, iovecs, offset)
 	if errno == ESUCCESS {
 		t.printf("%d", n)
 	} else {
@@ -248,11 +264,11 @@ func (t *Tracer) FDPwrite(ctx context.Context, fd FD, iovecs []IOVec, offset Fil
 	return n, errno
 }
 
-func (t *Tracer) FDRead(ctx context.Context, fd FD, iovecs []IOVec) (Size, Errno) {
+func (t *tracer) FDRead(ctx context.Context, fd FD, iovecs []IOVec) (Size, Errno) {
 	t.printf("FDRead(%d, ", fd)
 	t.printIOVecsProto(iovecs)
 	t.printf(") => ")
-	n, errno := t.System.FDRead(ctx, fd, iovecs)
+	n, errno := t.system.FDRead(ctx, fd, iovecs)
 	if errno == ESUCCESS {
 		t.printf("[%d]byte: ", n)
 		t.printIOVecs(iovecs, int(n))
@@ -263,9 +279,9 @@ func (t *Tracer) FDRead(ctx context.Context, fd FD, iovecs []IOVec) (Size, Errno
 	return n, errno
 }
 
-func (t *Tracer) FDReadDir(ctx context.Context, fd FD, entries []DirEntry, cookie DirCookie, bufferSizeBytes int) (int, Errno) {
+func (t *tracer) FDReadDir(ctx context.Context, fd FD, entries []DirEntry, cookie DirCookie, bufferSizeBytes int) (int, Errno) {
 	t.printf("FDReadDir(%d, %d) => ", fd, cookie)
-	n, errno := t.System.FDReadDir(ctx, fd, entries, cookie, bufferSizeBytes)
+	n, errno := t.system.FDReadDir(ctx, fd, entries, cookie, bufferSizeBytes)
 	if errno == ESUCCESS {
 		t.printDirEntries(entries[:n], bufferSizeBytes)
 	} else {
@@ -275,9 +291,9 @@ func (t *Tracer) FDReadDir(ctx context.Context, fd FD, entries []DirEntry, cooki
 	return n, errno
 }
 
-func (t *Tracer) FDRenumber(ctx context.Context, from, to FD) Errno {
+func (t *tracer) FDRenumber(ctx context.Context, from, to FD) Errno {
 	t.printf("FDRenumber(%d, %d) => ", from, to)
-	errno := t.System.FDRenumber(ctx, from, to)
+	errno := t.system.FDRenumber(ctx, from, to)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -287,9 +303,9 @@ func (t *Tracer) FDRenumber(ctx context.Context, from, to FD) Errno {
 	return errno
 }
 
-func (t *Tracer) FDSeek(ctx context.Context, fd FD, offset FileDelta, whence Whence) (FileSize, Errno) {
+func (t *tracer) FDSeek(ctx context.Context, fd FD, offset FileDelta, whence Whence) (FileSize, Errno) {
 	t.printf("FDSeek(%d, %d, %s) => ", fd, offset, whence)
-	result, errno := t.System.FDSeek(ctx, fd, offset, whence)
+	result, errno := t.system.FDSeek(ctx, fd, offset, whence)
 	if errno == ESUCCESS {
 		t.printf("%d", offset)
 	} else {
@@ -299,9 +315,9 @@ func (t *Tracer) FDSeek(ctx context.Context, fd FD, offset FileDelta, whence Whe
 	return result, errno
 }
 
-func (t *Tracer) FDSync(ctx context.Context, fd FD) Errno {
+func (t *tracer) FDSync(ctx context.Context, fd FD) Errno {
 	t.printf("FDSync(%d) => ", fd)
-	errno := t.System.FDSync(ctx, fd)
+	errno := t.system.FDSync(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -311,9 +327,9 @@ func (t *Tracer) FDSync(ctx context.Context, fd FD) Errno {
 	return errno
 }
 
-func (t *Tracer) FDTell(ctx context.Context, fd FD) (FileSize, Errno) {
+func (t *tracer) FDTell(ctx context.Context, fd FD) (FileSize, Errno) {
 	t.printf("FDTell(%d) => ", fd)
-	fileSize, errno := t.System.FDTell(ctx, fd)
+	fileSize, errno := t.system.FDTell(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("%d", fileSize)
 	} else {
@@ -323,11 +339,11 @@ func (t *Tracer) FDTell(ctx context.Context, fd FD) (FileSize, Errno) {
 	return fileSize, errno
 }
 
-func (t *Tracer) FDWrite(ctx context.Context, fd FD, iovecs []IOVec) (Size, Errno) {
+func (t *tracer) FDWrite(ctx context.Context, fd FD, iovecs []IOVec) (Size, Errno) {
 	t.printf("FDWrite(%d, ", fd)
 	t.printIOVecs(iovecs, -1)
 	t.printf(") => ")
-	n, errno := t.System.FDWrite(ctx, fd, iovecs)
+	n, errno := t.system.FDWrite(ctx, fd, iovecs)
 	if errno == ESUCCESS {
 		t.printf("%d", n)
 	} else {
@@ -337,9 +353,9 @@ func (t *Tracer) FDWrite(ctx context.Context, fd FD, iovecs []IOVec) (Size, Errn
 	return n, errno
 }
 
-func (t *Tracer) PathCreateDirectory(ctx context.Context, fd FD, path string) Errno {
+func (t *tracer) PathCreateDirectory(ctx context.Context, fd FD, path string) Errno {
 	t.printf("PathCreateDirectory(%d, %q) => ", fd, path)
-	errno := t.System.PathCreateDirectory(ctx, fd, path)
+	errno := t.system.PathCreateDirectory(ctx, fd, path)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -349,9 +365,9 @@ func (t *Tracer) PathCreateDirectory(ctx context.Context, fd FD, path string) Er
 	return errno
 }
 
-func (t *Tracer) PathFileStatGet(ctx context.Context, fd FD, lookupFlags LookupFlags, path string) (FileStat, Errno) {
+func (t *tracer) PathFileStatGet(ctx context.Context, fd FD, lookupFlags LookupFlags, path string) (FileStat, Errno) {
 	t.printf("PathFileStatGet(%d, %s, %q) => ", fd, lookupFlags, path)
-	filestat, errno := t.System.PathFileStatGet(ctx, fd, lookupFlags, path)
+	filestat, errno := t.system.PathFileStatGet(ctx, fd, lookupFlags, path)
 	if errno == ESUCCESS {
 		t.printFileStat(filestat)
 	} else {
@@ -361,9 +377,9 @@ func (t *Tracer) PathFileStatGet(ctx context.Context, fd FD, lookupFlags LookupF
 	return filestat, errno
 }
 
-func (t *Tracer) PathFileStatSetTimes(ctx context.Context, fd FD, lookupFlags LookupFlags, path string, accessTime, modifyTime Timestamp, flags FSTFlags) Errno {
+func (t *tracer) PathFileStatSetTimes(ctx context.Context, fd FD, lookupFlags LookupFlags, path string, accessTime, modifyTime Timestamp, flags FSTFlags) Errno {
 	t.printf("PathFileStatSetTimes(%d, %s, %q, %d, %d, %s) => ", fd, lookupFlags, path, accessTime, modifyTime, flags)
-	errno := t.System.PathFileStatSetTimes(ctx, fd, lookupFlags, path, accessTime, modifyTime, flags)
+	errno := t.system.PathFileStatSetTimes(ctx, fd, lookupFlags, path, accessTime, modifyTime, flags)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -373,9 +389,9 @@ func (t *Tracer) PathFileStatSetTimes(ctx context.Context, fd FD, lookupFlags Lo
 	return errno
 }
 
-func (t *Tracer) PathLink(ctx context.Context, oldFD FD, oldFlags LookupFlags, oldPath string, newFD FD, newPath string) Errno {
+func (t *tracer) PathLink(ctx context.Context, oldFD FD, oldFlags LookupFlags, oldPath string, newFD FD, newPath string) Errno {
 	t.printf("PathLink(%d, %s, %q, %d, %q) => ", oldFD, oldFlags, oldPath, newFD, newPath)
-	errno := t.System.PathLink(ctx, oldFD, oldFlags, oldPath, newFD, newPath)
+	errno := t.system.PathLink(ctx, oldFD, oldFlags, oldPath, newFD, newPath)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -385,9 +401,9 @@ func (t *Tracer) PathLink(ctx context.Context, oldFD FD, oldFlags LookupFlags, o
 	return errno
 }
 
-func (t *Tracer) PathOpen(ctx context.Context, fd FD, dirFlags LookupFlags, path string, openFlags OpenFlags, rightsBase, rightsInheriting Rights, fdFlags FDFlags) (FD, Errno) {
+func (t *tracer) PathOpen(ctx context.Context, fd FD, dirFlags LookupFlags, path string, openFlags OpenFlags, rightsBase, rightsInheriting Rights, fdFlags FDFlags) (FD, Errno) {
 	t.printf("PathOpen(%d, %s, %q, %s, %s, %s, %s) => ", fd, dirFlags, path, openFlags, rightsBase, rightsInheriting, fdFlags)
-	fd, errno := t.System.PathOpen(ctx, fd, dirFlags, path, openFlags, rightsBase, rightsInheriting, fdFlags)
+	fd, errno := t.system.PathOpen(ctx, fd, dirFlags, path, openFlags, rightsBase, rightsInheriting, fdFlags)
 	if errno == ESUCCESS {
 		t.printf("%d", fd)
 	} else {
@@ -397,9 +413,9 @@ func (t *Tracer) PathOpen(ctx context.Context, fd FD, dirFlags LookupFlags, path
 	return fd, errno
 }
 
-func (t *Tracer) PathReadLink(ctx context.Context, fd FD, path string, buffer []byte) (int, Errno) {
+func (t *tracer) PathReadLink(ctx context.Context, fd FD, path string, buffer []byte) (int, Errno) {
 	t.printf("PathReadLink(%d, %q, [%d]byte) => ", fd, path, len(buffer))
-	n, errno := t.System.PathReadLink(ctx, fd, path, buffer)
+	n, errno := t.system.PathReadLink(ctx, fd, path, buffer)
 	if errno == ESUCCESS {
 		t.printBytes(buffer[:n])
 	} else {
@@ -409,9 +425,9 @@ func (t *Tracer) PathReadLink(ctx context.Context, fd FD, path string, buffer []
 	return n, errno
 }
 
-func (t *Tracer) PathRemoveDirectory(ctx context.Context, fd FD, path string) Errno {
+func (t *tracer) PathRemoveDirectory(ctx context.Context, fd FD, path string) Errno {
 	t.printf("PathRemoveDirectory(%d, %q) => ", fd, path)
-	errno := t.System.PathRemoveDirectory(ctx, fd, path)
+	errno := t.system.PathRemoveDirectory(ctx, fd, path)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -421,9 +437,9 @@ func (t *Tracer) PathRemoveDirectory(ctx context.Context, fd FD, path string) Er
 	return errno
 }
 
-func (t *Tracer) PathRename(ctx context.Context, fd FD, oldPath string, newFD FD, newPath string) Errno {
+func (t *tracer) PathRename(ctx context.Context, fd FD, oldPath string, newFD FD, newPath string) Errno {
 	t.printf("PathRename(%d, %q, %d, %q) => ", fd, oldPath, newFD, newPath)
-	errno := t.System.PathRename(ctx, fd, oldPath, newFD, newPath)
+	errno := t.system.PathRename(ctx, fd, oldPath, newFD, newPath)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -433,9 +449,9 @@ func (t *Tracer) PathRename(ctx context.Context, fd FD, oldPath string, newFD FD
 	return errno
 }
 
-func (t *Tracer) PathSymlink(ctx context.Context, oldPath string, fd FD, newPath string) Errno {
+func (t *tracer) PathSymlink(ctx context.Context, oldPath string, fd FD, newPath string) Errno {
 	t.printf("PathSymlink(%q, %d, %q) => ", oldPath, fd, newPath)
-	errno := t.System.PathSymlink(ctx, oldPath, fd, newPath)
+	errno := t.system.PathSymlink(ctx, oldPath, fd, newPath)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -445,9 +461,9 @@ func (t *Tracer) PathSymlink(ctx context.Context, oldPath string, fd FD, newPath
 	return errno
 }
 
-func (t *Tracer) PathUnlinkFile(ctx context.Context, fd FD, path string) Errno {
+func (t *tracer) PathUnlinkFile(ctx context.Context, fd FD, path string) Errno {
 	t.printf("PathUnlinkFile(%d, %q) => ", fd, path)
-	errno := t.System.PathUnlinkFile(ctx, fd, path)
+	errno := t.system.PathUnlinkFile(ctx, fd, path)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -457,7 +473,7 @@ func (t *Tracer) PathUnlinkFile(ctx context.Context, fd FD, path string) Errno {
 	return errno
 }
 
-func (t *Tracer) PollOneOff(ctx context.Context, subscriptions []Subscription, events []Event) (int, Errno) {
+func (t *tracer) PollOneOff(ctx context.Context, subscriptions []Subscription, events []Event) (int, Errno) {
 	t.printf("PollOneoff(")
 	for i, s := range subscriptions {
 		if i > 0 {
@@ -466,7 +482,7 @@ func (t *Tracer) PollOneOff(ctx context.Context, subscriptions []Subscription, e
 		t.printSubscription(s)
 	}
 	t.printf(") => ")
-	n, errno := t.System.PollOneOff(ctx, subscriptions, events)
+	n, errno := t.system.PollOneOff(ctx, subscriptions, events)
 	switch {
 	case errno == ESUCCESS && n == 0:
 		t.printf("{}")
@@ -484,9 +500,9 @@ func (t *Tracer) PollOneOff(ctx context.Context, subscriptions []Subscription, e
 	return n, errno
 }
 
-func (t *Tracer) ProcExit(ctx context.Context, exitCode ExitCode) Errno {
+func (t *tracer) ProcExit(ctx context.Context, exitCode ExitCode) Errno {
 	t.printf("ProcExit(%d) => ", exitCode)
-	errno := t.System.ProcExit(ctx, exitCode)
+	errno := t.system.ProcExit(ctx, exitCode)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -496,9 +512,9 @@ func (t *Tracer) ProcExit(ctx context.Context, exitCode ExitCode) Errno {
 	return errno
 }
 
-func (t *Tracer) ProcRaise(ctx context.Context, signal Signal) Errno {
+func (t *tracer) ProcRaise(ctx context.Context, signal Signal) Errno {
 	t.printf("ProcRaise(%d) => ", signal)
-	errno := t.System.ProcRaise(ctx, signal)
+	errno := t.system.ProcRaise(ctx, signal)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -508,9 +524,9 @@ func (t *Tracer) ProcRaise(ctx context.Context, signal Signal) Errno {
 	return errno
 }
 
-func (t *Tracer) SchedYield(ctx context.Context) Errno {
+func (t *tracer) SchedYield(ctx context.Context) Errno {
 	t.printf("SchedYield() => ")
-	errno := t.System.SchedYield(ctx)
+	errno := t.system.SchedYield(ctx)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -520,9 +536,9 @@ func (t *Tracer) SchedYield(ctx context.Context) Errno {
 	return errno
 }
 
-func (t *Tracer) RandomGet(ctx context.Context, b []byte) Errno {
+func (t *tracer) RandomGet(ctx context.Context, b []byte) Errno {
 	t.printf("RandomGet([%d]byte) => ", len(b))
-	errno := t.System.RandomGet(ctx, b)
+	errno := t.system.RandomGet(ctx, b)
 	if errno == ESUCCESS {
 		t.printBytes(b)
 	} else {
@@ -532,9 +548,9 @@ func (t *Tracer) RandomGet(ctx context.Context, b []byte) Errno {
 	return errno
 }
 
-func (t *Tracer) SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, SocketAddress, SocketAddress, Errno) {
+func (t *tracer) SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, SocketAddress, SocketAddress, Errno) {
 	t.printf("SockAccept(%d, %s) => ", fd, flags)
-	newfd, peer, addr, errno := t.System.SockAccept(ctx, fd, flags)
+	newfd, peer, addr, errno := t.system.SockAccept(ctx, fd, flags)
 	if errno == ESUCCESS {
 		t.printf("%d, %s > %s", newfd, peer, addr)
 	} else {
@@ -544,9 +560,9 @@ func (t *Tracer) SockAccept(ctx context.Context, fd FD, flags FDFlags) (FD, Sock
 	return newfd, peer, addr, errno
 }
 
-func (t *Tracer) SockShutdown(ctx context.Context, fd FD, flags SDFlags) Errno {
+func (t *tracer) SockShutdown(ctx context.Context, fd FD, flags SDFlags) Errno {
 	t.printf("SockShutdown(%d, %s) => ", fd, flags)
-	errno := t.System.SockShutdown(ctx, fd, flags)
+	errno := t.system.SockShutdown(ctx, fd, flags)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -556,11 +572,11 @@ func (t *Tracer) SockShutdown(ctx context.Context, fd FD, flags SDFlags) Errno {
 	return errno
 }
 
-func (t *Tracer) SockRecv(ctx context.Context, fd FD, iovecs []IOVec, iflags RIFlags) (Size, ROFlags, Errno) {
+func (t *tracer) SockRecv(ctx context.Context, fd FD, iovecs []IOVec, iflags RIFlags) (Size, ROFlags, Errno) {
 	t.printf("SockRecv(%d, ", fd)
 	t.printIOVecsProto(iovecs)
 	t.printf(", %s) => ", iflags)
-	n, oflags, errno := t.System.SockRecv(ctx, fd, iovecs, iflags)
+	n, oflags, errno := t.system.SockRecv(ctx, fd, iovecs, iflags)
 	if errno == ESUCCESS {
 		t.printf("[%d]byte: ", n)
 		t.printIOVecs(iovecs, int(n))
@@ -572,11 +588,11 @@ func (t *Tracer) SockRecv(ctx context.Context, fd FD, iovecs []IOVec, iflags RIF
 	return n, oflags, errno
 }
 
-func (t *Tracer) SockSend(ctx context.Context, fd FD, iovecs []IOVec, iflags SIFlags) (Size, Errno) {
+func (t *tracer) SockSend(ctx context.Context, fd FD, iovecs []IOVec, iflags SIFlags) (Size, Errno) {
 	t.printf("SockSend(%d, ", fd)
 	t.printIOVecs(iovecs, -1)
 	t.printf(", %s) => ", iflags)
-	n, errno := t.System.SockSend(ctx, fd, iovecs, iflags)
+	n, errno := t.system.SockSend(ctx, fd, iovecs, iflags)
 	if errno == ESUCCESS {
 		t.printf("%d", n)
 	} else {
@@ -586,8 +602,8 @@ func (t *Tracer) SockSend(ctx context.Context, fd FD, iovecs []IOVec, iflags SIF
 	return n, errno
 }
 
-func (t *Tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType SocketType, protocol Protocol, rightsBase, rightsInheriting Rights) (FD, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType SocketType, protocol Protocol, rightsBase, rightsInheriting Rights) (FD, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return -1, ENOSYS
 	}
@@ -602,8 +618,8 @@ func (t *Tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType Soc
 	return fd, errno
 }
 
-func (t *Tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress) (SocketAddress, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress) (SocketAddress, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return nil, ENOSYS
 	}
@@ -618,8 +634,8 @@ func (t *Tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress) (Socke
 	return addr, errno
 }
 
-func (t *Tracer) SockConnect(ctx context.Context, fd FD, peer SocketAddress) (SocketAddress, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockConnect(ctx context.Context, fd FD, peer SocketAddress) (SocketAddress, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return nil, ENOSYS
 	}
@@ -636,8 +652,8 @@ func (t *Tracer) SockConnect(ctx context.Context, fd FD, peer SocketAddress) (So
 	return addr, errno
 }
 
-func (t *Tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return ENOSYS
 	}
@@ -652,8 +668,8 @@ func (t *Tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
 	return errno
 }
 
-func (t *Tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, iflags SIFlags, addr SocketAddress) (Size, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, iflags SIFlags, addr SocketAddress) (Size, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return 0, ENOSYS
 	}
@@ -670,8 +686,8 @@ func (t *Tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, iflags S
 	return n, errno
 }
 
-func (t *Tracer) SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, iflags RIFlags) (Size, ROFlags, SocketAddress, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, iflags RIFlags) (Size, ROFlags, SocketAddress, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return 0, 0, nil, ENOSYS
 	}
@@ -690,8 +706,8 @@ func (t *Tracer) SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, iflags
 	return n, oflags, addr, errno
 }
 
-func (t *Tracer) SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (SocketOptionValue, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (SocketOptionValue, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return nil, ENOSYS
 	}
@@ -706,8 +722,8 @@ func (t *Tracer) SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel,
 	return value, errno
 }
 
-func (t *Tracer) SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value SocketOptionValue) Errno {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value SocketOptionValue) Errno {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return ENOSYS
 	}
@@ -722,8 +738,8 @@ func (t *Tracer) SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel,
 	return errno
 }
 
-func (t *Tracer) SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return nil, ENOSYS
 	}
@@ -738,8 +754,8 @@ func (t *Tracer) SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Er
 	return addr, errno
 }
 
-func (t *Tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return nil, ENOSYS
 	}
@@ -754,8 +770,8 @@ func (t *Tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, E
 	return addr, errno
 }
 
-func (t *Tracer) SockAddressInfo(ctx context.Context, name, service string, hints AddressInfo, results []AddressInfo) (int, Errno) {
-	s, ok := t.System.(SocketsExtension)
+func (t *tracer) SockAddressInfo(ctx context.Context, name, service string, hints AddressInfo, results []AddressInfo) (int, Errno) {
+	s, ok := t.system.(SocketsExtension)
 	if !ok {
 		return 0, ENOSYS
 	}
@@ -779,9 +795,9 @@ func (t *Tracer) SockAddressInfo(ctx context.Context, name, service string, hint
 	return n, errno
 }
 
-func (t *Tracer) Close(ctx context.Context) error {
+func (t *tracer) Close(ctx context.Context) error {
 	t.printf("Close() => ")
-	err := t.System.Close(ctx)
+	err := t.system.Close(ctx)
 	if err == nil {
 		t.printf("ok\n")
 	} else {
@@ -790,15 +806,15 @@ func (t *Tracer) Close(ctx context.Context) error {
 	return err
 }
 
-func (t *Tracer) printf(msg string, args ...interface{}) {
-	fmt.Fprintf(t.Writer, msg, args...)
+func (t *tracer) printf(msg string, args ...interface{}) {
+	fmt.Fprintf(t.writer, msg, args...)
 }
 
-func (t *Tracer) printErrno(errno Errno) {
+func (t *tracer) printErrno(errno Errno) {
 	t.printf("%s (%s)", errno.Name(), errno.Error())
 }
 
-func (t *Tracer) printSubscription(s Subscription) {
+func (t *tracer) printSubscription(s Subscription) {
 	t.printf("{EventType:%s,UserData:%#x,", s.EventType, s.UserData)
 	if s.EventType == ClockEvent {
 		c := s.GetClock()
@@ -813,7 +829,7 @@ func (t *Tracer) printSubscription(s Subscription) {
 	}
 }
 
-func (t *Tracer) printEvent(e Event) {
+func (t *tracer) printEvent(e Event) {
 	t.printf("{EventType:%s,UserData:%#x", e.EventType, e.UserData)
 	if e.Errno != 0 {
 		t.printf(",Errno:%s}", e.Errno.Name())
@@ -827,7 +843,7 @@ func (t *Tracer) printEvent(e Event) {
 	}
 }
 
-func (t *Tracer) printFDStat(s FDStat) {
+func (t *tracer) printFDStat(s FDStat) {
 	t.printf("{FileType:%s", s.FileType)
 	if s.Flags != 0 {
 		t.printf(",Flags:%s", s.Flags)
@@ -839,11 +855,11 @@ func (t *Tracer) printFDStat(s FDStat) {
 	t.printf("}")
 }
 
-func (t *Tracer) printFileStat(s FileStat) {
+func (t *tracer) printFileStat(s FileStat) {
 	t.printf("%#v", s)
 }
 
-func (t *Tracer) printIOVecsProto(iovecs []IOVec) {
+func (t *tracer) printIOVecsProto(iovecs []IOVec) {
 	t.printf("[%d]IOVec{", len(iovecs))
 	for i, iovec := range iovecs {
 		if i > 0 {
@@ -854,7 +870,7 @@ func (t *Tracer) printIOVecsProto(iovecs []IOVec) {
 	t.printf("}")
 }
 
-func (t *Tracer) printIOVecs(iovecs []IOVec, size int) {
+func (t *tracer) printIOVecs(iovecs []IOVec, size int) {
 	t.printf("[%d]IOVec{", len(iovecs))
 	for i, iovec := range iovecs {
 		if i > 0 {
@@ -876,7 +892,7 @@ func (t *Tracer) printIOVecs(iovecs []IOVec, size int) {
 	t.printf("}")
 }
 
-func (t *Tracer) printDirEntries(dirEntries []DirEntry, bufferSizeBytes int) {
+func (t *tracer) printDirEntries(dirEntries []DirEntry, bufferSizeBytes int) {
 	t.printf("{")
 	for i, e := range dirEntries {
 		if i > 0 {
@@ -891,7 +907,7 @@ func (t *Tracer) printDirEntries(dirEntries []DirEntry, bufferSizeBytes int) {
 	t.printf("}")
 }
 
-func (t *Tracer) printAddressInfo(a AddressInfo) {
+func (t *tracer) printAddressInfo(a AddressInfo) {
 	t.printf("{")
 	if a.Flags != 0 {
 		t.printf("Flags:%s,", a.Flags)
@@ -908,7 +924,7 @@ func (t *Tracer) printAddressInfo(a AddressInfo) {
 
 const maxBytes = 32
 
-func (t *Tracer) printBytes(b []byte) {
+func (t *tracer) printBytes(b []byte) {
 	t.printf("[%d]byte(\"", len(b))
 
 	if len(b) > 0 {
