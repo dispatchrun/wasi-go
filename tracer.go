@@ -17,8 +17,6 @@ type tracer struct {
 	system System
 }
 
-var _ SocketsExtension = (*tracer)(nil)
-
 func (t *tracer) ArgsSizesGet(ctx context.Context) (int, int, Errno) {
 	t.printf("ArgsSizesGet() => ")
 	argCount, stringBytes, errno := t.system.ArgsSizesGet(ctx)
@@ -603,12 +601,8 @@ func (t *tracer) SockSend(ctx context.Context, fd FD, iovecs []IOVec, iflags SIF
 }
 
 func (t *tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType SocketType, protocol Protocol, rightsBase, rightsInheriting Rights) (FD, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return -1, ENOSYS
-	}
 	t.printf("SockOpen(%s, %s, %s, %s, %s) => ", pf, socketType, protocol, rightsBase, rightsInheriting)
-	fd, errno := s.SockOpen(ctx, pf, socketType, protocol, rightsBase, rightsInheriting)
+	fd, errno := t.system.SockOpen(ctx, pf, socketType, protocol, rightsBase, rightsInheriting)
 	if errno == ESUCCESS {
 		t.printf("%d", fd)
 	} else {
@@ -619,12 +613,8 @@ func (t *tracer) SockOpen(ctx context.Context, pf ProtocolFamily, socketType Soc
 }
 
 func (t *tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress) (SocketAddress, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return nil, ENOSYS
-	}
 	t.printf("SockBind(%d, %s) => ", fd, addr)
-	addr, errno := s.SockBind(ctx, fd, addr)
+	addr, errno := t.system.SockBind(ctx, fd, addr)
 	if errno == ESUCCESS {
 		t.printf("%s", addr)
 	} else {
@@ -635,12 +625,8 @@ func (t *tracer) SockBind(ctx context.Context, fd FD, addr SocketAddress) (Socke
 }
 
 func (t *tracer) SockConnect(ctx context.Context, fd FD, peer SocketAddress) (SocketAddress, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return nil, ENOSYS
-	}
 	t.printf("SockConnect(%d, %s) => ", fd, peer)
-	addr, errno := s.SockConnect(ctx, fd, peer)
+	addr, errno := t.system.SockConnect(ctx, fd, peer)
 	if errno == EINPROGRESS {
 		t.printf("%s (EINPROGRESS)", addr)
 	} else if errno == ESUCCESS {
@@ -653,12 +639,8 @@ func (t *tracer) SockConnect(ctx context.Context, fd FD, peer SocketAddress) (So
 }
 
 func (t *tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return ENOSYS
-	}
 	t.printf("SockListen(%d, %d) => ", fd, backlog)
-	errno := s.SockListen(ctx, fd, backlog)
+	errno := t.system.SockListen(ctx, fd, backlog)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -669,14 +651,10 @@ func (t *tracer) SockListen(ctx context.Context, fd FD, backlog int) Errno {
 }
 
 func (t *tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, iflags SIFlags, addr SocketAddress) (Size, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return 0, ENOSYS
-	}
 	t.printf("SockSendTo(%d, ", fd)
 	t.printIOVecs(iovecs, -1)
 	t.printf(", %s, %s) => ", iflags, addr)
-	n, errno := s.SockSendTo(ctx, fd, iovecs, iflags, addr)
+	n, errno := t.system.SockSendTo(ctx, fd, iovecs, iflags, addr)
 	if errno == ESUCCESS {
 		t.printf("%d", n)
 	} else {
@@ -687,14 +665,10 @@ func (t *tracer) SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, iflags S
 }
 
 func (t *tracer) SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, iflags RIFlags) (Size, ROFlags, SocketAddress, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return 0, 0, nil, ENOSYS
-	}
 	t.printf("SockRecvFrom(%d, ", fd)
 	t.printIOVecsProto(iovecs)
 	t.printf(", %s) => ", iflags)
-	n, oflags, addr, errno := s.SockRecvFrom(ctx, fd, iovecs, iflags)
+	n, oflags, addr, errno := t.system.SockRecvFrom(ctx, fd, iovecs, iflags)
 	if errno == ESUCCESS {
 		t.printf("[%d]byte: ", n)
 		t.printIOVecs(iovecs, int(n))
@@ -707,12 +681,8 @@ func (t *tracer) SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, iflags
 }
 
 func (t *tracer) SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (SocketOptionValue, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return nil, ENOSYS
-	}
 	t.printf("SockGetOpt(%d, %s, %s) => ", fd, level, option)
-	value, errno := s.SockGetOpt(ctx, fd, level, option)
+	value, errno := t.system.SockGetOpt(ctx, fd, level, option)
 	if errno == ESUCCESS {
 		t.printf("%d", value)
 	} else {
@@ -723,12 +693,8 @@ func (t *tracer) SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel,
 }
 
 func (t *tracer) SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value SocketOptionValue) Errno {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return ENOSYS
-	}
 	t.printf("SockSetOpt(%d, %s, %s, %d) => ", fd, level, option, value)
-	errno := s.SockSetOpt(ctx, fd, level, option, value)
+	errno := t.system.SockSetOpt(ctx, fd, level, option, value)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {
@@ -739,12 +705,8 @@ func (t *tracer) SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel,
 }
 
 func (t *tracer) SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return nil, ENOSYS
-	}
 	t.printf("SockLocalAddress(%d) => ", fd)
-	addr, errno := s.SockLocalAddress(ctx, fd)
+	addr, errno := t.system.SockLocalAddress(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("%s", addr)
 	} else {
@@ -755,12 +717,8 @@ func (t *tracer) SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Er
 }
 
 func (t *tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return nil, ENOSYS
-	}
 	t.printf("SockRemoteAddress(%d) => ", fd)
-	addr, errno := s.SockRemoteAddress(ctx, fd)
+	addr, errno := t.system.SockRemoteAddress(ctx, fd)
 	if errno == ESUCCESS {
 		t.printf("%s", addr)
 	} else {
@@ -771,14 +729,10 @@ func (t *tracer) SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, E
 }
 
 func (t *tracer) SockAddressInfo(ctx context.Context, name, service string, hints AddressInfo, results []AddressInfo) (int, Errno) {
-	s, ok := t.system.(SocketsExtension)
-	if !ok {
-		return 0, ENOSYS
-	}
 	t.printf("SockAddressInfo(%s, %s, ", name, service)
 	t.printAddressInfo(hints)
 	t.printf(", [%d]AddressInfo) => ", len(results))
-	n, errno := s.SockAddressInfo(ctx, name, service, hints, results)
+	n, errno := t.system.SockAddressInfo(ctx, name, service, hints, results)
 	if errno == ESUCCESS {
 		t.printf("[")
 		for i := range results[:n] {

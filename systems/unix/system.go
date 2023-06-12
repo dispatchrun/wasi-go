@@ -14,8 +14,6 @@ import (
 
 // System is a WASI preview 1 implementation for Unix.
 //
-// It implements the wasi.System and wasi.SocketsExtension interfaces.
-//
 // An instance of System is not safe for concurrent use.
 type System struct {
 	// Args are the environment variables accessible via ArgsGet.
@@ -69,7 +67,6 @@ type System struct {
 }
 
 var _ wasi.System = (*System)(nil)
-var _ wasi.SocketsExtension = (*System)(nil)
 
 func (s *System) ArgsSizesGet(ctx context.Context) (argCount, stringBytes int, errno wasi.Errno) {
 	argCount, stringBytes = wasi.SizesGet(s.Args)

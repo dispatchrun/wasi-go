@@ -280,6 +280,36 @@ type System interface {
 	// rather than to provide the random data directly.
 	RandomGet(ctx context.Context, b []byte) Errno
 
+	// SockOpen opens a socket.
+	//
+	// Note: This is similar to socket in POSIX.
+	SockOpen(ctx context.Context, family ProtocolFamily, socketType SocketType, protocol Protocol, rightsBase, rightsInheriting Rights) (FD, Errno)
+
+	// SockBind binds a socket to an address.
+	//
+	// The method returns the address that the socket has been bound to, which
+	// may differ from the one passed as argument. For example, in cases where
+	// the caller used an address with port 0, and the system is responsible for
+	// selecting a free port to bind the socket to.
+	//
+	// The implementation must not retain the socket address.
+	//
+	// Note: This is similar to bind in POSIX.
+	SockBind(ctx context.Context, fd FD, addr SocketAddress) (SocketAddress, Errno)
+
+	// SockConnect connects a socket to an address, returning the local socket
+	// address that the connection was made from.
+	//
+	// The implementation must not retain the socket address.
+	//
+	// Note: This is similar to connect in POSIX.
+	SockConnect(ctx context.Context, fd FD, addr SocketAddress) (SocketAddress, Errno)
+
+	// SockListen allows the socket to accept connections with SockAccept.
+	//
+	// Note: This is similar to listen in POSIX.
+	SockListen(ctx context.Context, fd FD, backlog int) Errno
+
 	// SockAccept accepts a new incoming connection.
 	//
 	// The method returns a pair of socket addresses where the first one is the
@@ -313,6 +343,62 @@ type System interface {
 	// Note: This is similar to send in POSIX, though it also supports
 	// writing the data from multiple buffers in the manner of writev.
 	SockSend(ctx context.Context, fd FD, iovecs []IOVec, flags SIFlags) (Size, Errno)
+
+	// SockSendTo sends a message on a socket.
+	//
+	// It's similar to SockSend, but accepts an additional SocketAddress.
+	//
+	// Note: This is similar to sendto in POSIX, though it also supports
+	// writing the data from multiple buffers in the manner of writev.
+	SockSendTo(ctx context.Context, fd FD, iovecs []IOVec, flags SIFlags, addr SocketAddress) (Size, Errno)
+
+	// SockRecvFrom receives a message from a socket.
+	//
+	// It's similar to SockRecv, but returns an additional SocketAddress.
+	//
+	// Note: This is similar to recvfrom in POSIX, though it also supports reading
+	// the data into multiple buffers in the manner of readv.
+	SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, flags RIFlags) (Size, ROFlags, SocketAddress, Errno)
+
+	// SockGetOpt gets a socket option.
+	//
+	// Note: This is similar to getsockopt in POSIX.
+	SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (SocketOptionValue, Errno)
+
+	// SockSetOpt sets a socket option.
+	//
+	// Note: This is similar to setsockopt in POSIX.
+	SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value SocketOptionValue) Errno
+
+	// SockLocalAddress gets the local address of the socket.
+	//
+	// The returned address is only valid until the next call on this
+	// interface. Assume that any method may invalidate the address.
+	//
+	// Note: This is similar to getsockname in POSIX.
+	SockLocalAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
+
+	// SockRemoteAddress gets the address of the peer when the socket is a
+	// connection.
+	//
+	// The returned address is only valid until the next call on this
+	// interface. Assume that any method may invalidate the address.
+	//
+	// Note: This is similar to getpeername in POSIX.
+	SockRemoteAddress(ctx context.Context, fd FD) (SocketAddress, Errno)
+
+	// SockAddressInfo get a list of IP addresses and port numbers for a
+	// host name and service.
+	//
+	// The function populates the AddressInfo.Address fields of the provided
+	// results slice, and returns a count indicating how many results were
+	// written.
+	//
+	// The returned addresses are only valid until the next call on this
+	// interface. Assume that any method may invalidate the addresses.
+	//
+	// Note: This is similar to getaddrinfo in POSIX.
+	SockAddressInfo(ctx context.Context, name, service string, hints AddressInfo, results []AddressInfo) (int, Errno)
 
 	// SockShutdown shuts down a socket's send and/or receive channels.
 	//
