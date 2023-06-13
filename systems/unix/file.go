@@ -219,11 +219,11 @@ func (fd FD) PathOpen(ctx context.Context, lookupFlags wasi.LookupFlags, path st
 	switch {
 	case openFlags.Has(wasi.OpenDirectory):
 		oflags |= unix.O_RDONLY
-	case rightsBase.HasAny(wasi.ReadRights) && rightsBase.HasAny(wasi.WriteRights):
+	case rightsBase.Has(wasi.FDReadRight) && rightsBase.Has(wasi.FDWriteRight):
 		oflags |= unix.O_RDWR
-	case rightsBase.HasAny(wasi.ReadRights):
+	case rightsBase.Has(wasi.FDReadRight):
 		oflags |= unix.O_RDONLY
-	case rightsBase.HasAny(wasi.WriteRights):
+	case rightsBase.Has(wasi.FDWriteRight):
 		oflags |= unix.O_WRONLY
 	default:
 		oflags |= unix.O_RDONLY
