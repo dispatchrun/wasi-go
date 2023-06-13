@@ -1,6 +1,8 @@
 package wasi
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Errno are the error codes returned by functions.
 //
@@ -242,6 +244,10 @@ const (
 	// ENOTCAPABLE means capabilities are insufficient.
 	ENOTCAPABLE
 )
+
+// MakeErrno converts a Go error to a WASI errno value in a way that is portable
+// across platforms.
+func MakeErrno(err error) Errno { return makeErrno(err) }
 
 func (e Errno) Error() string {
 	if i := int(e); i >= 0 && i < len(errorStrings) {

@@ -1,10 +1,6 @@
 package unix
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"syscall"
 	"unsafe"
 
 	"github.com/stealthrocket/wasi-go"
@@ -12,33 +8,7 @@ import (
 )
 
 func makeErrno(err error) wasi.Errno {
-	if err == nil {
-		return wasi.ESUCCESS
-	}
-	if err == syscall.EAGAIN {
-		return wasi.EAGAIN
-	}
-	return makeErrnoSlow(err)
-}
-
-func makeErrnoSlow(err error) wasi.Errno {
-	if err == context.Canceled {
-		return wasi.ECANCELED
-	}
-	var sysErrno unix.Errno
-	if errors.As(err, &sysErrno) {
-		if sysErrno == 0 {
-			return wasi.ESUCCESS
-		}
-		return syscallErrnoToWASI(sysErrno)
-	}
-	var timeout interface{ Timeout() bool }
-	if errors.As(err, &timeout) {
-		if timeout.Timeout() {
-			return wasi.ETIMEDOUT
-		}
-	}
-	panic(fmt.Errorf("unexpected error: %v", err))
+	return wasi.MakeErrno(err)
 }
 
 func makeFileStat(s *unix.Stat_t) wasi.FileStat {
