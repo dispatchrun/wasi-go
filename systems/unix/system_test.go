@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/stealthrocket/wasi-go"
@@ -14,6 +15,28 @@ import (
 	"github.com/stealthrocket/wasi-go/testwasi"
 	sysunix "golang.org/x/sys/unix"
 )
+
+func TestFS(t *testing.T) {
+	tmp := t.TempDir()
+
+	f, err := os.Open(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	system := &unix.System{}
+	rootFD := system.Preopen(unix.FD(f.Fd()), "/", wasi.FDStat{
+		RightsBase:       wasi.AllRights,
+		RightsInheriting: wasi.AllRights,
+	})
+
+	fsys := wasi.FS(context.Background(), system, rootFD)
+
+	if err := fstest.TestFS(fsys); err != nil {
+		t.Error(err)
+	}
+}
 
 func TestWASIP1(t *testing.T) {
 	files, _ := filepath.Glob("../testdata/*/*.wasm")

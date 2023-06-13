@@ -94,18 +94,18 @@ type Dir interface {
 //		...
 //	}
 type FileTable[T File[T]] struct {
-	files    descriptor.Table[FD, fileInfo[T]]
+	files    descriptor.Table[FD, fileEntry[T]]
 	preopens descriptor.Table[FD, string]
 	dirs     map[FD]Dir
 }
 
-type fileInfo[T File[T]] struct {
+type fileEntry[T File[T]] struct {
 	file T
 	stat FDStat
 }
 
 func (t *FileTable[T]) Close(ctx context.Context) error {
-	t.files.Range(func(fd FD, f fileInfo[T]) bool {
+	t.files.Range(func(fd FD, f fileEntry[T]) bool {
 		f.file.FDClose(ctx)
 		return true
 	})
@@ -129,7 +129,7 @@ func (t *FileTable[T]) Preopen(file T, path string, stat FDStat) FD {
 func (t *FileTable[T]) Register(file T, stat FDStat) FD {
 	stat.RightsBase &= AllRights
 	stat.RightsInheriting &= AllRights
-	return t.files.Insert(fileInfo[T]{file: file, stat: stat})
+	return t.files.Insert(fileEntry[T]{file: file, stat: stat})
 }
 
 func (t *FileTable[T]) LookupFD(fd FD, rights Rights) (file T, stat FDStat, errno Errno) {
@@ -154,7 +154,7 @@ func (t *FileTable[T]) isPreopen(fd FD) bool {
 	return t.preopens.Access(fd) != nil
 }
 
-func (t *FileTable[T]) lookupFD(fd FD, rights Rights) (*fileInfo[T], Errno) {
+func (t *FileTable[T]) lookupFD(fd FD, rights Rights) (*fileEntry[T], Errno) {
 	f := t.files.Access(fd)
 	if f == nil {
 		return nil, EBADF
@@ -180,7 +180,7 @@ func (t *FileTable[T]) lookupPreopenPath(fd FD) (string, Errno) {
 	return path, ESUCCESS
 }
 
-func (t *FileTable[T]) lookupSocketFD(fd FD, rights Rights) (*fileInfo[T], Errno) {
+func (t *FileTable[T]) lookupSocketFD(fd FD, rights Rights) (*fileEntry[T], Errno) {
 	f := t.files.Access(fd)
 	if f == nil {
 		return nil, EBADF
