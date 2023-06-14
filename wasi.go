@@ -303,7 +303,8 @@ func (t *FileTable[T]) FDFileStatGet(ctx context.Context, fd FD) (FileStat, Errn
 	if errno != ESUCCESS {
 		return FileStat{}, errno
 	}
-	if fd <= 2 {
+	switch s.FileType {
+	case BlockDeviceType, CharacterDeviceType:
 		// Override stdio size/times.
 		// See github.com/WebAssembly/wasi-testsuite/blob/1b1d4a5/tests/rust/src/bin/fd_filestat_get.rs
 		s.Size = 0
