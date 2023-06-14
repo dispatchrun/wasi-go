@@ -238,6 +238,7 @@ const (
 	UnspecifiedFamily ProtocolFamily = iota
 	InetFamily
 	Inet6Family
+	UnixFamily
 )
 
 func (pf ProtocolFamily) String() string {
@@ -248,6 +249,8 @@ func (pf ProtocolFamily) String() string {
 		return "InetFamily"
 	case Inet6Family:
 		return "Inet6Family"
+	case UnixFamily:
+		return "UnixFamily"
 	default:
 		return fmt.Sprintf("ProtocolFamily(%d)", pf)
 	}

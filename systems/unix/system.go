@@ -431,6 +431,8 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 		sysDomain = unix.AF_INET
 	case wasi.Inet6Family:
 		sysDomain = unix.AF_INET6
+	case wasi.UnixFamily:
+		sysDomain = unix.AF_UNIX
 	default:
 		return -1, wasi.EINVAL
 	}
