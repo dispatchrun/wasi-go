@@ -305,7 +305,8 @@ func (st SocketType) String() string {
 type SocketOptionLevel int32
 
 const (
-	SocketLevel SocketOptionLevel = iota
+	SocketLevel SocketOptionLevel = 0
+	TcpLevel    SocketOptionLevel = 6
 )
 
 func (sl SocketOptionLevel) String() string {
@@ -336,6 +337,7 @@ const (
 	SendTimeout
 	QueryAcceptConnections
 	BindToDevice
+	TcpNoDelay
 )
 
 func (so SocketOption) String() string {
@@ -370,6 +372,8 @@ func (so SocketOption) String() string {
 		return "QueryAcceptConnections"
 	case BindToDevice:
 		return "BindToDevice"
+	case TcpNoDelay:
+		return "TcpNoDelay"
 	default:
 		return fmt.Sprintf("SocketOption(%d)", so)
 	}

@@ -565,6 +565,8 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	switch level {
 	case wasi.SocketLevel:
 		sysLevel = unix.SOL_SOCKET
+	case wasi.TcpLevel:
+		sysLevel = unix.IPPROTO_TCP
 	default:
 		return nil, wasi.EINVAL
 	}
@@ -592,6 +594,8 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		sysOption = unix.SO_RCVLOWAT
 	case wasi.QueryAcceptConnections:
 		sysOption = unix.SO_ACCEPTCONN
+	case wasi.TcpNoDelay:
+		sysOption = unix.TCP_NODELAY
 	case wasi.Linger:
 		// This returns a struct linger value.
 		return nil, wasi.ENOTSUP // TODO: implement SO_LINGER
@@ -638,6 +642,8 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	switch level {
 	case wasi.SocketLevel:
 		sysLevel = unix.SOL_SOCKET
+	case wasi.TcpLevel:
+		sysLevel = unix.IPPROTO_TCP
 	default:
 		return wasi.EINVAL
 	}
