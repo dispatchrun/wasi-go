@@ -326,16 +326,30 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 }
 
 func (m *Module) wasmEdgeGetSocketAddress(b wasmEdgeAddress, port int) (sa wasi.SocketAddress, ok bool) {
+	// V2 addresses.
 	if len(b) == 128 {
 		switch wasi.ProtocolFamily(binary.LittleEndian.Uint16(b)) {
 		case wasi.InetFamily:
-			b = b[2:6]
+			b = b[2:6] // fallthrough to v1 parser below
 		case wasi.Inet6Family:
-			b = b[2:18]
+			b = b[2:18] // fallthrough to v1 parser below
+		case wasi.UnixFamily:
+			b = b[2:]
+			n := 0
+			for n < len(b) && b[n] != 0 {
+				n++
+			}
+			if n == len(b) || b[n] != 0 {
+				return
+			}
+			m.unixaddr.Name = string(b[:n])
+			return &m.unixaddr, true
 		default:
-			return // not implemented
+			return
 		}
 	}
+
+	// V1 addresses.
 	switch len(b) {
 	case 4:
 		m.inet4addr.Port = port
@@ -386,6 +400,14 @@ func (m *Module) wasmEdgeV2PutSocketAddress(b wasmEdgeAddress, sa wasi.SocketAdd
 		binary.LittleEndian.PutUint16(b, uint16(wasi.Inet6Family))
 		copy(b[2:], t.Addr[:])
 		port = t.Port
+		ok = true
+	case *wasi.UnixAddress:
+		binary.LittleEndian.PutUint16(b, uint16(wasi.UnixFamily))
+		if len(t.Name) > 125 {
+			return
+		}
+		copy(b[2:], t.Name[:])
+		b[2+len(t.Name)] = 0
 		ok = true
 	}
 	return
