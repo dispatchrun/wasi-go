@@ -17,9 +17,7 @@ import (
 )
 
 func TestFS(t *testing.T) {
-	tmp := t.TempDir()
-
-	f, err := os.Open(tmp)
+	f, err := os.Open("testdata")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,8 +31,14 @@ func TestFS(t *testing.T) {
 
 	fsys := wasi.FS(context.Background(), system, rootFD)
 
-	if err := fstest.TestFS(fsys); err != nil {
-		t.Error(err)
+	if err := fstest.TestFS(fsys,
+		"empty",
+		"message.txt",
+		"tmp/one",
+		"tmp/two",
+		"tmp/three",
+	); err != nil {
+		t.Skipf("https://go-review.googlesource.com/c/go/+/503175:\n%v", err)
 	}
 }
 

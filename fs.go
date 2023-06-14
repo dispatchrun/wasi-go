@@ -24,6 +24,7 @@ func (fsys *fileSystem) Open(name string) (fs.File, error) {
 		return nil, &fs.PathError{"open", name, fs.ErrInvalid}
 	}
 	const rights = PathOpenRight |
+		PathFileStatGetRight |
 		FDReadRight |
 		FDReadDirRight |
 		FDSeekRight |
@@ -81,7 +82,7 @@ func (f *file) Stat() (fs.FileInfo, error) {
 	if errno != ESUCCESS {
 		return nil, &fs.PathError{"stat", f.name, errno}
 	}
-	return &fileInfo{stat: s, name: f.name}, nil
+	return &fileInfo{stat: s, name: path.Base(f.name)}, nil
 }
 
 func (f *file) Seek(offset int64, whence int) (int64, error) {
@@ -91,6 +92,9 @@ func (f *file) Seek(offset int64, whence int) (int64, error) {
 	seek, errno := f.fsys.FDSeek(f.fsys.ctx, f.fd, FileDelta(offset), Whence(whence))
 	if errno != ESUCCESS {
 		return int64(seek), &fs.PathError{"seek", f.name, errno}
+	}
+	if f.dir != nil {
+		f.dir.cookie = DirCookie(seek)
 	}
 	return int64(seek), nil
 }
@@ -120,7 +124,7 @@ func (f *file) ReadDir(n int) ([]fs.DirEntry, error) {
 	capacity := n
 	if n <= 0 {
 		if capacity = cap(f.dirent); capacity == 0 {
-			capacity = 100
+			capacity = 20
 		}
 	}
 	if cap(f.dirent) < capacity {
@@ -131,8 +135,11 @@ func (f *file) ReadDir(n int) ([]fs.DirEntry, error) {
 
 	var dirent []fs.DirEntry
 	for {
-		rn, errno := f.fsys.FDReadDir(f.fsys.ctx, f.fd, f.dirent, f.cookie, 4096)
-
+		limit := len(f.dirent)
+		if n > 0 {
+			limit = n - len(dirent)
+		}
+		rn, errno := f.fsys.FDReadDir(f.fsys.ctx, f.fd, f.dirent[:limit], f.cookie, 4096)
 		if rn > 0 {
 			for _, e := range f.dirent[:rn] {
 				switch string(e.Name) {
@@ -142,13 +149,16 @@ func (f *file) ReadDir(n int) ([]fs.DirEntry, error) {
 				dirent = append(dirent, &dirEntry{
 					typ:  e.Type,
 					name: string(e.Name),
-					file: f,
+					dir:  f,
 				})
 			}
 			f.cookie = f.dirent[rn-1].Next
 		}
 		if errno != ESUCCESS {
 			return dirent, &fs.PathError{"readdir", f.name, errno}
+		}
+		if n > 0 && n == len(dirent) {
+			return dirent, nil
 		}
 		if rn == 0 {
 			if n <= 0 {
@@ -172,7 +182,7 @@ type fileInfo struct {
 }
 
 func (info *fileInfo) Name() string {
-	return path.Base(info.name)
+	return info.name
 }
 
 func (info *fileInfo) Size() int64 {
@@ -197,24 +207,28 @@ func (info *fileInfo) Sys() any {
 
 type dirEntry struct {
 	typ  FileType
+	dir  *file
 	name string
-	file *file
 }
 
-func (dirent *dirEntry) Name() string {
-	return dirent.name
+func (d *dirEntry) Name() string {
+	return d.name
 }
 
-func (dirent *dirEntry) IsDir() bool {
-	return dirent.typ == DirectoryType
+func (d *dirEntry) IsDir() bool {
+	return d.typ == DirectoryType
 }
 
-func (dirent *dirEntry) Type() fs.FileMode {
-	return makeFileMode(dirent.typ)
+func (d *dirEntry) Type() fs.FileMode {
+	return makeFileMode(d.typ)
 }
 
-func (dirent *dirEntry) Info() (fs.FileInfo, error) {
-	return dirent.file.Stat()
+func (d *dirEntry) Info() (fs.FileInfo, error) {
+	s, errno := d.dir.fsys.PathFileStatGet(d.dir.fsys.ctx, d.dir.fd, 0, d.name)
+	if errno != ESUCCESS {
+		return nil, &fs.PathError{"stat", d.name, errno}
+	}
+	return &fileInfo{stat: s, name: d.name}, nil
 }
 
 func makeFileMode(fileType FileType) fs.FileMode {
