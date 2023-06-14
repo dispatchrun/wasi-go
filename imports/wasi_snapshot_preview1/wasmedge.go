@@ -336,10 +336,8 @@ func (m *Module) wasmEdgeGetSocketAddress(b wasmEdgeAddress, port int) (sa wasi.
 		case wasi.UnixFamily:
 			b = b[2:]
 			n := 0
-			for ; n < len(b); n++ {
-				if b[n] == 0 {
-					break
-				}
+			for n < len(b) && b[n] != 0 {
+				n++
 			}
 			if n == len(b) || b[n] != 0 {
 				return
