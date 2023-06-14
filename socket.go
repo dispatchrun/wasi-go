@@ -139,7 +139,7 @@ type Port uint32
 type SocketAddress interface {
 	Network() string
 	String() string
-
+	Family() ProtocolFamily
 	sockaddr()
 }
 
@@ -154,6 +154,10 @@ type Inet4Address struct {
 }
 
 func (a *Inet4Address) sockaddr() {}
+
+func (a *Inet4Address) Family() ProtocolFamily {
+	return InetFamily
+}
 
 func (a *Inet4Address) Network() string {
 	return "ip4"
@@ -183,6 +187,10 @@ type Inet6Address struct {
 
 func (a *Inet6Address) sockaddr() {}
 
+func (a *Inet6Address) Family() ProtocolFamily {
+	return Inet6Family
+}
+
 func (a *Inet6Address) Network() string {
 	return "ip6"
 }
@@ -209,6 +217,10 @@ type UnixAddress struct {
 }
 
 func (a *UnixAddress) sockaddr() {}
+
+func (a *UnixAddress) Family() ProtocolFamily {
+	return UnixFamily
+}
 
 func (a *UnixAddress) Network() string {
 	return "unix"
