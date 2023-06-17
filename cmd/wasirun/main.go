@@ -12,6 +12,11 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports"
+	"github.com/stealthrocket/wasi-go/imports/wasi_http/default_http"
+	"github.com/stealthrocket/wasi-go/imports/wasi_http/wasi_http"
+	"github.com/stealthrocket/wasi-go/imports/wasi_http/wasi_streams"
+
+	//	"github.com/stealthrocket/wasi-go/imports/http/"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/sys"
 )
@@ -157,6 +162,10 @@ func run(wasmFile string, args []string) error {
 		return err
 	}
 	defer system.Close(ctx)
+
+	wasi_streams.MustInstantiate(ctx, runtime)
+	wasi_http.MustInstantiate(ctx, runtime)
+	default_http.MustInstantiate(ctx, runtime)
 
 	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
