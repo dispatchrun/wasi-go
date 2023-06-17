@@ -12,11 +12,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports"
-	"github.com/stealthrocket/wasi-go/imports/wasi_http/default_http"
-	"github.com/stealthrocket/wasi-go/imports/wasi_http/wasi_http"
-	"github.com/stealthrocket/wasi-go/imports/wasi_http/wasi_streams"
-
-	//	"github.com/stealthrocket/wasi-go/imports/http/"
+	"github.com/stealthrocket/wasi-go/imports/wasi_http"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/sys"
 )
@@ -60,6 +56,9 @@ OPTIONS:
    --non-blocking-stdio
       Enable non-blocking stdio
 
+   --wasi-http
+      Enable wasi-http client support
+
    -v, --version
       Print the version and exit
 
@@ -78,6 +77,7 @@ var (
 	trace            bool
 	nonBlockingStdio bool
 	version          bool
+	wasiHttp         bool
 )
 
 func main() {
@@ -94,6 +94,7 @@ func main() {
 	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
 	flagSet.BoolVar(&version, "version", false, "")
 	flagSet.BoolVar(&version, "v", false, "")
+	flagSet.BoolVar(&wasiHttp, "wasi-http", false, "")
 	flagSet.Parse(os.Args[1:])
 
 	if version {
@@ -163,9 +164,11 @@ func run(wasmFile string, args []string) error {
 	}
 	defer system.Close(ctx)
 
-	wasi_streams.MustInstantiate(ctx, runtime)
-	wasi_http.MustInstantiate(ctx, runtime)
-	default_http.MustInstantiate(ctx, runtime)
+	if wasiHttp {
+		if err := wasi_http.Instantiate(ctx, runtime); err != nil {
+			return err
+		}
+	}
 
 	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
