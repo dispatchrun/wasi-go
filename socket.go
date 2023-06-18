@@ -305,8 +305,8 @@ func (st SocketType) String() string {
 type SocketOptionLevel int32
 
 const (
-	SocketLevel SocketOptionLevel = 0
-	TcpLevel    SocketOptionLevel = 6
+	SocketLevel SocketOptionLevel = 0 // SOC_SOCKET
+	TcpLevel    SocketOptionLevel = 6 // IPPROTO_TCP
 )
 
 func (sl SocketOptionLevel) String() string {
@@ -322,6 +322,7 @@ func (sl SocketOptionLevel) String() string {
 type SocketOption int32
 
 const (
+	// SOC_SOCKET level options.
 	ReuseAddress SocketOption = iota
 	QuerySocketType
 	QuerySocketError
@@ -337,7 +338,9 @@ const (
 	SendTimeout
 	QueryAcceptConnections
 	BindToDevice
-	TcpNoDelay
+
+	// 0x1000 + iota are IPPROTO_TCP level options.
+	TcpNoDelay SocketOption = 0x1000 + iota
 )
 
 func (so SocketOption) String() string {
