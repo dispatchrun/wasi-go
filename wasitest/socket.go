@@ -181,5 +181,15 @@ func sockOpen(t *testing.T, ctx context.Context, sys wasi.System, family wasi.Pr
 	t.Helper()
 	sock, errno := sys.SockOpen(ctx, family, typ, proto, wasi.AllRights, wasi.AllRights)
 	skipIfNotImplemented(t, errno)
+
+	if errno == wasi.ESUCCESS {
+		opt, errno := sys.SockGetOpt(ctx, sock, wasi.SocketLevel, wasi.QuerySocketError)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		val, ok := opt.(wasi.IntValue)
+		assertEqual(t, ok, true)
+		assertEqual(t, wasi.Errno(val), wasi.ESUCCESS)
+	}
+
 	return sock, errno
 }
