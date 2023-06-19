@@ -146,11 +146,9 @@ func dup(fd int) (int, error) {
 
 func TestSystemPollAndShutdown(t *testing.T) {
 	testSystem(func(ctx context.Context, p *unix.System) {
-		errors := make(chan error, 1)
-		go func() {
-			time.Sleep(100 * time.Millisecond)
-			errors <- p.Shutdown(ctx)
-		}()
+		if err := p.Shutdown(ctx); err != nil {
+			t.Fatal(err)
+		}
 
 		// This call should block forever, unless async shutdown works, which is
 		// what we are testing here.
@@ -173,14 +171,10 @@ func TestSystemPollAndShutdown(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(events[:n], []wasi.Event{
-			{UserData: 0, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
-			{UserData: 1, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
-		}[:n]) {
-			t.Errorf("poll_oneoff: wrong events: %+v", events[:n])
-		}
-
-		if err := <-errors; err != nil {
-			t.Fatal(err)
+			{UserData: 42, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
+			{UserData: 43, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
+		}) {
+			t.Errorf("poll_oneoff: wrong events: %+v", events)
 		}
 	})
 }
@@ -211,7 +205,7 @@ func TestSystemPollBadFileDescriptor(t *testing.T) {
 		if n != 1 {
 			t.Errorf("poll_oneoff: wrong number of events: %d", n)
 		} else if !reflect.DeepEqual(events[0], wasi.Event{
-			UserData:  42,
+			UserData:  84,
 			EventType: wasi.FDReadEvent,
 			Errno:     wasi.EBADF,
 		}) {
@@ -348,7 +342,7 @@ func monotonic(context.Context) (uint64, error) {
 
 func subscribeFDRead(fd wasi.FD) wasi.Subscription {
 	return wasi.MakeSubscriptionFDReadWrite(
-		wasi.UserData(fd),
+		wasi.UserData(42+fd),
 		wasi.FDReadEvent,
 		wasi.SubscriptionFDReadWrite{FD: fd},
 	)

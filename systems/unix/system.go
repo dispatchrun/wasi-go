@@ -48,16 +48,10 @@ type System struct {
 
 	wasi.FileTable[FD]
 
-	pollfds   []unix.PollFd
-	unixInet4 unix.SockaddrInet4
-	unixInet6 unix.SockaddrInet6
-	unixUnix  unix.SockaddrUnix
-	inet4Addr wasi.Inet4Address
-	inet4Peer wasi.Inet4Address
-	inet6Addr wasi.Inet6Address
-	inet6Peer wasi.Inet6Address
-	unixAddr  wasi.UnixAddress
-	unixPeer  wasi.UnixAddress
+	pollfds []unix.PollFd
+	inet4   unix.SockaddrInet4
+	inet6   unix.SockaddrInet6
+	unix    unix.SockaddrUnix
 
 	// shutfds are a pair of file descriptors allocated to the read and write
 	// ends of a pipe. They are used to asynchronously interrupting calls to
@@ -885,13 +879,13 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 		results = results[:1]
 		results[0] = wasi.AddressInfo{}
 		if ipv4 := ip.To4(); ipv4 != nil {
-			s.inet4Addr.Port = port
-			copy(s.inet4Addr.Addr[:], ipv4)
-			results[0].Address = &s.inet4Addr
+			inet4Addr := &wasi.Inet4Address{Port: port}
+			copy(inet4Addr.Addr[:], ipv4)
+			results[0].Address = inet4Addr
 		} else {
-			s.inet6Addr.Port = port
-			copy(s.inet6Addr.Addr[:], ip)
-			results[0].Address = &s.inet6Addr
+			inet6Addr := &wasi.Inet6Address{Port: port}
+			copy(inet6Addr.Addr[:], ip)
+			results[0].Address = inet6Addr
 		}
 		return 1, wasi.ESUCCESS
 	}
@@ -972,22 +966,24 @@ func (s *System) shutdown() {
 	fd := s.shutfds[1]
 	s.shutfds[1] = -1
 	s.mutex.Unlock()
-	_ = closeRetryOnEINTR(fd)
+	if fd >= 0 {
+		_ = closeRetryOnEINTR(fd)
+	}
 }
 
 func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, ok bool) {
 	switch t := addr.(type) {
 	case *wasi.Inet4Address:
-		s.unixInet4.Port = t.Port
-		s.unixInet4.Addr = t.Addr
-		sa = &s.unixInet4
+		s.inet4.Port = t.Port
+		s.inet4.Addr = t.Addr
+		sa = &s.inet4
 	case *wasi.Inet6Address:
-		s.unixInet6.Port = t.Port
-		s.unixInet6.Addr = t.Addr
-		sa = &s.unixInet6
+		s.inet6.Port = t.Port
+		s.inet6.Addr = t.Addr
+		sa = &s.inet6
 	case *wasi.UnixAddress:
-		s.unixUnix.Name = t.Name
-		sa = &s.unixUnix
+		s.unix.Name = t.Name
+		sa = &s.unix
 	default:
 		return nil, false
 	}

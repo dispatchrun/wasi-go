@@ -503,11 +503,11 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		clientAddr, errno := sys.SockConnect(ctx, client, serverAddr)
-		assertNotEqual(t, clientAddr, nil)
-		assertEqual(t, clientAddr.Family(), bind.Family())
 		if errno != wasi.ESUCCESS {
 			assertEqual(t, errno, wasi.EINPROGRESS)
 		}
+		assertNotEqual(t, clientAddr, nil)
+		assertEqual(t, clientAddr.Family(), bind.Family())
 
 		subs := []wasi.Subscription{
 			wasi.MakeSubscriptionFDReadWrite(2, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
