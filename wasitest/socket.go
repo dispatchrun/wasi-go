@@ -609,7 +609,6 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, sockIsNonBlocking(t, ctx, sys, accept), true)
 		assertEqual(t, sys.SockShutdown(ctx, accept, wasi.ShutdownWR), wasi.ESUCCESS)
-		assertEqual(t, sys.SockShutdown(ctx, accept, wasi.ShutdownWR), wasi.ESUCCESS)
 
 		subs = []wasi.Subscription{
 			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
@@ -623,10 +622,15 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 			UserData:  1,
 			EventType: wasi.FDReadEvent,
 		})
-
-		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownRD), wasi.ESUCCESS)
 		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownWR), wasi.ESUCCESS)
 
+		// Darwin and Linux disagree on when to return ENOTCONN on shutdown(2);
+		// on Darwin, the error is returned for read and write directions
+		// independently, while on Linux, the error is only returned after
+		// shutting down both read and write directions. We have not way of
+		// managing this so we only test the Linux behavior which is less strict
+		// than Darwin, and expect ENOTCONN only after both the read and write
+		// ends of the socket have been shut down.
 		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownRD), wasi.ENOTCONN)
 		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownWR), wasi.ENOTCONN)
 
@@ -736,7 +740,7 @@ func testSocketShutdownAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTy
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
 
-		assertEqual(t, sys.SockShutdown(ctx, sock, wasi.ShutdownRD|wasi.ShutdownWR), wasi.ESUCCESS)
+		assertEqual(t, sys.SockShutdown(ctx, sock, wasi.ShutdownRD|wasi.ShutdownWR), wasi.ENOTCONN)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
