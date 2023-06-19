@@ -222,102 +222,103 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	if timeout > 0 {
 		deadline = time.Now().Add(timeout)
 	}
-	var n int
+
+	// This loops until either the deadline is reached or at least one event is
+	// reported.
 	for {
-		var timeoutMillis int
+		timeoutMillis := 0
 		switch {
 		case timeout < 0:
 			timeoutMillis = -1
 		case !deadline.IsZero():
 			timeoutMillis = int(time.Until(deadline).Milliseconds())
 		}
-		var err error
-		n, err = unix.Poll(s.pollfds, timeoutMillis)
-		if err == nil {
-			// poll(2) sometimes returns with no error and no events, so we
-			// verify that the timeout has actually expired.
-			if n > 0 || deadline.IsZero() || time.Now().After(deadline) {
-				break
-			}
-		} else if err != unix.EINTR {
+
+		n, err := unix.Poll(s.pollfds, timeoutMillis)
+		if err != nil && err != unix.EINTR {
 			return 0, makeErrno(err)
 		}
-	}
 
-	// poll(2) may cause spurious wake up, so we verify that the system
-	// has indeed been shutdown instead of relying on reading the events
-	// reported on the first pollfd.
-	if s.isShutdown() {
-		// If the wake fd was notified it means the system was shut down,
-		// we report this by cancelling all subscriptions.
-		//
-		// Technically we might be erasing events that had already gathered
-		// errors in the first loop prior to the call to unix.Poll; this is
-		// not a concern since at this time the program would likely be
-		// terminating and should not be bothered with handling other errors.
-		for i := range subscriptions {
-			events[i] = wasi.Event{
-				UserData:  subscriptions[i].UserData,
-				EventType: subscriptions[i].EventType,
-				Errno:     wasi.ECANCELED,
+		// poll(2) may cause spurious wake up, so we verify that the system
+		// has indeed been shutdown instead of relying on reading the events
+		// reported on the first pollfd.
+		if s.isShutdown() {
+			// If the wake fd was notified it means the system was shut down,
+			// we report this by cancelling all subscriptions.
+			//
+			// Technically we might be erasing events that had already gathered
+			// errors in the first loop prior to the call to unix.Poll; this is
+			// not a concern since at this time the program would likely be
+			// terminating and should not be bothered with handling other
+			// errors.
+			for i := range subscriptions {
+				events[i] = wasi.Event{
+					UserData:  subscriptions[i].UserData,
+					EventType: subscriptions[i].EventType,
+					Errno:     wasi.ECANCELED,
+				}
+			}
+			return len(subscriptions), wasi.ESUCCESS
+		}
+
+		if timeoutEventIndex >= 0 && deadline.Before(time.Now()) {
+			events[timeoutEventIndex] = wasi.Event{
+				UserData:  subscriptions[timeoutEventIndex].UserData,
+				EventType: subscriptions[timeoutEventIndex].EventType + 1,
 			}
 		}
-		return len(subscriptions), wasi.ESUCCESS
-	}
 
-	if timeoutEventIndex >= 0 {
-		events[timeoutEventIndex] = wasi.Event{
-			UserData:  subscriptions[timeoutEventIndex].UserData,
-			EventType: subscriptions[timeoutEventIndex].EventType + 1,
-		}
-	}
-
-	j := 1
-	for i := range subscriptions {
-		if events[i].EventType != 0 {
-			continue
-		}
-		switch sub := &subscriptions[i]; sub.EventType {
-		case wasi.FDReadEvent, wasi.FDWriteEvent:
-			pf := &s.pollfds[j]
-			j++
-			if pf.Revents == 0 {
+		j := 1
+		for i := range subscriptions {
+			if events[i].EventType != 0 {
 				continue
 			}
-			// Linux never reports POLLHUP for disconnected sockets,
-			// so there is no reliable mechanism to set wasi.Hanghup.
-			// We optimize for portability here and just report that
-			// the file descriptor is ready for reading or writing,
-			// and let the application deal with the conditions it
-			// sees from the following calles to read/write/etc...
-			events[i] = wasi.Event{
-				UserData:  sub.UserData,
-				EventType: sub.EventType + 1,
+			switch sub := &subscriptions[i]; sub.EventType {
+			case wasi.FDReadEvent, wasi.FDWriteEvent:
+				pf := &s.pollfds[j]
+				j++
+				if pf.Revents == 0 {
+					continue
+				}
+				// Linux never reports POLLHUP for disconnected sockets,
+				// so there is no reliable mechanism to set wasi.Hanghup.
+				// We optimize for portability here and just report that
+				// the file descriptor is ready for reading or writing,
+				// and let the application deal with the conditions it
+				// sees from the following calles to read/write/etc...
+				events[i] = wasi.Event{
+					UserData:  sub.UserData,
+					EventType: sub.EventType + 1,
+				}
 			}
 		}
-	}
 
-	// A 1:1 correspondance between the subscription and events arrays is used
-	// to track the completion of events, including the completion of invalid
-	// subscriptions, clock events, and I/O notifications coming from poll(2).
-	//
-	// We use zero as the marker on events for subscriptions that have not been
-	// fulfilled, but because the zero event type is used to represent clock
-	// subscriptions, we mark completed events with the event type + 1.
-	//
-	// The event type is finally restored to its correct value in the loop below
-	// when we pack all completed events at the front of the output buffer.
-	n = 0
+		// A 1:1 correspondance between the subscription and events arrays is
+		// used to track the completion of events, including the completion of
+		// invalid subscriptions, clock events, and I/O notifications coming
+		// from poll(2).
+		//
+		// We use zero as the marker on events for subscriptions that have not
+		// been fulfilled, but because the zero event type is used to represent
+		// clock subscriptions, we mark completed events with the event type+1.
+		//
+		// The event type is finally restored to its correct value in the loop
+		// below when we pack all completed events at the front of the output
+		// buffer.
+		n = 0
 
-	for _, e := range events[:len(subscriptions)] {
-		if e.EventType != 0 {
-			e.EventType--
-			events[n] = e
-			n++
+		for _, e := range events[:len(subscriptions)] {
+			if e.EventType != 0 {
+				e.EventType--
+				events[n] = e
+				n++
+			}
+		}
+
+		if n > 0 {
+			return n, wasi.ESUCCESS
 		}
 	}
-
-	return n, wasi.ESUCCESS
 }
 
 func errorEvent(s *wasi.Subscription, err wasi.Errno) wasi.Event {
