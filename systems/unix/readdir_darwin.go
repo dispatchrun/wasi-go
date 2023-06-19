@@ -35,7 +35,9 @@ func (d *dirbuf) readDirEntries(entries []wasi.DirEntry, cookie wasi.DirCookie, 
 	}
 
 	if cookie < d.cookie {
-		if _, err := syscall.Seek(d.fd, 0, 0); err != nil {
+		if _, err := ignoreEINTR2(func() (int64, error) {
+			return syscall.Seek(d.fd, 0, 0)
+		}); err != nil {
 			return 0, err
 		}
 		d.offset = 0
@@ -54,7 +56,9 @@ func (d *dirbuf) readDirEntries(entries []wasi.DirEntry, cookie wasi.DirCookie, 
 			if numEntries > 0 {
 				return numEntries, nil
 			}
-			n, err := syscall.Getdirentries(d.fd, d.buffer[:], &d.basep)
+			n, err := ignoreEINTR2(func() (int, error) {
+				return syscall.Getdirentries(d.fd, d.buffer[:], &d.basep)
+			})
 			if err != nil {
 				return numEntries, err
 			}
