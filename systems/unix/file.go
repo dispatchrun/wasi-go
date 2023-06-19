@@ -10,27 +10,29 @@ import (
 type FD int
 
 func (fd FD) FDAdvise(ctx context.Context, offset, length wasi.FileSize, advice wasi.Advice) wasi.Errno {
-	err := fdadvise(int(fd), int64(offset), int64(length), advice)
+	err := ignoreEINTR(func() error { return fdadvise(int(fd), int64(offset), int64(length), advice) })
 	return makeErrno(err)
 }
 
 func (fd FD) FDAllocate(ctx context.Context, offset, length wasi.FileSize) wasi.Errno {
-	err := fallocate(int(fd), int64(offset), int64(length))
+	err := ignoreEINTR(func() error { return fallocate(int(fd), int64(offset), int64(length)) })
 	return makeErrno(err)
 }
 
 func (fd FD) FDClose(ctx context.Context) wasi.Errno {
-	err := unix.Close(int(fd))
+	err := ignoreEINTR(func() error { return unix.Close(int(fd)) })
 	return makeErrno(err)
 }
 
 func (fd FD) FDDataSync(ctx context.Context) wasi.Errno {
-	err := fdatasync(int(fd))
+	err := ignoreEINTR(func() error { return fdatasync(int(fd)) })
 	return makeErrno(err)
 }
 
 func (fd FD) FDStatSetFlags(ctx context.Context, flags wasi.FDFlags) wasi.Errno {
-	fl, err := unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
+	fl, err := ignoreEINTR2(func() (int, error) {
+		return unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
+	})
 	if err != nil {
 		return makeErrno(err)
 	}
@@ -44,13 +46,15 @@ func (fd FD) FDStatSetFlags(ctx context.Context, flags wasi.FDFlags) wasi.Errno 
 	} else {
 		fl &^= unix.O_NONBLOCK
 	}
-	_, err = unix.FcntlInt(uintptr(fd), unix.F_SETFL, fl)
+	_, err = ignoreEINTR2(func() (int, error) {
+		return unix.FcntlInt(uintptr(fd), unix.F_SETFL, fl)
+	})
 	return makeErrno(err)
 }
 
 func (fd FD) FDFileStatGet(ctx context.Context) (wasi.FileStat, wasi.Errno) {
 	var sysStat unix.Stat_t
-	if err := unix.Fstat(int(fd), &sysStat); err != nil {
+	if err := ignoreEINTR(func() error { return unix.Fstat(int(fd), &sysStat) }); err != nil {
 		return wasi.FileStat{}, makeErrno(err)
 	}
 	stat := makeFileStat(&sysStat)
@@ -58,7 +62,7 @@ func (fd FD) FDFileStatGet(ctx context.Context) (wasi.FileStat, wasi.Errno) {
 }
 
 func (fd FD) FDFileStatSetSize(ctx context.Context, size wasi.FileSize) wasi.Errno {
-	err := unix.Ftruncate(int(fd), int64(size))
+	err := ignoreEINTR(func() error { return unix.Ftruncate(int(fd), int64(size)) })
 	return makeErrno(err)
 }
 
@@ -81,27 +85,27 @@ func (fd FD) FDFileStatSetTimes(ctx context.Context, accessTime, modifyTime wasi
 			ts[1] = unix.NsecToTimespec(int64(modifyTime))
 		}
 	}
-	err := futimens(int(fd), &ts)
+	err := ignoreEINTR(func() error { return futimens(int(fd), &ts) })
 	return makeErrno(err)
 }
 
 func (fd FD) FDPread(ctx context.Context, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
-	n, err := preadv(int(fd), makeIOVecs(iovecs), int64(offset))
+	n, err := handleEINTR(func() (int, error) { return preadv(int(fd), makeIOVecs(iovecs), int64(offset)) })
 	return wasi.Size(n), makeErrno(err)
 }
 
 func (fd FD) FDPwrite(ctx context.Context, iovecs []wasi.IOVec, offset wasi.FileSize) (wasi.Size, wasi.Errno) {
-	n, err := pwritev(int(fd), makeIOVecs(iovecs), int64(offset))
+	n, err := handleEINTR(func() (int, error) { return pwritev(int(fd), makeIOVecs(iovecs), int64(offset)) })
 	return wasi.Size(n), makeErrno(err)
 }
 
 func (fd FD) FDRead(ctx context.Context, iovecs []wasi.IOVec) (wasi.Size, wasi.Errno) {
-	n, err := readv(int(fd), makeIOVecs(iovecs))
+	n, err := handleEINTR(func() (int, error) { return readv(int(fd), makeIOVecs(iovecs)) })
 	return wasi.Size(n), makeErrno(err)
 }
 
 func (fd FD) FDWrite(ctx context.Context, iovecs []wasi.IOVec) (wasi.Size, wasi.Errno) {
-	n, err := writev(int(fd), makeIOVecs(iovecs))
+	n, err := handleEINTR(func() (int, error) { return writev(int(fd), makeIOVecs(iovecs)) })
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -110,7 +114,7 @@ func (fd FD) FDOpenDir(ctx context.Context) (wasi.Dir, wasi.Errno) {
 }
 
 func (fd FD) FDSync(ctx context.Context) wasi.Errno {
-	err := fsync(int(fd))
+	err := ignoreEINTR(func() error { return fsync(int(fd)) })
 	return makeErrno(err)
 }
 
@@ -126,12 +130,12 @@ func (fd FD) FDSeek(ctx context.Context, delta wasi.FileDelta, whence wasi.Whenc
 	default:
 		return 0, wasi.EINVAL
 	}
-	off, err := lseek(int(fd), int64(delta), sysWhence)
+	off, err := ignoreEINTR2(func() (int64, error) { return lseek(int(fd), int64(delta), sysWhence) })
 	return wasi.FileSize(off), makeErrno(err)
 }
 
 func (fd FD) PathCreateDirectory(ctx context.Context, path string) wasi.Errno {
-	err := unix.Mkdirat(int(fd), path, 0755)
+	err := ignoreEINTR(func() error { return unix.Mkdirat(int(fd), path, 0755) })
 	return makeErrno(err)
 }
 
@@ -141,7 +145,7 @@ func (fd FD) PathFileStatGet(ctx context.Context, flags wasi.LookupFlags, path s
 	if !flags.Has(wasi.SymlinkFollow) {
 		sysFlags |= unix.AT_SYMLINK_NOFOLLOW
 	}
-	err := unix.Fstatat(int(fd), path, &sysStat, sysFlags)
+	err := ignoreEINTR(func() error { return unix.Fstatat(int(fd), path, &sysStat, sysFlags) })
 	return makeFileStat(&sysStat), makeErrno(err)
 }
 
@@ -168,7 +172,7 @@ func (fd FD) PathFileStatSetTimes(ctx context.Context, lookupFlags wasi.LookupFl
 			ts[1] = unix.NsecToTimespec(int64(modifyTime))
 		}
 	}
-	err := unix.UtimesNanoAt(int(fd), path, ts[:], sysFlags)
+	err := ignoreEINTR(func() error { return unix.UtimesNanoAt(int(fd), path, ts[:], sysFlags) })
 	return makeErrno(err)
 }
 
@@ -177,7 +181,7 @@ func (fd FD) PathLink(ctx context.Context, flags wasi.LookupFlags, oldPath strin
 	if flags.Has(wasi.SymlinkFollow) {
 		sysFlags |= unix.AT_SYMLINK_FOLLOW
 	}
-	err := unix.Linkat(int(fd), oldPath, int(newDir), newPath, sysFlags)
+	err := ignoreEINTR(func() error { return unix.Linkat(int(fd), oldPath, int(newDir), newPath, sysFlags) })
 	return makeErrno(err)
 }
 
@@ -233,12 +237,16 @@ func (fd FD) PathOpen(ctx context.Context, lookupFlags wasi.LookupFlags, path st
 	if (oflags & unix.O_DIRECTORY) != 0 {
 		mode = 0
 	}
-	hostfd, err := unix.Openat(int(fd), path, oflags, mode)
+	hostfd, err := ignoreEINTR2(func() (int, error) {
+		return unix.Openat(int(fd), path, oflags, mode)
+	})
 	return FD(hostfd), makeErrno(err)
 }
 
 func (fd FD) PathReadLink(ctx context.Context, path string, buffer []byte) (int, wasi.Errno) {
-	n, err := unix.Readlinkat(int(fd), path, buffer)
+	n, err := ignoreEINTR2(func() (int, error) {
+		return unix.Readlinkat(int(fd), path, buffer)
+	})
 	if err != nil {
 		return n, makeErrno(err)
 	} else if n == len(buffer) {
@@ -249,22 +257,22 @@ func (fd FD) PathReadLink(ctx context.Context, path string, buffer []byte) (int,
 }
 
 func (fd FD) PathRemoveDirectory(ctx context.Context, path string) wasi.Errno {
-	err := unix.Unlinkat(int(fd), path, unix.AT_REMOVEDIR)
+	err := ignoreEINTR(func() error { return unix.Unlinkat(int(fd), path, unix.AT_REMOVEDIR) })
 	return makeErrno(err)
 }
 
 func (fd FD) PathRename(ctx context.Context, oldPath string, newDir FD, newPath string) wasi.Errno {
-	err := unix.Renameat(int(fd), oldPath, int(newDir), newPath)
+	err := ignoreEINTR(func() error { return unix.Renameat(int(fd), oldPath, int(newDir), newPath) })
 	return makeErrno(err)
 }
 
 func (fd FD) PathSymlink(ctx context.Context, oldPath string, newPath string) wasi.Errno {
-	err := unix.Symlinkat(oldPath, int(fd), newPath)
+	err := ignoreEINTR(func() error { return unix.Symlinkat(oldPath, int(fd), newPath) })
 	return makeErrno(err)
 }
 
 func (fd FD) PathUnlinkFile(ctx context.Context, path string) wasi.Errno {
-	err := unix.Unlinkat(int(fd), path, 0)
+	err := ignoreEINTR(func() error { return unix.Unlinkat(int(fd), path, 0) })
 	return makeErrno(err)
 }
 

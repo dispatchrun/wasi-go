@@ -218,21 +218,33 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 		}
 	}
 
-	var timeoutMillis int
 	// We set the timeout to zero when we already produced events due to
 	// invalid subscriptions; this is useful to still make progress on I/O
 	// completion.
-	if numEvents == 0 {
-		if timeout < 0 {
-			timeoutMillis = -1
-		} else {
-			timeoutMillis = int(timeout.Milliseconds())
-		}
+	var deadline time.Time
+	if numEvents > 0 {
+		timeout = 0
 	}
-
-	n, err := unix.Poll(s.pollfds, timeoutMillis)
-	if err != nil {
-		return 0, makeErrno(err)
+	if timeout > 0 {
+		deadline = time.Now().Add(timeout)
+	}
+	var n int
+	for {
+		var timeoutMillis int
+		switch {
+		case timeout < 0:
+			timeoutMillis = -1
+		case !deadline.IsZero():
+			timeoutMillis = int(time.Until(deadline).Milliseconds())
+		}
+		var err error
+		n, err = unix.Poll(s.pollfds, timeoutMillis)
+		if err == nil {
+			break
+		}
+		if err != unix.EINTR {
+			return 0, makeErrno(err)
+		}
 	}
 
 	if n > 0 && s.pollfds[0].Revents != 0 {
@@ -369,7 +381,7 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 	}
 	peer := makeSocketAddress(sa)
 	if peer == nil {
-		unix.Close(connfd)
+		_ = closeRetryOnEINTR(connfd)
 		return -1, nil, nil, wasi.ENOTSUP
 	}
 	guestfd := s.Register(FD(connfd), wasi.FDStat{
@@ -393,12 +405,17 @@ func (s *System) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, 
 	if flags.Has(wasi.RecvWaitAll) {
 		sysIFlags |= unix.MSG_WAITALL
 	}
-	n, _, sysOFlags, _, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
-	var roflags wasi.ROFlags
-	if (sysOFlags & unix.MSG_TRUNC) != 0 {
-		roflags |= wasi.RecvDataTruncated
+	for {
+		n, _, sysOFlags, _, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
+		if err == unix.EINTR {
+			continue
+		}
+		var roflags wasi.ROFlags
+		if (sysOFlags & unix.MSG_TRUNC) != 0 {
+			roflags |= wasi.RecvDataTruncated
+		}
+		return wasi.Size(n), roflags, makeErrno(err)
 	}
-	return wasi.Size(n), roflags, makeErrno(err)
 }
 
 func (s *System) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.SIFlags) (wasi.Size, wasi.Errno) {
@@ -406,7 +423,9 @@ func (s *System) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, 
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
-	n, err := unix.SendmsgBuffers(int(socket), makeIOVecs(iovecs), nil, nil, 0)
+	n, err := handleEINTR(func() (int, error) {
+		return unix.SendmsgBuffers(int(socket), makeIOVecs(iovecs), nil, nil, 0)
+	})
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -438,7 +457,9 @@ func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlag
 	//
 	// For more context see: https://bugzilla.kernel.org/show_bug.cgi?id=106241
 	if runtime.GOOS == "linux" {
-		v, err := unix.GetsockoptInt(int(socket), unix.SOL_SOCKET, unix.SO_ACCEPTCONN)
+		v, err := ignoreEINTR2(func() (int, error) {
+			return unix.GetsockoptInt(int(socket), unix.SOL_SOCKET, unix.SO_ACCEPTCONN)
+		})
 		if err != nil {
 			return makeErrno(err)
 		}
@@ -446,7 +467,7 @@ func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlag
 			return wasi.ENOTCONN
 		}
 	}
-	err := unix.Shutdown(int(socket), sysHow)
+	err := ignoreEINTR(func() error { return unix.Shutdown(int(socket), sysHow) })
 	return makeErrno(err)
 }
 
@@ -497,7 +518,9 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 		return -1, wasi.EINVAL
 	}
 
-	fd, err := unix.Socket(sysDomain, sysType, sysProtocol)
+	fd, err := ignoreEINTR2(func() (int, error) {
+		return unix.Socket(sysDomain, sysType, sysProtocol)
+	})
 	if err != nil {
 		// Darwin gives EPROTOTYPE when the socket type and protocol do
 		// not match, which differs from the Linux behavior which returns
@@ -527,7 +550,8 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 	if !ok {
 		return nil, wasi.EINVAL
 	}
-	if err := unix.Bind(int(socket), sa); err != nil {
+	err := ignoreEINTR(func() error { return unix.Bind(int(socket), sa) })
+	if err != nil {
 		return nil, makeErrno(err)
 	}
 	return s.SockLocalAddress(ctx, fd)
@@ -542,7 +566,7 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 	if !ok {
 		return nil, wasi.EINVAL
 	}
-	err := unix.Connect(int(socket), sa)
+	err := ignoreEINTR(func() error { return unix.Connect(int(socket), sa) })
 	if err != nil && err != unix.EINPROGRESS {
 		// Darwin gives EOPNOTSUPP when trying to connect a socket that is
 		// already connected or already listening. Align on the Linux behavior
@@ -564,7 +588,7 @@ func (s *System) SockListen(ctx context.Context, fd wasi.FD, backlog int) wasi.E
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := unix.Listen(int(socket), backlog)
+	err := ignoreEINTR(func() error { return unix.Listen(int(socket), backlog) })
 	return makeErrno(err)
 }
 
@@ -577,7 +601,9 @@ func (s *System) SockSendTo(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec
 	if !ok {
 		return 0, wasi.EINVAL
 	}
-	n, err := unix.SendmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sa, 0)
+	n, err := handleEINTR(func() (int, error) {
+		return unix.SendmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sa, 0)
+	})
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -593,19 +619,24 @@ func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOV
 	if flags.Has(wasi.RecvWaitAll) {
 		sysIFlags |= unix.MSG_WAITALL
 	}
-	n, _, sysOFlags, sa, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
-	var addr wasi.SocketAddress
-	if sa != nil {
-		addr = makeSocketAddress(sa)
-		if addr == nil {
-			errno = wasi.ENOTSUP
+	for {
+		n, _, sysOFlags, sa, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
+		if err == unix.EINTR {
+			continue
 		}
+		var addr wasi.SocketAddress
+		if sa != nil {
+			addr = makeSocketAddress(sa)
+			if addr == nil {
+				errno = wasi.ENOTSUP
+			}
+		}
+		var roflags wasi.ROFlags
+		if (sysOFlags & unix.MSG_TRUNC) != 0 {
+			roflags |= wasi.RecvDataTruncated
+		}
+		return wasi.Size(n), roflags, addr, makeErrno(err)
 	}
-	var roflags wasi.ROFlags
-	if (sysOFlags & unix.MSG_TRUNC) != 0 {
-		roflags |= wasi.RecvDataTruncated
-	}
-	return wasi.Size(n), roflags, addr, makeErrno(err)
 }
 
 func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (wasi.SocketOptionValue, wasi.Errno) {
@@ -657,7 +688,9 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		return nil, wasi.EINVAL
 	}
 
-	value, err := unix.GetsockoptInt(int(socket), sysLevel, sysOption)
+	value, err := ignoreEINTR2(func() (int, error) {
+		return unix.GetsockoptInt(int(socket), sysLevel, sysOption)
+	})
 	if err != nil {
 		return nil, makeErrno(err)
 	}
@@ -733,7 +766,9 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	if !ok {
 		return wasi.EINVAL
 	}
-	err := unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
+	err := ignoreEINTR(func() error {
+		return unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
+	})
 	return makeErrno(err)
 }
 
@@ -742,7 +777,9 @@ func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketA
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	sa, err := unix.Getsockname(int(socket))
+	sa, err := ignoreEINTR2(func() (unix.Sockaddr, error) {
+		return unix.Getsockname(int(socket))
+	})
 	if err != nil {
 		return nil, makeErrno(err)
 	}
@@ -758,7 +795,9 @@ func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.Socket
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	sa, err := unix.Getpeername(int(socket))
+	sa, err := ignoreEINTR2(func() (unix.Sockaddr, error) {
+		return unix.Getpeername(int(socket))
+	})
 	if err != nil {
 		return nil, makeErrno(err)
 	}
@@ -899,8 +938,8 @@ func (s *System) Close(ctx context.Context) error {
 	s.mutex.Unlock()
 
 	if fd0 != 0 || fd1 != 0 { // true if the system was initialized
-		unix.Close(fd0)
-		unix.Close(fd1)
+		_ = closeRetryOnEINTR(fd0)
+		_ = closeRetryOnEINTR(fd1)
 	}
 	return err
 }
@@ -933,7 +972,7 @@ func (s *System) shutdown() {
 	fd := s.shutfds[1]
 	s.shutfds[1] = -1
 	s.mutex.Unlock()
-	unix.Close(fd)
+	_ = closeRetryOnEINTR(fd)
 }
 
 func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, ok bool) {
