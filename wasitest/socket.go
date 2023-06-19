@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/stealthrocket/wasi-go"
-	"golang.org/x/exp/slices"
 )
 
 var (
@@ -465,8 +464,6 @@ func testSocketConnectOK(family wasi.ProtocolFamily, typ wasi.SocketType, bind w
 		addr, errno := sys.SockConnect(ctx, sock, bind)
 		assertNotEqual(t, addr, nil)
 		assertEqual(t, addr.Family(), bind.Family())
-		assertEqual(t, errno, wasi.ESUCCESS)
-
 		if errno != wasi.ESUCCESS {
 			assertEqual(t, errno, wasi.EINPROGRESS)
 		}
@@ -501,7 +498,7 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		assertNotEqual(t, serverAddr, nil)
 		assertEqual(t, serverAddr.Family(), bind.Family())
 		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, sys.SockListen(ctx, server, 0), wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, server, 10), wasi.ESUCCESS)
 
 		client, errno := sockOpen(t, ctx, sys, family, typ, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
@@ -509,16 +506,11 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		clientAddr, errno := sys.SockConnect(ctx, client, serverAddr)
 		assertNotEqual(t, clientAddr, nil)
 		assertEqual(t, clientAddr.Family(), bind.Family())
-		assertEqual(t, errno, wasi.ESUCCESS)
-
 		if errno != wasi.ESUCCESS {
 			assertEqual(t, errno, wasi.EINPROGRESS)
 		}
 
 		subs := []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
-				FD: server,
-			}),
 			wasi.MakeSubscriptionFDReadWrite(2, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
 				FD: client,
 			}),
@@ -526,18 +518,25 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		evs := make([]wasi.Event, len(subs))
 
 		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 2)
+		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, evs[0], wasi.Event{
+			UserData:    2,
+			EventType:   wasi.FDWriteEvent,
+			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+		})
 
-		sortEvents(evs[:numEvents])
+		subs = []wasi.Subscription{
+			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
+				FD: server,
+			}),
+		}
+		numEvents, errno = sys.PollOneOff(ctx, subs, evs)
+		assertEqual(t, numEvents, 1)
+		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
 			UserData:    1,
 			EventType:   wasi.FDReadEvent,
-			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
-		})
-		assertEqual(t, evs[1], wasi.Event{
-			UserData:    2,
-			EventType:   wasi.FDWriteEvent,
 			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
 		})
 
@@ -546,6 +545,7 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		assertNotEqual(t, accept, ^wasi.FD(0))
 		assertDeepEqual(t, localAddr, serverAddr)
 		assertDeepEqual(t, remoteAddr, clientAddr)
+		assertEqual(t, sockIsNonBlocking(t, ctx, sys, accept), true)
 
 		localAddr, errno = sys.SockLocalAddress(ctx, accept)
 		assertEqual(t, errno, wasi.ESUCCESS)
@@ -570,7 +570,7 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 
 		addr, errno := sys.SockBind(ctx, server, bind)
 		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, sys.SockListen(ctx, server, 0), wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, server, 10), wasi.ESUCCESS)
 
 		client, errno := sockOpen(t, ctx, sys, family, typ, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
@@ -581,33 +581,38 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		}
 
 		subs := []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
-				FD: server,
-			}),
-			wasi.MakeSubscriptionFDReadWrite(2, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
+			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
 				FD: client,
 			}),
 		}
 		evs := make([]wasi.Event, len(subs))
 
 		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 2)
+		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, evs[0], wasi.Event{
+			UserData:    1,
+			EventType:   wasi.FDWriteEvent,
+			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+		})
 
-		sortEvents(evs[:numEvents])
+		subs = []wasi.Subscription{
+			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
+				FD: server,
+			}),
+		}
+		numEvents, errno = sys.PollOneOff(ctx, subs, evs)
+		assertEqual(t, numEvents, 1)
+		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
 			UserData:    1,
 			EventType:   wasi.FDReadEvent,
 			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
 		})
-		assertEqual(t, evs[1], wasi.Event{
-			UserData:    2,
-			EventType:   wasi.FDWriteEvent,
-			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
-		})
 
 		accept, _, _, errno := sys.SockAccept(ctx, server, wasi.NonBlock)
 		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sockIsNonBlocking(t, ctx, sys, accept), true)
 		assertEqual(t, sys.SockShutdown(ctx, accept, wasi.ShutdownWR), wasi.ESUCCESS)
 		assertEqual(t, sys.SockShutdown(ctx, accept, wasi.ShutdownWR), wasi.ENOTCONN)
 
@@ -746,6 +751,8 @@ func sockOpen(t *testing.T, ctx context.Context, sys wasi.System, family wasi.Pr
 	sock, errno := sys.SockOpen(ctx, family, typ, proto, wasi.AllRights, wasi.AllRights)
 	skipIfNotImplemented(t, errno)
 	if errno == wasi.ESUCCESS {
+		assertEqual(t, sys.FDStatSetFlags(ctx, sock, wasi.NonBlock), wasi.ESUCCESS)
+		assertEqual(t, sockIsNonBlocking(t, ctx, sys, sock), true)
 		assertEqual(t, sockErrno(t, ctx, sys, sock), wasi.ESUCCESS)
 	}
 	return sock, errno
@@ -759,8 +766,8 @@ func sockErrno(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD)
 	return wasi.Errno(val)
 }
 
-func sortEvents(events []wasi.Event) {
-	slices.SortFunc(events, func(e1, e2 wasi.Event) bool {
-		return e1.UserData < e2.UserData
-	})
+func sockIsNonBlocking(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD) bool {
+	stat, errno := sys.FDStatGet(ctx, sock)
+	assertEqual(t, errno, wasi.ESUCCESS)
+	return stat.Flags.Has(wasi.NonBlock)
 }

@@ -2,10 +2,12 @@ package unix_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"reflect"
+	"syscall"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -85,18 +87,21 @@ func makeSystem(config wasitest.TestConfig) (wasi.System, error) {
 		config.Stdout.Close()
 		config.Stderr.Close()
 	}()
+	stdinFile := int(config.Stdin.Fd())
+	stdoutFile := int(config.Stdout.Fd())
+	stderrFile := int(config.Stderr.Fd())
 
-	stdin, err := dup(int(config.Stdin.Fd()))
+	stdin, err := dup(stdinFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("duplicating stdin (%d): %w", stdinFile, err)
 	}
-	stdout, err := dup(int(config.Stdout.Fd()))
+	stdout, err := dup(stdoutFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("duplicating stdout (%d): %w", stdoutFile, err)
 	}
-	stderr, err := dup(int(config.Stderr.Fd()))
+	stderr, err := dup(stderrFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("duplicating stderr (%d): %w", stderrFile, err)
 	}
 
 	s.Preopen(unix.FD(stdin), "/dev/stdin", wasi.FDStat{
@@ -113,9 +118,10 @@ func makeSystem(config wasitest.TestConfig) (wasi.System, error) {
 	})
 
 	if config.RootFS != nil {
-		root, err := dup(int(config.RootFS.Fd()))
+		rootFile := int(config.RootFS.Fd())
+		root, err := dup(rootFile)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("duplicating rootfs (%d): %w", rootFile, err)
 		}
 		s.Preopen(unix.FD(root), "/", wasi.FDStat{
 			FileType:         wasi.DirectoryType,
@@ -128,6 +134,8 @@ func makeSystem(config wasitest.TestConfig) (wasi.System, error) {
 }
 
 func dup(fd int) (int, error) {
+	syscall.ForkLock.Lock()
+	defer syscall.ForkLock.Unlock()
 	newfd, err := sysunix.Dup(fd)
 	if err != nil {
 		return -1, err
@@ -138,13 +146,10 @@ func dup(fd int) (int, error) {
 
 func TestSystemPollAndShutdown(t *testing.T) {
 	testSystem(func(ctx context.Context, p *unix.System) {
-		errors := make(chan error)
+		errors := make(chan error, 1)
 		go func() {
 			time.Sleep(100 * time.Millisecond)
-			if err := p.Shutdown(ctx); err != nil {
-				errors <- err
-			}
-			close(errors)
+			errors <- p.Shutdown(ctx)
 		}()
 
 		// This call should block forever, unless async shutdown works, which is
@@ -155,7 +160,7 @@ func TestSystemPollAndShutdown(t *testing.T) {
 		}
 		events := make([]wasi.Event, len(subscriptions))
 
-		_, errno := p.PollOneOff(ctx, subscriptions, events)
+		n, errno := p.PollOneOff(ctx, subscriptions, events)
 		if errno != wasi.ESUCCESS {
 			t.Fatal(errno)
 		}
@@ -167,11 +172,11 @@ func TestSystemPollAndShutdown(t *testing.T) {
 			t.Error("poll_oneoff: altered subscriptions")
 		}
 
-		if !reflect.DeepEqual(events, []wasi.Event{
+		if !reflect.DeepEqual(events[:n], []wasi.Event{
 			{UserData: 0, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
 			{UserData: 1, EventType: wasi.FDReadEvent, Errno: wasi.ECANCELED},
-		}) {
-			t.Errorf("poll_oneoff: wrong events: %+v", events)
+		}[:n]) {
+			t.Errorf("poll_oneoff: wrong events: %+v", events[:n])
 		}
 
 		if err := <-errors; err != nil {

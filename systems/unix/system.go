@@ -235,6 +235,9 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	}
 
 	if n > 0 && s.pollfds[0].Revents != 0 {
+		if s.pollfds[0].Fd != int32(wakefd) {
+			panic("kernel reordered pollfds")
+		}
 		// If the wake fd was notified it means the system was shut down,
 		// we report this by cancelling all subscriptions.
 		//

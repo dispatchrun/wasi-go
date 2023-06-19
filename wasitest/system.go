@@ -45,20 +45,22 @@ func (tests testSuite) run(t *testing.T, makeSystem MakeSystem) {
 			defer cancel()
 
 			tests[name](t, ctx, func(c TestConfig) wasi.System {
-				devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
-				if err != nil {
-					t.Fatal(err)
+				devNull := func(flag int) *os.File {
+					f, err := os.OpenFile(os.DevNull, flag, 0)
+					if err != nil {
+						t.Fatal(err)
+					}
+					return f
 				}
-				defer devNull.Close()
 
 				if c.Stdin == nil {
-					c.Stdin = devNull
+					c.Stdin = devNull(os.O_RDONLY)
 				}
 				if c.Stdout == nil {
-					c.Stdout = devNull
+					c.Stdout = devNull(os.O_WRONLY)
 				}
 				if c.Stderr == nil {
-					c.Stderr = devNull
+					c.Stderr = devNull(os.O_WRONLY)
 				}
 
 				s, err := makeSystem(c)
