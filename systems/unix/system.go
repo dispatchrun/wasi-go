@@ -275,18 +275,13 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 			if pf.Revents == 0 {
 				continue
 			}
-
-			if sub.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
-				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
-			}
-			if sub.EventType == wasi.FDWriteEvent && (pf.Revents&unix.POLLOUT) != 0 {
-				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
-			}
-			if (pf.Revents & unix.POLLERR) != 0 {
+			switch {
+			case (pf.Revents & unix.POLLERR) != 0:
 				e.Errno = wasi.ECANCELED // we don't know what error, just pass something
-			}
-			if (pf.Revents & unix.POLLHUP) != 0 {
+			case (pf.Revents & unix.POLLHUP) != 0:
 				e.FDReadWrite.Flags |= wasi.Hangup
+			case (pf.Revents & (unix.POLLIN | unix.POLLOUT)) != 0:
+				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
 			}
 			events[i] = e
 		}
@@ -371,8 +366,8 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 	if err != nil {
 		return -1, nil, nil, makeErrno(err)
 	}
-	peer, ok := s.makeRemoteSocketAddress(sa)
-	if !ok {
+	peer := makeSocketAddress(sa)
+	if peer == nil {
 		unix.Close(connfd)
 		return -1, nil, nil, wasi.ENOTSUP
 	}
@@ -561,9 +556,8 @@ func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOV
 	n, _, sysOFlags, sa, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
 	var addr wasi.SocketAddress
 	if sa != nil {
-		var ok bool
-		addr, ok = s.makeRemoteSocketAddress(sa)
-		if !ok {
+		addr = makeSocketAddress(sa)
+		if addr == nil {
 			errno = wasi.ENOTSUP
 		}
 	}
@@ -712,8 +706,8 @@ func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketA
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	addr, ok := s.makeLocalSocketAddress(sa)
-	if !ok {
+	addr := makeSocketAddress(sa)
+	if addr == nil {
 		return nil, wasi.ENOTSUP
 	}
 	return addr, wasi.ESUCCESS
@@ -728,8 +722,8 @@ func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.Socket
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	addr, ok := s.makeRemoteSocketAddress(sa)
-	if !ok {
+	addr := makeSocketAddress(sa)
+	if addr == nil {
 		return nil, wasi.ENOTSUP
 	}
 	return addr, wasi.ESUCCESS
@@ -921,28 +915,23 @@ func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, o
 	return sa, true
 }
 
-func (s *System) makeLocalSocketAddress(sa unix.Sockaddr) (wasi.SocketAddress, bool) {
-	return s.makeSocketAddress(sa, &s.inet4Addr, &s.inet6Addr, &s.unixAddr)
-}
-
-func (s *System) makeRemoteSocketAddress(sa unix.Sockaddr) (wasi.SocketAddress, bool) {
-	return s.makeSocketAddress(sa, &s.inet4Peer, &s.inet6Peer, &s.unixPeer)
-}
-
-func (s *System) makeSocketAddress(sa unix.Sockaddr, in4 *wasi.Inet4Address, in6 *wasi.Inet6Address, un *wasi.UnixAddress) (wasi.SocketAddress, bool) {
+func makeSocketAddress(sa unix.Sockaddr) wasi.SocketAddress {
 	switch t := sa.(type) {
 	case *unix.SockaddrInet4:
-		in4.Addr = t.Addr
-		in4.Port = t.Port
-		return in4, true
+		return &wasi.Inet4Address{
+			Addr: t.Addr,
+			Port: t.Port,
+		}
 	case *unix.SockaddrInet6:
-		in6.Addr = t.Addr
-		in6.Port = t.Port
-		return in6, true
+		return &wasi.Inet6Address{
+			Addr: t.Addr,
+			Port: t.Port,
+		}
 	case *unix.SockaddrUnix:
-		un.Name = t.Name
-		return un, true
+		return &wasi.UnixAddress{
+			Name: t.Name,
+		}
 	default:
-		return nil, false
+		return nil
 	}
 }

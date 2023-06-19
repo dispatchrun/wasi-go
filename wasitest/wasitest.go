@@ -2,6 +2,7 @@ package wasitest
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"github.com/stealthrocket/wasi-go"
@@ -25,7 +26,21 @@ func assertOK(t *testing.T, err error) {
 func assertEqual[T comparable](t *testing.T, got, want T) {
 	if got != want {
 		t.Helper()
-		t.Fatalf("%T values mismatch\nwant = %+v\ngot  = %+v", want, want, got)
+		t.Fatalf("%T values must be equal\nwant = %+v\ngot  = %+v", want, want, got)
+	}
+}
+
+func assertNotEqual[T comparable](t *testing.T, got, want T) {
+	if got == want {
+		t.Helper()
+		t.Fatalf("%T values must not be equal\nwant = %+v\ngot  = %+v", want, want, got)
+	}
+}
+
+func assertDeepEqual(t *testing.T, got, want any) {
+	if !reflect.DeepEqual(got, want) {
+		t.Helper()
+		t.Fatalf("%T values must be deep equal\nwant = %+v\ngot  = %+v", want, want, got)
 	}
 }
 
