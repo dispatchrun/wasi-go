@@ -1,4 +1,4 @@
-package testwasi
+package wasitest
 
 import (
 	"context"
@@ -34,9 +34,9 @@ type TestConfig struct {
 // MakeSystem is a function used to create a system to run the test suites
 // against.
 //
-// The function returns the system and a callback that will be invoked after
-// completing a test to tear down resources allocated by the system.
-type MakeSystem func(TestConfig) (wasi.System, func(), error)
+// The test guarantees that the system will be closed when it isn't needed
+// anymore.
+type MakeSystem func(TestConfig) (wasi.System, error)
 
 // TestWASIP1 is a generic test suite which runs the list of WebAssembly
 // programs passed as file paths, creating a system and runtime to execute
@@ -93,7 +93,7 @@ func TestWASIP1(t *testing.T, filePaths []string, makeSystem MakeSystem) {
 			go io.Copy(os.Stdout, stdoutR)
 			go io.Copy(os.Stderr, stderrR)
 
-			system, teardown, err := makeSystem(TestConfig{
+			system, err := makeSystem(TestConfig{
 				Args: []string{
 					filepath.Base(test),
 				},
@@ -110,8 +110,8 @@ func TestWASIP1(t *testing.T, filePaths []string, makeSystem MakeSystem) {
 			if err != nil {
 				t.Fatal("system:", err)
 			}
-			defer teardown()
 			ctx := context.Background()
+			defer system.Close(ctx)
 
 			runtime := wazero.NewRuntime(ctx)
 			defer runtime.Close(ctx)

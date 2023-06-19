@@ -128,10 +128,14 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	if err != nil {
 		return 0, makeErrno(err)
 	}
-	epoch := time.Duration(0)
+
+	realtimeEpoch := time.Duration(0)
+	monotonicEpoch := time.Duration(0)
+
 	timeout := time.Duration(-1)
-	s.pollfds = s.pollfds[:0]
-	s.pollfds = append(s.pollfds, unix.PollFd{
+	timeoutEventIndex := -1
+
+	s.pollfds = append(s.pollfds[:0], unix.PollFd{
 		Fd:     int32(wakefd),
 		Events: unix.POLLIN | unix.POLLERR | unix.POLLHUP,
 	})
@@ -163,34 +167,52 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 
 		case wasi.ClockEvent:
 			c := sub.GetClock()
-			if c.ID != wasi.Monotonic || s.Monotonic == nil {
-				events[i] = errorEvent(sub, wasi.ENOSYS)
+
+			var epoch *time.Duration
+			var gettime func(context.Context) (uint64, error)
+			switch c.ID {
+			case wasi.Realtime:
+				epoch, gettime = &realtimeEpoch, s.Realtime
+			case wasi.Monotonic:
+				epoch, gettime = &monotonicEpoch, s.Monotonic
+			}
+			if gettime == nil {
+				events[i] = errorEvent(sub, wasi.ENOTSUP)
 				numEvents++
 				continue
 			}
-			if epoch == 0 {
+
+			t := c.Timeout.Duration() + c.Precision.Duration()
+			if c.Flags.Has(wasi.Abstime) {
 				// Only capture the current time if the program requested a
 				// clock subscription; it allows programs that never ask for
 				// a timeout to run with a system which does not have a
 				// monotonic clock configured.
-				now, err := s.Monotonic(ctx)
-				if err != nil {
-					return 0, makeErrno(err)
+				if *epoch == 0 {
+					t, err := gettime(ctx)
+					if err != nil {
+						events[i] = errorEvent(sub, wasi.MakeErrno(err))
+						numEvents++
+						continue
+					}
+					*epoch = time.Duration(t)
 				}
-				epoch = time.Duration(now)
-			}
-			t := c.Timeout.Duration()
-			if c.Flags.Has(wasi.Abstime) {
 				// If the subscription asks for an absolute monotonic time point
 				// we can honnor it by computing its relative delta to the poll
 				// epoch.
-				t -= epoch
+				t -= *epoch
+			}
+
+			if t < 0 {
+				t = 0
 			}
 			switch {
 			case timeout < 0:
 				timeout = t
+				timeoutEventIndex = i
 			case t < timeout:
 				timeout = t
+				timeoutEventIndex = i
 			}
 		}
 	}
@@ -230,13 +252,11 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 		return len(subscriptions), wasi.ESUCCESS
 	}
 
-	var now time.Duration
-	if timeout >= 0 {
-		t, err := s.Monotonic(ctx)
-		if err != nil {
-			return 0, makeErrno(err)
+	if timeoutEventIndex >= 0 {
+		events[timeoutEventIndex] = wasi.Event{
+			UserData:  subscriptions[timeoutEventIndex].UserData,
+			EventType: subscriptions[timeoutEventIndex].EventType + 1,
 		}
-		now = time.Duration(t)
 	}
 
 	j := 1
@@ -249,16 +269,6 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 		}
 
 		switch sub.EventType {
-		case wasi.ClockEvent:
-			c := sub.GetClock()
-			t := c.Timeout.Duration()
-			if !c.Flags.Has(wasi.Abstime) {
-				t += epoch
-			}
-			if t >= now {
-				events[i] = e
-			}
-
 		case wasi.FDReadEvent, wasi.FDWriteEvent:
 			pf := &s.pollfds[j]
 			j++
@@ -266,10 +276,10 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 				continue
 			}
 
-			if e.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
+			if sub.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
 				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
 			}
-			if e.EventType == wasi.FDWriteEvent && (pf.Revents&unix.POLLOUT) != 0 {
+			if sub.EventType == wasi.FDWriteEvent && (pf.Revents&unix.POLLOUT) != 0 {
 				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
 			}
 			if (pf.Revents & unix.POLLERR) != 0 {

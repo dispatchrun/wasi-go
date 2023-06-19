@@ -75,7 +75,7 @@ The package layout is as follows:
 - [`systems/unix`][unix-system] a Unix implementation (tested on Linux and macOS)
 - [`imports/wasi_snapshot_preview1`][host-module] a host module for the [wazero][wazero] runtime
 - [`cmd/wasirun`][wasirun] a command to run WebAssembly modules
-- [`testwasi`][testwasi] a test suite against the WASI interface
+- [`wasitest`][wasitest] a test suite against the WASI interface
 
 To run a WebAssembly module, it's also necessary to prepare clocks and "preopens"
 (files/directories that the WebAssembly module can access). To see how it all fits
@@ -125,7 +125,7 @@ Remember to be respectful and open minded!
 [preview1]: https://github.com/WebAssembly/WASI/blob/e324ce3/legacy/preview1/docs.md
 [wazero]: https://wazero.io
 [wasirun]: https://github.com/stealthrocket/wasi-go/blob/main/cmd/wasirun/main.go
-[testwasi]: https://github.com/stealthrocket/wasi-go/tree/main/testwasi
+[wasitest]: https://github.com/stealthrocket/wasi-go/tree/main/wasitest
 [tracer]: https://github.com/stealthrocket/wasi-go/blob/main/tracer.go
 [sockets-extension]: https://github.com/stealthrocket/wasi-go/blob/main/sockets_extension.go
 [gotip]: https://pkg.go.dev/golang.org/dl/gotip

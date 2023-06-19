@@ -12,7 +12,8 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/systems/unix"
-	"github.com/stealthrocket/wasi-go/testwasi"
+	"github.com/stealthrocket/wasi-go/wasitest"
+	"github.com/tetratelabs/wazero/sys"
 	sysunix "golang.org/x/sys/unix"
 )
 
@@ -42,71 +43,88 @@ func TestFS(t *testing.T) {
 	}
 }
 
+func TestSystem(t *testing.T) {
+	wasitest.TestSystem(t, makeSystem)
+}
+
 func TestWASIP1(t *testing.T) {
 	files, _ := filepath.Glob("../testdata/*/*.wasm")
+	wasitest.TestWASIP1(t, files, makeSystem)
+}
 
-	testwasi.TestWASIP1(t, files,
-		func(config testwasi.TestConfig) (wasi.System, func(), error) {
-			epoch := config.Now()
-
-			s := &unix.System{
-				Args:    config.Args,
-				Environ: config.Environ,
-				Monotonic: func(context.Context) (uint64, error) {
-					return uint64(config.Now().Sub(epoch)), nil
-				},
-				MonotonicPrecision: time.Nanosecond,
-				Realtime: func(context.Context) (uint64, error) {
-					return uint64(config.Now().UnixNano()), nil
-				},
-				RealtimePrecision: time.Microsecond,
-				Rand:              config.Rand,
-			}
-
-			stdin, err := dup(int(config.Stdin.Fd()))
-			if err != nil {
-				return nil, nil, err
-			}
-
-			stdout, err := dup(int(config.Stdout.Fd()))
-			if err != nil {
-				return nil, nil, err
-			}
-
-			stderr, err := dup(int(config.Stderr.Fd()))
-			if err != nil {
-				return nil, nil, err
-			}
-
-			root, err := dup(int(config.RootFS.Fd()))
-			if err != nil {
-				return nil, nil, err
-			}
-
-			s.Preopen(unix.FD(stdin), "/dev/stdin", wasi.FDStat{
-				FileType:   wasi.CharacterDeviceType,
-				RightsBase: wasi.AllRights,
-			})
-
-			s.Preopen(unix.FD(stdout), "/dev/stdout", wasi.FDStat{
-				FileType:   wasi.CharacterDeviceType,
-				RightsBase: wasi.AllRights,
-			})
-
-			s.Preopen(unix.FD(stderr), "/dev/stderr", wasi.FDStat{
-				FileType:   wasi.CharacterDeviceType,
-				RightsBase: wasi.AllRights,
-			})
-
-			s.Preopen(unix.FD(root), "/", wasi.FDStat{
-				FileType:         wasi.DirectoryType,
-				RightsBase:       wasi.AllRights,
-				RightsInheriting: wasi.AllRights,
-			})
-
-			return s, func() { s.Close(context.Background()) }, nil
+func makeSystem(config wasitest.TestConfig) (wasi.System, error) {
+	s := &unix.System{
+		Args:    config.Args,
+		Environ: config.Environ,
+		Rand:    config.Rand,
+		Yield: func(ctx context.Context) error {
+			return nil
 		},
-	)
+		Exit: func(ctx context.Context, code int) error {
+			panic(sys.NewExitError(uint32(code)))
+		},
+		Raise: func(ctx context.Context, code int) error {
+			panic(sys.NewExitError(127 + uint32(code)))
+		},
+	}
+
+	if now := config.Now; now != nil {
+		epoch := now()
+		s.Monotonic = func(context.Context) (uint64, error) {
+			return uint64(now().Sub(epoch)), nil
+		}
+		s.MonotonicPrecision = time.Nanosecond
+		s.Realtime = func(context.Context) (uint64, error) {
+			return uint64(now().UnixNano()), nil
+		}
+		s.RealtimePrecision = time.Microsecond
+	}
+
+	defer func() {
+		config.Stdin.Close()
+		config.Stdout.Close()
+		config.Stderr.Close()
+	}()
+
+	stdin, err := dup(int(config.Stdin.Fd()))
+	if err != nil {
+		return nil, err
+	}
+	stdout, err := dup(int(config.Stdout.Fd()))
+	if err != nil {
+		return nil, err
+	}
+	stderr, err := dup(int(config.Stderr.Fd()))
+	if err != nil {
+		return nil, err
+	}
+
+	s.Preopen(unix.FD(stdin), "/dev/stdin", wasi.FDStat{
+		FileType:   wasi.CharacterDeviceType,
+		RightsBase: wasi.AllRights,
+	})
+	s.Preopen(unix.FD(stdout), "/dev/stdout", wasi.FDStat{
+		FileType:   wasi.CharacterDeviceType,
+		RightsBase: wasi.AllRights,
+	})
+	s.Preopen(unix.FD(stderr), "/dev/stderr", wasi.FDStat{
+		FileType:   wasi.CharacterDeviceType,
+		RightsBase: wasi.AllRights,
+	})
+
+	if config.RootFS != nil {
+		root, err := dup(int(config.RootFS.Fd()))
+		if err != nil {
+			return nil, err
+		}
+		s.Preopen(unix.FD(root), "/", wasi.FDStat{
+			FileType:         wasi.DirectoryType,
+			RightsBase:       wasi.AllRights,
+			RightsInheriting: wasi.AllRights,
+		})
+	}
+
+	return s, nil
 }
 
 func dup(fd int) (int, error) {
@@ -224,7 +242,7 @@ func TestSystemPollMissingMonotonicClock(t *testing.T) {
 		} else if !reflect.DeepEqual(events[0], wasi.Event{
 			UserData:  42,
 			EventType: wasi.ClockEvent,
-			Errno:     wasi.ENOSYS,
+			Errno:     wasi.ENOTSUP,
 		}) {
 			t.Errorf("poll_oneoff: wrong event (0): %+v", events[0])
 		}
