@@ -132,5 +132,5 @@ func dropOutgoingRequestFn(_ context.Context, mod api.Module, handle uint32) {
 }
 
 func outgoingRequestWriteFn(_ context.Context, mod api.Module, handle, ptr uint32) {
-
+	// TODO: handle request bodies
 }

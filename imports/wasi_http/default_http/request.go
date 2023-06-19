@@ -8,20 +8,22 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-// TODO: Implement inbound requests someday...
+// Request handles HTTP serving. It's currently unimplemented
 func requestFn(_ context.Context, mod api.Module, a, b, c, d, e, f, g, h, j, k, l, m, n, o uint32) int32 {
 	return 0
 }
 
-func handleFn(_ context.Context, mod api.Module, request, b, c, d, e, f, g, h uint32) uint32 {
+// Handle handles HTTP client calls.
+// The remaining parameters (b..h) are for the HTTP Options, currently unimplemented.
+func handleFn(_ context.Context, mod api.Module, request, b, c, d, e, f, g, h uint32) int32 {
 	req, ok := types.GetRequest(request)
 	if !ok {
-		log.Printf("Failed to get request: %v", request)
+		log.Printf("Failed to get request: %v\n", request)
 		return 0
 	}
 	r, err := req.MakeRequest()
 	if err != nil {
-		log.Printf(err.Error())
+		log.Println(err.Error())
 		return 0
 	}
 	return types.MakeResponse(r)
