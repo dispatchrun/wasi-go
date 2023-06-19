@@ -671,6 +671,8 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		sysOption = unix.SO_RCVLOWAT
 	case wasi.QueryAcceptConnections:
 		sysOption = unix.SO_ACCEPTCONN
+	case wasi.TcpNoDelay:
+		sysOption = unix.TCP_NODELAY
 	case wasi.Linger:
 		// This accepts a struct linger value.
 		return wasi.ENOTSUP // TODO: implement SO_LINGER

@@ -135,7 +135,7 @@ func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, 
 	// See socket.go
 	switch wasi.SocketOptionLevel(level) {
 	case wasi.TcpLevel:
-		option = option - 0x1000
+		option += 0x1000
 	}
 	// Only int options are supported for now.
 	switch wasi.SocketOption(option) {
@@ -153,7 +153,7 @@ func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, 
 	// See socket.go
 	switch wasi.SocketOptionLevel(level) {
 	case wasi.TcpLevel:
-		option = option - 0x1000
+		option -= 0x1000
 	}
 	// Only int options are supported for now.
 	switch wasi.SocketOption(option) {
