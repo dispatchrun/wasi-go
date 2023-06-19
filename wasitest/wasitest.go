@@ -3,6 +3,8 @@ package wasitest
 import (
 	"context"
 	"testing"
+
+	"github.com/stealthrocket/wasi-go"
 )
 
 func testContext(t *testing.T) (context.Context, context.CancelFunc) {
@@ -24,5 +26,12 @@ func assertEqual[T comparable](t *testing.T, got, want T) {
 	if got != want {
 		t.Helper()
 		t.Fatalf("%T values mismatch\nwant = %+v\ngot  = %+v", want, want, got)
+	}
+}
+
+func skipIfNotImplemented(t *testing.T, errno wasi.Errno) {
+	if errno == wasi.ENOSYS {
+		t.Helper()
+		t.Skip("operation not implemented on this system")
 	}
 }

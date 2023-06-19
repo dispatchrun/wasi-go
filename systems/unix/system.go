@@ -446,6 +446,14 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	default:
 		return -1, wasi.EINVAL
 	}
+	if socketType == wasi.AnySocket {
+		switch protocol {
+		case wasi.TCPProtocol:
+			socketType = wasi.StreamSocket
+		case wasi.UDPProtocol:
+			socketType = wasi.DatagramSocket
+		}
+	}
 	var fdType wasi.FileType
 	var sysType int
 	switch socketType {

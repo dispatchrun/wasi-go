@@ -15,6 +15,7 @@ import (
 func TestSystem(t *testing.T, makeSystem MakeSystem) {
 	t.Run("proc", proc.runFunc(makeSystem))
 	t.Run("poll", poll.runFunc(makeSystem))
+	t.Run("socket", socket.runFunc(makeSystem))
 }
 
 type skip string
