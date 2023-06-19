@@ -234,17 +234,20 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 		var err error
 		n, err = unix.Poll(s.pollfds, timeoutMillis)
 		if err == nil {
-			break
-		}
-		if err != unix.EINTR {
+			// poll(2) sometimes returns with no error and no events, so we
+			// verify that the timeout has actually expired.
+			if n > 0 || deadline.IsZero() || time.Now().After(deadline) {
+				break
+			}
+		} else if err != unix.EINTR {
 			return 0, makeErrno(err)
 		}
 	}
 
-	if n > 0 && s.pollfds[0].Revents != 0 {
-		if s.pollfds[0].Fd != int32(wakefd) {
-			panic("kernel reordered pollfds")
-		}
+	// poll(2) may cause spurious wake up, so we verify that the system
+	// has indeed been shutdown instead of relying on reading the events
+	// reported on the first pollfd.
+	if s.isShutdown() {
 		// If the wake fd was notified it means the system was shut down,
 		// we report this by cancelling all subscriptions.
 		//
@@ -969,6 +972,13 @@ func (s *System) shutdown() {
 	if fd >= 0 {
 		_ = closeRetryOnEINTR(fd)
 	}
+}
+
+func (s *System) isShutdown() bool {
+	s.mutex.Lock()
+	ok := s.shutfds[1] == -1
+	s.mutex.Unlock()
+	return ok
 }
 
 func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, ok bool) {
