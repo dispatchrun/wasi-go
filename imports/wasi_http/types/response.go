@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"net/http"
 
-	"github.com/stealthrocket/wasi-go/imports/wasi_http/wasi_streams"
+	"github.com/stealthrocket/wasi-go/imports/wasi_http/streams"
 	"github.com/tetratelabs/wazero/api"
 )
 
@@ -34,7 +34,7 @@ func incomingResponseHeadersFn(_ context.Context, mod api.Module, handle uint32)
 }
 
 func incomingResponseConsumeFn(_ context.Context, mod api.Module, handle, ptr uint32) {
-	stream := wasi_streams.Streams.NewInputStream(response.Body)
+	stream := streams.Streams.NewInputStream(response.Body)
 	data := []byte{}
 	// 0 == ok, 1 == is_err
 	data = le.AppendUint32(data, 0)

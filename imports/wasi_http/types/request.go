@@ -26,16 +26,16 @@ func (r Request) Url() string {
 
 type requests struct {
 	requests        map[uint32]*Request
-	request_id_base uint32
+	requestIdBase uint32
 }
 
 var r = &requests{make(map[uint32]*Request), 1}
 
 func (r *requests) newRequest() (*Request, uint32) {
 	request := &Request{}
-	r.request_id_base++
-	r.requests[r.request_id_base] = request
-	return request, r.request_id_base
+	r.requestIdBase++
+	r.requests[r.requestIdBase] = request
+	return request, r.requestIdBase
 }
 
 func (r *requests) deleteRequest(handle uint32) {
