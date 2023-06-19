@@ -11,7 +11,7 @@ var (
 	localIPv4 = [4]byte{127, 0, 0, 1}
 	localIPv6 = [16]byte{15: 1}
 
-	unknownIPv4 = [4]byte{127, 0, 0, 2}
+	unknownIPv4 = [4]byte{123, 234, 123, 234}
 	unknownIPv6 = [16]byte{15: 2}
 )
 
@@ -53,19 +53,19 @@ var socket = testSuite{
 	),
 
 	"cannot create an ipv4 stream socket with the udp protocol": testSocketOpenError(
-		wasi.InetFamily, wasi.StreamSocket, wasi.UDPProtocol, wasi.EPROTOTYPE,
+		wasi.InetFamily, wasi.StreamSocket, wasi.UDPProtocol, wasi.EPROTONOSUPPORT,
 	),
 
 	"cannot create an ipv4 datagram socket with the tcp protocol": testSocketOpenError(
-		wasi.InetFamily, wasi.DatagramSocket, wasi.TCPProtocol, wasi.EPROTOTYPE,
+		wasi.InetFamily, wasi.DatagramSocket, wasi.TCPProtocol, wasi.EPROTONOSUPPORT,
 	),
 
 	"cannot create an ipv6 stream socket with the udp protocol": testSocketOpenError(
-		wasi.Inet6Family, wasi.StreamSocket, wasi.UDPProtocol, wasi.EPROTOTYPE,
+		wasi.Inet6Family, wasi.StreamSocket, wasi.UDPProtocol, wasi.EPROTONOSUPPORT,
 	),
 
 	"cannot create an ipv6 datagram socket with the tcp protocol": testSocketOpenError(
-		wasi.Inet6Family, wasi.DatagramSocket, wasi.TCPProtocol, wasi.EPROTOTYPE,
+		wasi.Inet6Family, wasi.DatagramSocket, wasi.TCPProtocol, wasi.EPROTONOSUPPORT,
 	),
 
 	"cannot create a unix stream socket with the tcp protocol": testSocketOpenError(
@@ -480,9 +480,8 @@ func testSocketConnectOK(family wasi.ProtocolFamily, typ wasi.SocketType, bind w
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		assertEqual(t, evs[0], wasi.Event{
-			UserData:    42,
-			EventType:   wasi.FDWriteEvent,
-			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+			UserData:  42,
+			EventType: wasi.FDWriteEvent,
 		})
 	}
 }
@@ -521,9 +520,8 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
-			UserData:    2,
-			EventType:   wasi.FDWriteEvent,
-			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+			UserData:  2,
+			EventType: wasi.FDWriteEvent,
 		})
 
 		subs = []wasi.Subscription{
@@ -535,9 +533,8 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
-			UserData:    1,
-			EventType:   wasi.FDReadEvent,
-			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+			UserData:  1,
+			EventType: wasi.FDReadEvent,
 		})
 
 		accept, remoteAddr, localAddr, errno := sys.SockAccept(ctx, server, wasi.NonBlock)
@@ -591,9 +588,8 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
-			UserData:    1,
-			EventType:   wasi.FDWriteEvent,
-			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+			UserData:  1,
+			EventType: wasi.FDWriteEvent,
 		})
 
 		subs = []wasi.Subscription{
@@ -605,16 +601,15 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
-			UserData:    1,
-			EventType:   wasi.FDReadEvent,
-			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+			UserData:  1,
+			EventType: wasi.FDReadEvent,
 		})
 
 		accept, _, _, errno := sys.SockAccept(ctx, server, wasi.NonBlock)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, sockIsNonBlocking(t, ctx, sys, accept), true)
 		assertEqual(t, sys.SockShutdown(ctx, accept, wasi.ShutdownWR), wasi.ESUCCESS)
-		assertEqual(t, sys.SockShutdown(ctx, accept, wasi.ShutdownWR), wasi.ENOTCONN)
+		assertEqual(t, sys.SockShutdown(ctx, accept, wasi.ShutdownWR), wasi.ESUCCESS)
 
 		subs = []wasi.Subscription{
 			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
@@ -625,13 +620,14 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
-			UserData:    1,
-			EventType:   wasi.FDReadEvent,
-			FDReadWrite: wasi.EventFDReadWrite{Flags: wasi.Hangup},
+			UserData:  1,
+			EventType: wasi.FDReadEvent,
 		})
 
-		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownRD), wasi.ENOTCONN)
+		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownRD), wasi.ESUCCESS)
 		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownWR), wasi.ESUCCESS)
+
+		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownRD), wasi.ENOTCONN)
 		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownWR), wasi.ENOTCONN)
 
 		subs = []wasi.Subscription{
@@ -643,9 +639,8 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
-			UserData:    1,
-			EventType:   wasi.FDReadEvent,
-			FDReadWrite: wasi.EventFDReadWrite{Flags: wasi.Hangup},
+			UserData:  1,
+			EventType: wasi.FDReadEvent,
 		})
 
 		assertEqual(t, sockErrno(t, ctx, sys, client), wasi.ESUCCESS)
@@ -705,7 +700,7 @@ func testSocketConnectAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ESUCCESS)
 
 		_, errno = sys.SockConnect(ctx, sock, bind)
-		assertEqual(t, errno, wasi.ENOTSUP)
+		assertEqual(t, errno, wasi.EISCONN)
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
@@ -741,7 +736,7 @@ func testSocketShutdownAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTy
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
 
-		assertEqual(t, sys.SockShutdown(ctx, sock, wasi.ShutdownRD|wasi.ShutdownWR), wasi.ENOTCONN)
+		assertEqual(t, sys.SockShutdown(ctx, sock, wasi.ShutdownRD|wasi.ShutdownWR), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }

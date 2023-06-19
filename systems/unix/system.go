@@ -137,7 +137,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 
 	s.pollfds = append(s.pollfds[:0], unix.PollFd{
 		Fd:     int32(wakefd),
-		Events: unix.POLLIN | unix.POLLERR | unix.POLLHUP,
+		Events: unix.POLLIN | unix.POLLHUP,
 	})
 
 	numEvents := 0
@@ -148,21 +148,21 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	for i := range subscriptions {
 		sub := &subscriptions[i]
 
+		var pollEvent int16 = unix.POLLIN | unix.POLLHUP
 		switch sub.EventType {
-		case wasi.FDReadEvent, wasi.FDWriteEvent:
+		case wasi.FDWriteEvent:
+			pollEvent = unix.POLLOUT
+			fallthrough
+		case wasi.FDReadEvent:
 			fd, _, errno := s.LookupFD(sub.GetFDReadWrite().FD, wasi.PollFDReadWriteRight)
 			if errno != wasi.ESUCCESS {
 				events[i] = errorEvent(sub, errno)
 				numEvents++
 				continue
 			}
-			var pollevent int16 = unix.POLLIN
-			if sub.EventType == wasi.FDWriteEvent {
-				pollevent = unix.POLLOUT
-			}
 			s.pollfds = append(s.pollfds, unix.PollFd{
 				Fd:     int32(fd),
-				Events: pollevent,
+				Events: pollEvent,
 			})
 
 		case wasi.ClockEvent:
@@ -264,29 +264,26 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 
 	j := 1
 	for i := range subscriptions {
-		sub := &subscriptions[i]
-		e := wasi.Event{UserData: sub.UserData, EventType: sub.EventType + 1}
-
 		if events[i].EventType != 0 {
 			continue
 		}
-
-		switch sub.EventType {
+		switch sub := &subscriptions[i]; sub.EventType {
 		case wasi.FDReadEvent, wasi.FDWriteEvent:
 			pf := &s.pollfds[j]
 			j++
 			if pf.Revents == 0 {
 				continue
 			}
-			switch {
-			case (pf.Revents & unix.POLLERR) != 0:
-				e.Errno = wasi.ECANCELED // we don't know what error, just pass something
-			case (pf.Revents & unix.POLLHUP) != 0:
-				e.FDReadWrite.Flags |= wasi.Hangup
-			case (pf.Revents & (unix.POLLIN | unix.POLLOUT)) != 0:
-				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
+			// Linux never reports POLLHUP for disconnected sockets,
+			// so there is no reliable mechanism to set wasi.Hanghup.
+			// We optimize for portability here and just report that
+			// the file descriptor is ready for reading or writing,
+			// and let the application deal with the conditions it
+			// sees from the following calles to read/write/etc...
+			events[i] = wasi.Event{
+				UserData:  sub.UserData,
+				EventType: sub.EventType + 1,
 			}
-			events[i] = e
 		}
 	}
 
@@ -444,6 +441,7 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	default:
 		return -1, wasi.EINVAL
 	}
+
 	if socketType == wasi.AnySocket {
 		switch protocol {
 		case wasi.TCPProtocol:
@@ -452,6 +450,7 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 			socketType = wasi.DatagramSocket
 		}
 	}
+
 	var fdType wasi.FileType
 	var sysType int
 	switch socketType {
@@ -464,6 +463,7 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	default:
 		return -1, wasi.EINVAL
 	}
+
 	var sysProtocol int
 	switch protocol {
 	case wasi.IPProtocol:
@@ -475,8 +475,18 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	default:
 		return -1, wasi.EINVAL
 	}
+
 	fd, err := unix.Socket(sysDomain, sysType, sysProtocol)
 	if err != nil {
+		// Darwin gives EPROTOTYPE when the socket type and protocol do
+		// not match, which differs from the Linux behavior which returns
+		// EPROTONOSUPPORT. Since there is no real use case for dealing
+		// with the error differently, and valid applications will not
+		// invoke SockOpen with invalid parameters, we align on the Linux
+		// behavior for simplicity.
+		if err == unix.EPROTOTYPE {
+			err = unix.EPROTONOSUPPORT
+		}
 		return -1, makeErrno(err)
 	}
 	guestfd := s.Register(FD(fd), wasi.FDStat{
@@ -513,6 +523,12 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 	}
 	err := unix.Connect(int(socket), sa)
 	if err != nil && err != unix.EINPROGRESS {
+		// Darwin gives EOPNOTSUPP when trying to connect a socket that is
+		// already connected or already listening. Align on the Linux behavior
+		// here and convert the error to EISCONN.
+		if err == unix.EOPNOTSUPP {
+			err = unix.EISCONN
+		}
 		return nil, makeErrno(err)
 	}
 	addr, errno := s.SockLocalAddress(ctx, fd)

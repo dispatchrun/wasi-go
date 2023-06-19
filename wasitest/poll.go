@@ -69,9 +69,8 @@ var poll = testSuite{
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, evs[0], wasi.Event{
-			UserData:    42,
-			EventType:   wasi.FDReadEvent,
-			FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+			UserData:  42,
+			EventType: wasi.FDReadEvent,
 		})
 
 		n, errno = sys.FDRead(ctx, 0, []wasi.IOVec{buffer})
@@ -129,9 +128,8 @@ var poll = testSuite{
 			assertEqual(t, numEvents, 1)
 			assertEqual(t, errno, wasi.ESUCCESS)
 			assertEqual(t, evs[0], wasi.Event{
-				UserData:    42,
-				EventType:   wasi.FDWriteEvent,
-				FDReadWrite: wasi.EventFDReadWrite{NBytes: 1},
+				UserData:  42,
+				EventType: wasi.FDWriteEvent,
 			})
 
 			n, errno = sys.FDWrite(ctx, 1, []wasi.IOVec{[]byte("Hello, World!")})
