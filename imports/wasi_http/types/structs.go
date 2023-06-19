@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"encoding/binary"
 	"log"
 
 	"github.com/stealthrocket/wasi-go/imports/wasi_http/common"
@@ -22,13 +23,19 @@ func allocateWriteString(ctx context.Context, m api.Module, s string) uint32 {
 }
 
 func fieldsEntriesFn(ctx context.Context, mod api.Module, handle, out_ptr uint32) {
-	headers := ResponseHeaders()
+	r, found := GetResponse(handle)
+	if !found {
+		return
+	}
+	headers := r.ResponseHeaders()
 	l := uint32(len(headers))
 	// 8 bytes per string/string
 	ptr, err := common.Malloc(ctx, mod, l*16)
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
+
+	le := binary.LittleEndian
 	data := []byte{}
 	data = le.AppendUint32(data, ptr)
 	data = le.AppendUint32(data, l)
