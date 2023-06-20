@@ -265,6 +265,14 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
+	"cannot connect an ipv4 stream socket to an address of the wrong family": testSocketConnectWrongFamily(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"cannot connect an ipv6 stream socket to an address of the wrong family": testSocketConnectWrongFamily(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
 	"listen on an unbound ipv4 stream socket automatically binds it": testSocketListenBeforeBind(
 		wasi.InetFamily, wasi.StreamSocket,
 	),
@@ -858,6 +866,20 @@ func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketTy
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+	}
+}
+
+func testSocketConnectWrongFamily(family wasi.ProtocolFamily, typ wasi.SocketType, addr wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, sock, addr)
+		assertEqual(t, errno, wasi.EAFNOSUPPORT)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
 
