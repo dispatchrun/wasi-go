@@ -265,6 +265,14 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
+	"cannot connect to a connected ipv4 stream socket": testSocketConnectToConnected(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"cannot connect to a connected ipv6 stream socket": testSocketConnectToConnected(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
 	"cannot connect an ipv4 stream socket to an address of the wrong family": testSocketConnectWrongFamily(
 		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
@@ -591,7 +599,6 @@ func testSocketConnectOK(family wasi.ProtocolFamily, typ wasi.SocketType, bind w
 		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
-
 		assertEqual(t, evs[0], wasi.Event{
 			UserData:  42,
 			EventType: wasi.FDWriteEvent,
@@ -621,7 +628,6 @@ func testSocketConnectError(family wasi.ProtocolFamily, typ wasi.SocketType, bin
 		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
-
 		assertEqual(t, evs[0], wasi.Event{
 			UserData:  42,
 			EventType: wasi.FDWriteEvent,
@@ -890,6 +896,54 @@ func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketTy
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+	}
+}
+
+func testSocketConnectToConnected(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+
+		conn1, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr1, errno := sys.SockConnect(ctx, conn1, addr)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+		assertNotEqual(t, addr1, nil)
+
+		conn2, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr2, errno := sys.SockConnect(ctx, conn2, addr1)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+		assertNotEqual(t, addr2, nil)
+
+		subs := []wasi.Subscription{
+			wasi.MakeSubscriptionFDReadWrite(42, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
+				FD: conn2,
+			}),
+		}
+		evs := make([]wasi.Event, len(subs))
+
+		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
+		assertEqual(t, numEvents, 1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, evs[0], wasi.Event{
+			UserData:  42,
+			EventType: wasi.FDWriteEvent,
+		})
+
+		assertEqual(t, sockErrno(t, ctx, sys, conn2), wasi.ECONNREFUSED)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn2), wasi.ESUCCESS)
 	}
 }
 
