@@ -273,6 +273,14 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
 	),
 
+	"cannot listen on a connected ipv4 stream socket": testSocketListenAfterConnect(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"cannot listen on a connected ipv6 stream socket": testSocketListenAfterConnect(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
 	"listen on an unbound ipv4 stream socket automatically binds it": testSocketListenBeforeBind(
 		wasi.InetFamily, wasi.StreamSocket,
 	),
@@ -924,6 +932,29 @@ func testSocketListenBeforeBind(family wasi.ProtocolFamily, typ wasi.SocketType)
 		}
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn, addr)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+		assertEqual(t, sys.SockListen(ctx, conn, 0), wasi.EINVAL)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
 	}
 }
 
