@@ -640,6 +640,7 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
+
 	var sysLevel int
 	switch level {
 	case wasi.SocketLevel:
@@ -649,6 +650,7 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	default:
 		return nil, wasi.EINVAL
 	}
+
 	var sysOption int
 	switch option {
 	case wasi.ReuseAddress:
@@ -709,6 +711,12 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		}
 	case wasi.QuerySocketError:
 		value = int(makeErrno(unix.Errno(value)))
+	case wasi.RecvBufferSize, wasi.SendBufferSize:
+		// Linux doubles the socket buffer sizes, so we adjust the value here
+		// to ensure the behavior is portable across operating systems.
+		if runtime.GOOS == "linux" {
+			value /= 2
+		}
 	}
 
 	return wasi.IntValue(value), errno
@@ -719,6 +727,7 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
+
 	var sysLevel int
 	switch level {
 	case wasi.SocketLevel:
@@ -728,6 +737,7 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	default:
 		return wasi.EINVAL
 	}
+
 	var sysOption int
 	switch option {
 	case wasi.ReuseAddress:
@@ -766,10 +776,23 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	default:
 		return wasi.EINVAL
 	}
+
 	intval, ok := value.(wasi.IntValue)
 	if !ok {
 		return wasi.EINVAL
 	}
+
+	// Linux allows setting the socket buffer size to zero, but this is not
+	// portable so we instead refuse to support this option here.
+	if runtime.GOOS == "linux" {
+		switch option {
+		case wasi.RecvBufferSize, wasi.SendBufferSize:
+			if intval <= 0 {
+				return wasi.EINVAL
+			}
+		}
+	}
+
 	err := ignoreEINTR(func() error {
 		return unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
 	})

@@ -784,8 +784,13 @@ func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketTy
 		_, errno = sys.SockConnect(ctx, conn, addr)
 		assertEqual(t, errno, wasi.EINPROGRESS)
 
+		// The second call to connect(2) may race since the connection is done
+		// asynchronously, so we have to tolerate ESUCCESS but also want to make
+		// sure that the only other possible error is EALREADY.
 		_, errno = sys.SockConnect(ctx, conn, addr)
-		assertEqual(t, errno, wasi.EALREADY)
+		if errno != wasi.ESUCCESS {
+			assertEqual(t, errno, wasi.EALREADY)
+		}
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
