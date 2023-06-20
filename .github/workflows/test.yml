@@ -19,8 +19,10 @@ jobs:
         go-version: '1.20'
         check-latest: true
 
+    # We run the tests 20 times because sometimes it helps highlight flaky
+    # behaviors that do not trigger on a single pass.
     - name: Go Tests
-      run: make test
+      run: make test count=20
 
   WASI:
     runs-on: ubuntu-latest

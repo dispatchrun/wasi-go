@@ -1,5 +1,7 @@
 .PHONY: all clean test testdata wasi-libc wasi-testsuite
 
+count ?= 1
+
 wasi-go.src = \
 	$(wildcard *.go) \
 	$(wildcard */*.go) \
@@ -27,7 +29,7 @@ clean:
 	rm -f $(testdata.files)
 
 test: testdata
-	go test ./...
+	go test -count=$(count) ./...
 
 testdata: $(testdata.files)
 

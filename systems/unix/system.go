@@ -4,8 +4,11 @@ import (
 	"context"
 	"io"
 	"net"
+	"os"
+	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/stealthrocket/wasi-go"
@@ -47,23 +50,14 @@ type System struct {
 
 	wasi.FileTable[FD]
 
-	pollfds   []unix.PollFd
-	unixInet4 unix.SockaddrInet4
-	unixInet6 unix.SockaddrInet6
-	unixUnix  unix.SockaddrUnix
-	inet4Addr wasi.Inet4Address
-	inet4Peer wasi.Inet4Address
-	inet6Addr wasi.Inet6Address
-	inet6Peer wasi.Inet6Address
-	unixAddr  wasi.UnixAddress
-	unixPeer  wasi.UnixAddress
+	pollfds []unix.PollFd
+	inet4   unix.SockaddrInet4
+	inet6   unix.SockaddrInet6
+	unix    unix.SockaddrUnix
 
-	// shutfds are a pair of file descriptors allocated to the read and write
-	// ends of a pipe. They are used to asynchronously interrupting calls to
-	// poll(2) by closing the write end of the pipe, causing the read end to
-	// become reading for reading and any polling on the fd to return.
-	mutex   sync.Mutex
-	shutfds [2]int
+	mutex sync.Mutex
+	wake  [2]*os.File
+	shut  atomic.Bool
 }
 
 var _ wasi.System = (*System)(nil)
@@ -124,17 +118,20 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	if len(subscriptions) == 0 || len(events) < len(subscriptions) {
 		return 0, wasi.EINVAL
 	}
-	wakefd, err := s.init()
+	r, _, err := s.init()
 	if err != nil {
 		return 0, makeErrno(err)
 	}
-	epoch := time.Duration(0)
-	timeout := time.Duration(-1)
-	s.pollfds = s.pollfds[:0]
-	s.pollfds = append(s.pollfds, unix.PollFd{
-		Fd:     int32(wakefd),
-		Events: unix.POLLIN | unix.POLLERR | unix.POLLHUP,
+	s.pollfds = append(s.pollfds[:0], unix.PollFd{
+		Fd:     int32(r.Fd()),
+		Events: unix.POLLIN | unix.POLLHUP,
 	})
+
+	realtimeEpoch := time.Duration(0)
+	monotonicEpoch := time.Duration(0)
+
+	timeout := time.Duration(-1)
+	timeoutEventIndex := -1
 
 	numEvents := 0
 	for i := range events {
@@ -144,165 +141,182 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	for i := range subscriptions {
 		sub := &subscriptions[i]
 
+		var pollEvent int16 = unix.POLLIN | unix.POLLHUP
 		switch sub.EventType {
-		case wasi.FDReadEvent, wasi.FDWriteEvent:
+		case wasi.FDWriteEvent:
+			pollEvent = unix.POLLOUT
+			fallthrough
+		case wasi.FDReadEvent:
 			fd, _, errno := s.LookupFD(sub.GetFDReadWrite().FD, wasi.PollFDReadWriteRight)
 			if errno != wasi.ESUCCESS {
 				events[i] = errorEvent(sub, errno)
 				numEvents++
 				continue
 			}
-			var pollevent int16 = unix.POLLIN
-			if sub.EventType == wasi.FDWriteEvent {
-				pollevent = unix.POLLOUT
-			}
 			s.pollfds = append(s.pollfds, unix.PollFd{
 				Fd:     int32(fd),
-				Events: pollevent,
+				Events: pollEvent,
 			})
 
 		case wasi.ClockEvent:
 			c := sub.GetClock()
-			if c.ID != wasi.Monotonic || s.Monotonic == nil {
-				events[i] = errorEvent(sub, wasi.ENOSYS)
+
+			var epoch *time.Duration
+			var gettime func(context.Context) (uint64, error)
+			switch c.ID {
+			case wasi.Realtime:
+				epoch, gettime = &realtimeEpoch, s.Realtime
+			case wasi.Monotonic:
+				epoch, gettime = &monotonicEpoch, s.Monotonic
+			}
+			if gettime == nil {
+				events[i] = errorEvent(sub, wasi.ENOTSUP)
 				numEvents++
 				continue
 			}
-			if epoch == 0 {
+
+			t := c.Timeout.Duration() + c.Precision.Duration()
+			if c.Flags.Has(wasi.Abstime) {
 				// Only capture the current time if the program requested a
 				// clock subscription; it allows programs that never ask for
 				// a timeout to run with a system which does not have a
 				// monotonic clock configured.
-				now, err := s.Monotonic(ctx)
-				if err != nil {
-					return 0, makeErrno(err)
+				if *epoch == 0 {
+					t, err := gettime(ctx)
+					if err != nil {
+						events[i] = errorEvent(sub, wasi.MakeErrno(err))
+						numEvents++
+						continue
+					}
+					*epoch = time.Duration(t)
 				}
-				epoch = time.Duration(now)
-			}
-			t := c.Timeout.Duration()
-			if c.Flags.Has(wasi.Abstime) {
 				// If the subscription asks for an absolute monotonic time point
 				// we can honnor it by computing its relative delta to the poll
 				// epoch.
-				t -= epoch
+				t -= *epoch
+			}
+
+			if t < 0 {
+				t = 0
 			}
 			switch {
 			case timeout < 0:
 				timeout = t
+				timeoutEventIndex = i
 			case t < timeout:
 				timeout = t
+				timeoutEventIndex = i
 			}
 		}
 	}
 
-	var timeoutMillis int
 	// We set the timeout to zero when we already produced events due to
 	// invalid subscriptions; this is useful to still make progress on I/O
 	// completion.
-	if numEvents == 0 {
-		if timeout < 0 {
+	var deadline time.Time
+	if numEvents > 0 {
+		timeout = 0
+	}
+	if timeout > 0 {
+		deadline = time.Now().Add(timeout)
+	}
+
+	// This loops until either the deadline is reached or at least one event is
+	// reported.
+	for {
+		timeoutMillis := 0
+		switch {
+		case timeout < 0:
 			timeoutMillis = -1
-		} else {
-			timeoutMillis = int(timeout.Milliseconds())
+		case !deadline.IsZero():
+			timeoutMillis = int(time.Until(deadline).Milliseconds())
 		}
-	}
 
-	n, err := unix.Poll(s.pollfds, timeoutMillis)
-	if err != nil {
-		return 0, makeErrno(err)
-	}
-
-	if n > 0 && s.pollfds[0].Revents != 0 {
-		// If the wake fd was notified it means the system was shut down,
-		// we report this by cancelling all subscriptions.
-		//
-		// Technically we might be erasing events that had already gathered
-		// errors in the first loop prior to the call to unix.Poll; this is
-		// not a concern since at this time the program would likely be
-		// terminating and should not be bothered with handling other errors.
-		for i := range subscriptions {
-			events[i] = wasi.Event{
-				UserData:  subscriptions[i].UserData,
-				EventType: subscriptions[i].EventType,
-				Errno:     wasi.ECANCELED,
-			}
-		}
-		return len(subscriptions), wasi.ESUCCESS
-	}
-
-	var now time.Duration
-	if timeout >= 0 {
-		t, err := s.Monotonic(ctx)
-		if err != nil {
+		n, err := unix.Poll(s.pollfds, timeoutMillis)
+		if err != nil && err != unix.EINTR {
 			return 0, makeErrno(err)
 		}
-		now = time.Duration(t)
-	}
 
-	j := 1
-	for i := range subscriptions {
-		sub := &subscriptions[i]
-		e := wasi.Event{UserData: sub.UserData, EventType: sub.EventType + 1}
-
-		if events[i].EventType != 0 {
-			continue
+		// poll(2) may cause spurious wake up, so we verify that the system
+		// has indeed been shutdown instead of relying on reading the events
+		// reported on the first pollfd.
+		if s.shut.Load() {
+			// If the wake fd was notified it means the system was shut down,
+			// we report this by cancelling all subscriptions.
+			//
+			// Technically we might be erasing events that had already gathered
+			// errors in the first loop prior to the call to unix.Poll; this is
+			// not a concern since at this time the program would likely be
+			// terminating and should not be bothered with handling other
+			// errors.
+			for i := range subscriptions {
+				events[i] = wasi.Event{
+					UserData:  subscriptions[i].UserData,
+					EventType: subscriptions[i].EventType,
+					Errno:     wasi.ECANCELED,
+				}
+			}
+			return len(subscriptions), wasi.ESUCCESS
 		}
 
-		switch sub.EventType {
-		case wasi.ClockEvent:
-			c := sub.GetClock()
-			t := c.Timeout.Duration()
-			if !c.Flags.Has(wasi.Abstime) {
-				t += epoch
+		if timeoutEventIndex >= 0 && deadline.Before(time.Now().Add(time.Millisecond)) {
+			events[timeoutEventIndex] = wasi.Event{
+				UserData:  subscriptions[timeoutEventIndex].UserData,
+				EventType: subscriptions[timeoutEventIndex].EventType + 1,
 			}
-			if t >= now {
-				events[i] = e
-			}
+		}
 
-		case wasi.FDReadEvent, wasi.FDWriteEvent:
-			pf := &s.pollfds[j]
-			j++
-			if pf.Revents == 0 {
+		j := 1
+		for i := range subscriptions {
+			if events[i].EventType != 0 {
 				continue
 			}
+			switch sub := &subscriptions[i]; sub.EventType {
+			case wasi.FDReadEvent, wasi.FDWriteEvent:
+				pf := &s.pollfds[j]
+				j++
+				if pf.Revents == 0 {
+					continue
+				}
+				// Linux never reports POLLHUP for disconnected sockets,
+				// so there is no reliable mechanism to set wasi.Hanghup.
+				// We optimize for portability here and just report that
+				// the file descriptor is ready for reading or writing,
+				// and let the application deal with the conditions it
+				// sees from the following calles to read/write/etc...
+				events[i] = wasi.Event{
+					UserData:  sub.UserData,
+					EventType: sub.EventType + 1,
+				}
+			}
+		}
 
-			if e.EventType == wasi.FDReadEvent && (pf.Revents&unix.POLLIN) != 0 {
-				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
+		// A 1:1 correspondance between the subscription and events arrays is
+		// used to track the completion of events, including the completion of
+		// invalid subscriptions, clock events, and I/O notifications coming
+		// from poll(2).
+		//
+		// We use zero as the marker on events for subscriptions that have not
+		// been fulfilled, but because the zero event type is used to represent
+		// clock subscriptions, we mark completed events with the event type+1.
+		//
+		// The event type is finally restored to its correct value in the loop
+		// below when we pack all completed events at the front of the output
+		// buffer.
+		n = 0
+
+		for _, e := range events[:len(subscriptions)] {
+			if e.EventType != 0 {
+				e.EventType--
+				events[n] = e
+				n++
 			}
-			if e.EventType == wasi.FDWriteEvent && (pf.Revents&unix.POLLOUT) != 0 {
-				e.FDReadWrite.NBytes = 1 // we don't know how many, so just say 1
-			}
-			if (pf.Revents & unix.POLLERR) != 0 {
-				e.Errno = wasi.ECANCELED // we don't know what error, just pass something
-			}
-			if (pf.Revents & unix.POLLHUP) != 0 {
-				e.FDReadWrite.Flags |= wasi.Hangup
-			}
-			events[i] = e
+		}
+
+		if n > 0 {
+			return n, wasi.ESUCCESS
 		}
 	}
-
-	// A 1:1 correspondance between the subscription and events arrays is used
-	// to track the completion of events, including the completion of invalid
-	// subscriptions, clock events, and I/O notifications coming from poll(2).
-	//
-	// We use zero as the marker on events for subscriptions that have not been
-	// fulfilled, but because the zero event type is used to represent clock
-	// subscriptions, we mark completed events with the event type + 1.
-	//
-	// The event type is finally restored to its correct value in the loop below
-	// when we pack all completed events at the front of the output buffer.
-	n = 0
-
-	for _, e := range events[:len(subscriptions)] {
-		if e.EventType != 0 {
-			e.EventType--
-			events[n] = e
-			n++
-		}
-	}
-
-	return n, wasi.ESUCCESS
 }
 
 func errorEvent(s *wasi.Subscription, err wasi.Errno) wasi.Event {
@@ -361,9 +375,9 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 	if err != nil {
 		return -1, nil, nil, makeErrno(err)
 	}
-	peer, ok := s.makeRemoteSocketAddress(sa)
-	if !ok {
-		unix.Close(connfd)
+	peer := makeSocketAddress(sa)
+	if peer == nil {
+		_ = closeTraceEBADF(connfd)
 		return -1, nil, nil, wasi.ENOTSUP
 	}
 	guestfd := s.Register(FD(connfd), wasi.FDStat{
@@ -387,12 +401,17 @@ func (s *System) SockRecv(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, 
 	if flags.Has(wasi.RecvWaitAll) {
 		sysIFlags |= unix.MSG_WAITALL
 	}
-	n, _, sysOFlags, _, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
-	var roflags wasi.ROFlags
-	if (sysOFlags & unix.MSG_TRUNC) != 0 {
-		roflags |= wasi.RecvDataTruncated
+	for {
+		n, _, sysOFlags, _, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
+		if err == unix.EINTR {
+			continue
+		}
+		var roflags wasi.ROFlags
+		if (sysOFlags & unix.MSG_TRUNC) != 0 {
+			roflags |= wasi.RecvDataTruncated
+		}
+		return wasi.Size(n), roflags, makeErrno(err)
 	}
-	return wasi.Size(n), roflags, makeErrno(err)
 }
 
 func (s *System) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, flags wasi.SIFlags) (wasi.Size, wasi.Errno) {
@@ -400,7 +419,9 @@ func (s *System) SockSend(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec, 
 	if errno != wasi.ESUCCESS {
 		return 0, errno
 	}
-	n, err := unix.SendmsgBuffers(int(socket), makeIOVecs(iovecs), nil, nil, 0)
+	n, err := handleEINTR(func() (int, error) {
+		return unix.SendmsgBuffers(int(socket), makeIOVecs(iovecs), nil, nil, 0)
+	})
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -420,7 +441,29 @@ func (s *System) SockShutdown(ctx context.Context, fd wasi.FD, flags wasi.SDFlag
 	default:
 		return wasi.EINVAL
 	}
-	err := unix.Shutdown(int(socket), sysHow)
+	// Linux allows calling shutdown(2) on listening sockets, but not Darwin.
+	// To provide a portable behavior we align on the POSIX behavior which says
+	// that shutting down non-connected sockets must return ENOTCONN.
+	//
+	// Note that this may cause issues in the future if applications need a way
+	// to break out of a blocking accept(2) call. We could relax this limitation
+	// down the line, tho keep in mind that applications may be better served by
+	// not relying on system-specific behaviors and should use synchronization
+	// mechanisms is user-space to maximize portability.
+	//
+	// For more context see: https://bugzilla.kernel.org/show_bug.cgi?id=106241
+	if runtime.GOOS == "linux" {
+		v, err := ignoreEINTR2(func() (int, error) {
+			return unix.GetsockoptInt(int(socket), unix.SOL_SOCKET, unix.SO_ACCEPTCONN)
+		})
+		if err != nil {
+			return makeErrno(err)
+		}
+		if v != 0 {
+			return wasi.ENOTCONN
+		}
+	}
+	err := ignoreEINTR(func() error { return unix.Shutdown(int(socket), sysHow) })
 	return makeErrno(err)
 }
 
@@ -436,6 +479,16 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	default:
 		return -1, wasi.EINVAL
 	}
+
+	if socketType == wasi.AnySocket {
+		switch protocol {
+		case wasi.TCPProtocol:
+			socketType = wasi.StreamSocket
+		case wasi.UDPProtocol:
+			socketType = wasi.DatagramSocket
+		}
+	}
+
 	var fdType wasi.FileType
 	var sysType int
 	switch socketType {
@@ -448,6 +501,7 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	default:
 		return -1, wasi.EINVAL
 	}
+
 	var sysProtocol int
 	switch protocol {
 	case wasi.IPProtocol:
@@ -459,8 +513,20 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 	default:
 		return -1, wasi.EINVAL
 	}
-	fd, err := unix.Socket(sysDomain, sysType, sysProtocol)
+
+	fd, err := ignoreEINTR2(func() (int, error) {
+		return unix.Socket(sysDomain, sysType, sysProtocol)
+	})
 	if err != nil {
+		// Darwin gives EPROTOTYPE when the socket type and protocol do
+		// not match, which differs from the Linux behavior which returns
+		// EPROTONOSUPPORT. Since there is no real use case for dealing
+		// with the error differently, and valid applications will not
+		// invoke SockOpen with invalid parameters, we align on the Linux
+		// behavior for simplicity.
+		if err == unix.EPROTOTYPE {
+			err = unix.EPROTONOSUPPORT
+		}
 		return -1, makeErrno(err)
 	}
 	guestfd := s.Register(FD(fd), wasi.FDStat{
@@ -480,7 +546,8 @@ func (s *System) SockBind(ctx context.Context, fd wasi.FD, addr wasi.SocketAddre
 	if !ok {
 		return nil, wasi.EINVAL
 	}
-	if err := unix.Bind(int(socket), sa); err != nil {
+	err := ignoreEINTR(func() error { return unix.Bind(int(socket), sa) })
+	if err != nil {
 		return nil, makeErrno(err)
 	}
 	return s.SockLocalAddress(ctx, fd)
@@ -495,8 +562,14 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 	if !ok {
 		return nil, wasi.EINVAL
 	}
-	err := unix.Connect(int(socket), sa)
+	err := ignoreEINTR(func() error { return unix.Connect(int(socket), sa) })
 	if err != nil && err != unix.EINPROGRESS {
+		// Darwin gives EOPNOTSUPP when trying to connect a socket that is
+		// already connected or already listening. Align on the Linux behavior
+		// here and convert the error to EISCONN.
+		if err == unix.EOPNOTSUPP {
+			err = unix.EISCONN
+		}
 		return nil, makeErrno(err)
 	}
 	addr, errno := s.SockLocalAddress(ctx, fd)
@@ -511,7 +584,7 @@ func (s *System) SockListen(ctx context.Context, fd wasi.FD, backlog int) wasi.E
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
-	err := unix.Listen(int(socket), backlog)
+	err := ignoreEINTR(func() error { return unix.Listen(int(socket), backlog) })
 	return makeErrno(err)
 }
 
@@ -524,7 +597,9 @@ func (s *System) SockSendTo(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec
 	if !ok {
 		return 0, wasi.EINVAL
 	}
-	n, err := unix.SendmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sa, 0)
+	n, err := handleEINTR(func() (int, error) {
+		return unix.SendmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sa, 0)
+	})
 	return wasi.Size(n), makeErrno(err)
 }
 
@@ -540,20 +615,24 @@ func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOV
 	if flags.Has(wasi.RecvWaitAll) {
 		sysIFlags |= unix.MSG_WAITALL
 	}
-	n, _, sysOFlags, sa, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
-	var addr wasi.SocketAddress
-	if sa != nil {
-		var ok bool
-		addr, ok = s.makeRemoteSocketAddress(sa)
-		if !ok {
-			errno = wasi.ENOTSUP
+	for {
+		n, _, sysOFlags, sa, err := unix.RecvmsgBuffers(int(socket), makeIOVecs(iovecs), nil, sysIFlags)
+		if err == unix.EINTR {
+			continue
 		}
+		var addr wasi.SocketAddress
+		if sa != nil {
+			addr = makeSocketAddress(sa)
+			if addr == nil {
+				errno = wasi.ENOTSUP
+			}
+		}
+		var roflags wasi.ROFlags
+		if (sysOFlags & unix.MSG_TRUNC) != 0 {
+			roflags |= wasi.RecvDataTruncated
+		}
+		return wasi.Size(n), roflags, addr, makeErrno(err)
 	}
-	var roflags wasi.ROFlags
-	if (sysOFlags & unix.MSG_TRUNC) != 0 {
-		roflags |= wasi.RecvDataTruncated
-	}
-	return wasi.Size(n), roflags, addr, makeErrno(err)
 }
 
 func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (wasi.SocketOptionValue, wasi.Errno) {
@@ -605,7 +684,9 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		return nil, wasi.EINVAL
 	}
 
-	value, err := unix.GetsockoptInt(int(socket), sysLevel, sysOption)
+	value, err := ignoreEINTR2(func() (int, error) {
+		return unix.GetsockoptInt(int(socket), sysLevel, sysOption)
+	})
 	if err != nil {
 		return nil, makeErrno(err)
 	}
@@ -681,7 +762,9 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	if !ok {
 		return wasi.EINVAL
 	}
-	err := unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
+	err := ignoreEINTR(func() error {
+		return unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
+	})
 	return makeErrno(err)
 }
 
@@ -690,12 +773,14 @@ func (s *System) SockLocalAddress(ctx context.Context, fd wasi.FD) (wasi.SocketA
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	sa, err := unix.Getsockname(int(socket))
+	sa, err := ignoreEINTR2(func() (unix.Sockaddr, error) {
+		return unix.Getsockname(int(socket))
+	})
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	addr, ok := s.makeLocalSocketAddress(sa)
-	if !ok {
+	addr := makeSocketAddress(sa)
+	if addr == nil {
 		return nil, wasi.ENOTSUP
 	}
 	return addr, wasi.ESUCCESS
@@ -706,12 +791,14 @@ func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.Socket
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
-	sa, err := unix.Getpeername(int(socket))
+	sa, err := ignoreEINTR2(func() (unix.Sockaddr, error) {
+		return unix.Getpeername(int(socket))
+	})
 	if err != nil {
 		return nil, makeErrno(err)
 	}
-	addr, ok := s.makeRemoteSocketAddress(sa)
-	if !ok {
+	addr := makeSocketAddress(sa)
+	if addr == nil {
 		return nil, wasi.ENOTSUP
 	}
 	return addr, wasi.ESUCCESS
@@ -794,13 +881,13 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 		results = results[:1]
 		results[0] = wasi.AddressInfo{}
 		if ipv4 := ip.To4(); ipv4 != nil {
-			s.inet4Addr.Port = port
-			copy(s.inet4Addr.Addr[:], ipv4)
-			results[0].Address = &s.inet4Addr
+			inet4Addr := &wasi.Inet4Address{Port: port}
+			copy(inet4Addr.Addr[:], ipv4)
+			results[0].Address = inet4Addr
 		} else {
-			s.inet6Addr.Port = port
-			copy(s.inet6Addr.Addr[:], ip)
-			results[0].Address = &s.inet6Addr
+			inet6Addr := &wasi.Inet6Address{Port: port}
+			copy(inet6Addr.Addr[:], ip)
+			results[0].Address = inet6Addr
 		}
 		return 1, wasi.ESUCCESS
 	}
@@ -837,94 +924,93 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 }
 
 func (s *System) Close(ctx context.Context) error {
-	err := s.FileTable.Close(ctx)
-
+	s.shut.Store(true)
 	s.mutex.Lock()
-	fd0 := s.shutfds[0]
-	fd1 := s.shutfds[1]
-	s.shutfds[0] = -1
-	s.shutfds[1] = -1
+	r := s.wake[0]
+	w := s.wake[1]
+	s.wake[0] = nil
+	s.wake[1] = nil
 	s.mutex.Unlock()
 
-	if fd0 != 0 || fd1 != 0 { // true if the system was initialized
-		unix.Close(fd0)
-		unix.Close(fd1)
+	if r != nil {
+		r.Close()
 	}
-	return err
+	if w != nil {
+		w.Close()
+	}
+	return s.FileTable.Close(ctx)
 }
 
-// Shutdown may be called to asynchronously cancel all blocking operations on
+// Shutdown may be called asynchronously to cancel all blocking operations on
 // the system, causing calls such as PollOneOff to unblock and return an
 // error indicating that the system is shutting down.
 func (s *System) Shutdown(ctx context.Context) error {
-	_, err := s.init()
+	_, w, err := s.init()
 	if err != nil {
+		if err == context.Canceled {
+			err = nil // already shutdown
+		}
 		return err
 	}
-	s.shutdown()
-	return nil
+	s.shut.Store(true)
+	return w.Close()
 }
 
-func (s *System) init() (int, error) {
+func (s *System) init() (*os.File, *os.File, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if s.shutfds[0] == 0 && s.shutfds[1] == 0 {
-		if err := pipe(s.shutfds[:], unix.O_NONBLOCK); err != nil {
-			return -1, err
-		}
-	}
-	return s.shutfds[0], nil
-}
 
-func (s *System) shutdown() {
-	s.mutex.Lock()
-	fd := s.shutfds[1]
-	s.shutfds[1] = -1
-	s.mutex.Unlock()
-	unix.Close(fd)
+	if s.wake[0] == nil {
+		if s.shut.Load() {
+			return nil, nil, context.Canceled
+		}
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		s.wake[0] = r
+		s.wake[1] = w
+	}
+
+	return s.wake[0], s.wake[1], nil
 }
 
 func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, ok bool) {
 	switch t := addr.(type) {
 	case *wasi.Inet4Address:
-		s.unixInet4.Port = t.Port
-		s.unixInet4.Addr = t.Addr
-		sa = &s.unixInet4
+		s.inet4.Port = t.Port
+		s.inet4.Addr = t.Addr
+		sa = &s.inet4
 	case *wasi.Inet6Address:
-		s.unixInet6.Port = t.Port
-		s.unixInet6.Addr = t.Addr
-		sa = &s.unixInet6
+		s.inet6.Port = t.Port
+		s.inet6.Addr = t.Addr
+		sa = &s.inet6
 	case *wasi.UnixAddress:
-		s.unixUnix.Name = t.Name
-		sa = &s.unixUnix
+		s.unix.Name = t.Name
+		sa = &s.unix
 	default:
 		return nil, false
 	}
 	return sa, true
 }
 
-func (s *System) makeLocalSocketAddress(sa unix.Sockaddr) (wasi.SocketAddress, bool) {
-	return s.makeSocketAddress(sa, &s.inet4Addr, &s.inet6Addr, &s.unixAddr)
-}
-
-func (s *System) makeRemoteSocketAddress(sa unix.Sockaddr) (wasi.SocketAddress, bool) {
-	return s.makeSocketAddress(sa, &s.inet4Peer, &s.inet6Peer, &s.unixPeer)
-}
-
-func (s *System) makeSocketAddress(sa unix.Sockaddr, in4 *wasi.Inet4Address, in6 *wasi.Inet6Address, un *wasi.UnixAddress) (wasi.SocketAddress, bool) {
+func makeSocketAddress(sa unix.Sockaddr) wasi.SocketAddress {
 	switch t := sa.(type) {
 	case *unix.SockaddrInet4:
-		in4.Addr = t.Addr
-		in4.Port = t.Port
-		return in4, true
+		return &wasi.Inet4Address{
+			Addr: t.Addr,
+			Port: t.Port,
+		}
 	case *unix.SockaddrInet6:
-		in6.Addr = t.Addr
-		in6.Port = t.Port
-		return in6, true
+		return &wasi.Inet6Address{
+			Addr: t.Addr,
+			Port: t.Port,
+		}
 	case *unix.SockaddrUnix:
-		un.Name = t.Name
-		return un, true
+		return &wasi.UnixAddress{
+			Name: t.Name,
+		}
 	default:
-		return nil, false
+		return nil
 	}
 }
