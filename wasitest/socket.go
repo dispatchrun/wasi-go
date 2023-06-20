@@ -305,6 +305,22 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
+	"cannot accept on an ipv4 stream socket which is not listening": testSocketAcceptBeforeListen(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"cannot accept on an ipv6 stream socket which is not listening": testSocketAcceptBeforeListen(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"cannot accept on a connected ipv4 stream socket": testSocketAcceptAfterConnect(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"cannot accept on a connected ipv6 stream socket": testSocketAcceptAfterConnect(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
 	"cannot shutdown an ipv4 stream socket with an invalid argument": testSocketShutdownInvalidArgument(
 		wasi.InetFamily, wasi.StreamSocket,
 	),
@@ -939,6 +955,50 @@ func testSocketListenLargeBacklog(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, sys.SockListen(ctx, sock, math.MaxInt32), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketAcceptBeforeListen(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, peer, addr, errno := sys.SockAccept(ctx, sock, wasi.NonBlock)
+		assertEqual(t, conn, ^wasi.FD(0))
+		assertEqual(t, peer, nil)
+		assertEqual(t, addr, nil)
+		assertEqual(t, errno, wasi.EINVAL)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketAcceptAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn, addr)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+
+		fd, peer, addr, errno := sys.SockAccept(ctx, conn, wasi.NonBlock)
+		assertEqual(t, fd, ^wasi.FD(0))
+		assertEqual(t, peer, nil)
+		assertEqual(t, addr, nil)
+		assertEqual(t, errno, wasi.EINVAL)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
 	}
 }
 
