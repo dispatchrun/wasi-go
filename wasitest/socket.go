@@ -968,6 +968,13 @@ func testSocketSetBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) t
 					assertEqual(t, size, want)
 				})
 
+				t.Run("cannot set the socket buffer size to a negative value", func(t *testing.T) {
+					want := getBufferSize()
+					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(-1)), wasi.EINVAL)
+					size := getBufferSize()
+					assertEqual(t, size, want)
+				})
+
 				assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 			})
 		}
