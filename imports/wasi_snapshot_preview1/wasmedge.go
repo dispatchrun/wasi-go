@@ -132,6 +132,11 @@ func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs Li
 }
 
 func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
+	// See socket.go
+	switch wasi.SocketOptionLevel(level) {
+	case wasi.TcpLevel:
+		option += 0x1000
+	}
 	// Only int options are supported for now.
 	switch wasi.SocketOption(option) {
 	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout, wasi.BindToDevice:
@@ -145,6 +150,11 @@ func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, 
 }
 
 func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
+	// See socket.go
+	switch wasi.SocketOptionLevel(level) {
+	case wasi.TcpLevel:
+		option += 0x1000
+	}
 	// Only int options are supported for now.
 	switch wasi.SocketOption(option) {
 	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout, wasi.BindToDevice:
