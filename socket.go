@@ -305,7 +305,7 @@ func (st SocketType) String() string {
 type SocketOptionLevel int32
 
 const (
-	SocketLevel SocketOptionLevel = 0 // SOC_SOCKET
+	SocketLevel SocketOptionLevel = 0 // SOL_SOCKET
 	TcpLevel    SocketOptionLevel = 6 // IPPROTO_TCP
 )
 
@@ -322,7 +322,7 @@ func (sl SocketOptionLevel) String() string {
 type SocketOption int32
 
 const (
-	// SOC_SOCKET level options.
+	// SOL_SOCKET level options.
 	ReuseAddress SocketOption = iota
 	QuerySocketType
 	QuerySocketError
