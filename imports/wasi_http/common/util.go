@@ -15,3 +15,11 @@ func Malloc(ctx context.Context, m api.Module, size uint32) (uint32, error) {
 	}
 	return uint32(result[0]), err
 }
+
+func ReadString(mod api.Module, ptr, len uint32) (string, bool) {
+	data, ok := mod.Memory().Read(ptr, len)
+	if !ok {
+		return "", false
+	}
+	return string(data), true
+}

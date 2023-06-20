@@ -3,21 +3,24 @@ package types
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 
+	"github.com/stealthrocket/wasi-go/imports/wasi_http/streams"
 	"github.com/tetratelabs/wazero/api"
 )
 
 type Request struct {
-	Method    string
-	Path      string
-	Query     string
-	Scheme    string
-	Authority string
-	Body      io.Reader
+	Method     string
+	Path       string
+	Query      string
+	Scheme     string
+	Authority  string
+	Headers    uint32
+	BodyBuffer *bytes.Buffer
 }
 
 func (r Request) Url() string {
@@ -25,7 +28,7 @@ func (r Request) Url() string {
 }
 
 type requests struct {
-	requests        map[uint32]*Request
+	requests      map[uint32]*Request
 	requestIdBase uint32
 }
 
@@ -48,16 +51,20 @@ func GetRequest(handle uint32) (*Request, bool) {
 }
 
 func (request *Request) MakeRequest() (*http.Response, error) {
-	r, err := http.NewRequest(request.Method, request.Url(), request.Body)
+	var body io.Reader = nil
+	if request.BodyBuffer != nil {
+		body = bytes.NewReader(request.BodyBuffer.Bytes())
+	}
+	r, err := http.NewRequest(request.Method, request.Url(), body)
 	if err != nil {
 		return nil, err
 	}
 
-	return http.DefaultClient.Do(r)
-}
+	if fields, found := GetFields(request.Headers); found {
+		r.Header = http.Header(fields)
+	}
 
-func (request *Request) RequestBody(body []byte) {
-	request.Body = bytes.NewBuffer(body)
+	return http.DefaultClient.Do(r)
 }
 
 func newOutgoingRequestFn(_ context.Context, mod api.Module,
@@ -124,6 +131,8 @@ func newOutgoingRequestFn(_ context.Context, mod api.Module,
 	}
 	request.Authority = string(authority)
 
+	request.Headers = header_handle
+
 	return id
 }
 
@@ -132,5 +141,16 @@ func dropOutgoingRequestFn(_ context.Context, mod api.Module, handle uint32) {
 }
 
 func outgoingRequestWriteFn(_ context.Context, mod api.Module, handle, ptr uint32) {
-	// TODO: handle request bodies
+	request, found := GetRequest(handle)
+	if !found {
+		fmt.Printf("Failed to find request: %d\n", handle)
+		return
+	}
+	request.BodyBuffer = &bytes.Buffer{}
+	stream := streams.Streams.NewOutputStream(request.BodyBuffer)
+
+	data := []byte{}
+	data = binary.LittleEndian.AppendUint32(data, 0)
+	data = binary.LittleEndian.AppendUint32(data, stream)
+	mod.Memory().Write(ptr, data)
 }

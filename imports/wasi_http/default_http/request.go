@@ -15,7 +15,7 @@ func requestFn(_ context.Context, mod api.Module, a, b, c, d, e, f, g, h, j, k, 
 
 // Handle handles HTTP client calls.
 // The remaining parameters (b..h) are for the HTTP Options, currently unimplemented.
-func handleFn(_ context.Context, mod api.Module, request, b, c, d, e, f, g, h uint32) int32 {
+func handleFn(_ context.Context, mod api.Module, request, b, c, d, e, f, g, h uint32) uint32 {
 	req, ok := types.GetRequest(request)
 	if !ok {
 		log.Printf("Failed to get request: %v\n", request)
