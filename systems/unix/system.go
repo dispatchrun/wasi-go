@@ -576,6 +576,12 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 		// here and convert the error to EISCONN.
 		case unix.EOPNOTSUPP:
 			err = unix.EISCONN
+		// Linux appears to return EISCONN instead of EALREADY when attempting
+		// to connect a socket that was already connected, while in other cases
+		// it may also race and return ESUCCESS if the connection completed
+		// right away.
+		case unix.EISCONN:
+			err = unix.EALREADY
 		}
 		return nil, makeErrno(err)
 	}
