@@ -564,10 +564,17 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 	}
 	err := ignoreEINTR(func() error { return unix.Connect(int(socket), sa) })
 	if err != nil && err != unix.EINPROGRESS {
+		switch err {
+		// Linux gives EINVAL only when trying to connect to an ipv4 address
+		// from an ipv6 address. Darwin does not seem to return EINVAL but it
+		// documents that it might if the address family does not match, so we
+		// normalize the the error value here.
+		case unix.EINVAL:
+			err = unix.EAFNOSUPPORT
 		// Darwin gives EOPNOTSUPP when trying to connect a socket that is
 		// already connected or already listening. Align on the Linux behavior
 		// here and convert the error to EISCONN.
-		if err == unix.EOPNOTSUPP {
+		case unix.EOPNOTSUPP:
 			err = unix.EISCONN
 		}
 		return nil, makeErrno(err)
