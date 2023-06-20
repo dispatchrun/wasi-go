@@ -2,6 +2,7 @@ package wasitest
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/stealthrocket/wasi-go"
@@ -248,11 +249,35 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
-	"cannot listen an unbound ipv4 socket": testSocketListenBeforeBind(
+	"listen on an unbound ipv4 socket automatically binds it": testSocketListenBeforeBind(
 		wasi.InetFamily, wasi.StreamSocket,
 	),
 
-	"cannot listen an unbound ipv6 socket": testSocketListenBeforeBind(
+	"listen on an unbound ipv6 socket automatically binds it": testSocketListenBeforeBind(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"listen on a listening ipv4 socket is supported": testSocketListenAfterListen(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"listen on a listening ipv6 socket is supported": testSocketListenAfterListen(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"listen with a negative backlog on an ipv4 address is invalid": testSocketListenNegativeBacklog(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"listen with a negative backlog on an ipv6 address is invalid": testSocketListenNegativeBacklog(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"listen with a large backlog on an ipv4 address is supported": testSocketListenLargeBacklog(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"listen with a large backlog on an ipv6 address is supported": testSocketListenLargeBacklog(
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
@@ -723,7 +748,56 @@ func testSocketListenBeforeBind(family wasi.ProtocolFamily, typ wasi.SocketType)
 		sys := newSystem(TestConfig{})
 		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.EDESTADDRREQ)
+		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ESUCCESS)
+
+		addr, errno := sys.SockLocalAddress(ctx, sock)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertNotEqual(t, addr, nil)
+
+		switch a := addr.(type) {
+		case *wasi.Inet4Address:
+			var zero [4]byte
+			assertEqual(t, a.Addr, zero)
+			assertNotEqual(t, a.Port, 0)
+		case *wasi.Inet6Address:
+			var zero [16]byte
+			assertEqual(t, a.Addr, zero)
+			assertNotEqual(t, a.Port, 0)
+		default:
+			t.Errorf("invalid socket address type: %T", a)
+		}
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenAfterListen(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenNegativeBacklog(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, -1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenLargeBacklog(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, math.MaxInt32), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
