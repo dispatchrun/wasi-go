@@ -1007,8 +1007,16 @@ func makeSocketAddress(sa unix.Sockaddr) wasi.SocketAddress {
 			Port: t.Port,
 		}
 	case *unix.SockaddrUnix:
+		name := t.Name
+		if len(name) == 0 {
+			// For consistency across platforms, replace empty unix socket
+			// addresses with @. On Linux, addresses where the first byte is
+			// a null byte are considered abstract unix sockets, and the first
+			// byte is replaced with @.
+			name = "@"
+		}
 		return &wasi.UnixAddress{
-			Name: t.Name,
+			Name: name,
 		}
 	default:
 		return nil
