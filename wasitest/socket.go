@@ -357,19 +357,19 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
-	"cannot option of ipv4 stream socket with invalid level": testSocketSetOptionInvalidLevel(
+	"cannot set option of ipv4 stream socket with invalid level": testSocketSetOptionInvalidLevel(
 		wasi.InetFamily, wasi.StreamSocket,
 	),
 
-	"cannot option of ipv6 stream socket with invalid level": testSocketSetOptionInvalidLevel(
+	"cannot set option of ipv6 stream socket with invalid level": testSocketSetOptionInvalidLevel(
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
-	"cannot option of ipv4 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
+	"cannot set option of ipv4 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
 		wasi.InetFamily, wasi.StreamSocket,
 	),
 
-	"cannot option of ipv6 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
+	"cannot set option of ipv6 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
