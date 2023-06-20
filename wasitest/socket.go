@@ -413,6 +413,14 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
+	"connected ipv4 stream sockets can send and receive data": testSocketSendAndReceive(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"connected ipv6 stream sockets can send and receive data": testSocketSendAndReceive(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
 	"cannot bind a file descriptor which is not a socket": testNotSocket(
 		func(ctx context.Context, sys wasi.System, fd wasi.FD) wasi.Errno {
 			_, errno := sys.SockBind(ctx, fd, &wasi.Inet4Address{Addr: localIPv4})
@@ -589,20 +597,7 @@ func testSocketConnectOK(family wasi.ProtocolFamily, typ wasi.SocketType, bind w
 			assertEqual(t, errno, wasi.EINPROGRESS)
 		}
 
-		subs := []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(42, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
-				FD: sock,
-			}),
-		}
-		evs := make([]wasi.Event, len(subs))
-
-		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  42,
-			EventType: wasi.FDWriteEvent,
-		})
+		sockPoll(t, ctx, sys, sock, wasi.FDWriteEvent)
 	}
 }
 
@@ -618,20 +613,7 @@ func testSocketConnectError(family wasi.ProtocolFamily, typ wasi.SocketType, bin
 		assertEqual(t, addr.Family(), bind.Family())
 		assertEqual(t, errno, wasi.EINPROGRESS)
 
-		subs := []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(42, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
-				FD: sock,
-			}),
-		}
-		evs := make([]wasi.Event, len(subs))
-
-		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  42,
-			EventType: wasi.FDWriteEvent,
-		})
+		sockPoll(t, ctx, sys, sock, wasi.FDWriteEvent)
 
 		t.Run("the error is reported after polling", func(t *testing.T) {
 			errno := sockErrno(t, ctx, sys, sock)
@@ -668,33 +650,8 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		assertNotEqual(t, clientAddr, nil)
 		assertEqual(t, clientAddr.Family(), bind.Family())
 
-		subs := []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(2, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
-				FD: client,
-			}),
-		}
-		evs := make([]wasi.Event, len(subs))
-
-		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  2,
-			EventType: wasi.FDWriteEvent,
-		})
-
-		subs = []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
-				FD: server,
-			}),
-		}
-		numEvents, errno = sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  1,
-			EventType: wasi.FDReadEvent,
-		})
+		sockPoll(t, ctx, sys, client, wasi.FDWriteEvent)
+		sockPoll(t, ctx, sys, server, wasi.FDReadEvent)
 
 		accept, remoteAddr, localAddr, errno := sys.SockAccept(ctx, server, wasi.NonBlock)
 		assertEqual(t, errno, wasi.ESUCCESS)
@@ -736,53 +693,17 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 			assertEqual(t, errno, wasi.EINPROGRESS)
 		}
 
-		subs := []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
-				FD: client,
-			}),
-		}
-		evs := make([]wasi.Event, len(subs))
-
-		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  1,
-			EventType: wasi.FDWriteEvent,
-		})
-
-		subs = []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
-				FD: server,
-			}),
-		}
-		numEvents, errno = sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  1,
-			EventType: wasi.FDReadEvent,
-		})
+		sockPoll(t, ctx, sys, client, wasi.FDWriteEvent)
+		sockPoll(t, ctx, sys, server, wasi.FDReadEvent)
 
 		accept, _, _, errno := sys.SockAccept(ctx, server, wasi.NonBlock)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, sockIsNonBlocking(t, ctx, sys, accept), true)
 		assertEqual(t, sys.SockShutdown(ctx, accept, wasi.ShutdownWR), wasi.ESUCCESS)
 
-		subs = []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
-				FD: client,
-			}),
-		}
-		numEvents, errno = sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  1,
-			EventType: wasi.FDReadEvent,
-		})
-		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownWR), wasi.ESUCCESS)
+		sockPoll(t, ctx, sys, client, wasi.FDReadEvent)
 
+		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownWR), wasi.ESUCCESS)
 		// Darwin and Linux disagree on when to return ENOTCONN on shutdown(2);
 		// on Darwin, the error is returned for read and write directions
 		// independently, while on Linux, the error is only returned after
@@ -793,18 +714,7 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownRD), wasi.ENOTCONN)
 		assertEqual(t, sys.SockShutdown(ctx, client, wasi.ShutdownWR), wasi.ENOTCONN)
 
-		subs = []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(1, wasi.FDReadEvent, wasi.SubscriptionFDReadWrite{
-				FD: accept,
-			}),
-		}
-		numEvents, errno = sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  1,
-			EventType: wasi.FDReadEvent,
-		})
+		sockPoll(t, ctx, sys, accept, wasi.FDReadEvent)
 
 		assertEqual(t, sockErrno(t, ctx, sys, client), wasi.ESUCCESS)
 		assertEqual(t, sockErrno(t, ctx, sys, accept), wasi.ESUCCESS)
@@ -890,8 +800,12 @@ func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketTy
 		// asynchronously, so we have to tolerate ESUCCESS but also want to make
 		// sure that the only other possible error is EALREADY.
 		_, errno = sys.SockConnect(ctx, conn, addr)
-		if errno != wasi.ESUCCESS {
-			assertEqual(t, errno, wasi.EALREADY)
+		switch errno {
+		case wasi.EALREADY:
+		case wasi.EISCONN:
+		case wasi.ESUCCESS:
+		default:
+			t.Errorf("invalid error code returned on second call to connect: %s", errno)
 		}
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
@@ -924,20 +838,7 @@ func testSocketConnectToConnected(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, errno, wasi.EINPROGRESS)
 		assertNotEqual(t, addr2, nil)
 
-		subs := []wasi.Subscription{
-			wasi.MakeSubscriptionFDReadWrite(42, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
-				FD: conn2,
-			}),
-		}
-		evs := make([]wasi.Event, len(subs))
-
-		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
-		assertEqual(t, numEvents, 1)
-		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  42,
-			EventType: wasi.FDWriteEvent,
-		})
+		sockPoll(t, ctx, sys, conn2, wasi.FDWriteEvent)
 
 		assertEqual(t, sockErrno(t, ctx, sys, conn2), wasi.ECONNREFUSED)
 
@@ -1122,6 +1023,67 @@ func testSocketShutdownAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTy
 	}
 }
 
+func testSocketSendAndReceive(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ESUCCESS)
+
+		conn1, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn1, addr)
+		if errno != wasi.ESUCCESS {
+			assertEqual(t, errno, wasi.EINPROGRESS)
+		}
+
+		sockPoll(t, ctx, sys, conn1, wasi.FDWriteEvent)
+		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
+
+		conn2, _, _, errno := sys.SockAccept(ctx, sock, wasi.NonBlock)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 32)
+
+		size1, errno := sys.FDWrite(ctx, conn1, []wasi.IOVec{buffer1})
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn2, wasi.FDReadEvent)
+		size2, errno := sys.FDRead(ctx, conn2, []wasi.IOVec{buffer2})
+		assertEqual(t, size2, size1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+
+		buffer1 = []byte("How are you?")
+		size3, errno := sys.FDWrite(ctx, conn2, []wasi.IOVec{buffer1})
+		assertEqual(t, size3, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn1, wasi.FDReadEvent)
+		size4, errno := sys.FDRead(ctx, conn1, []wasi.IOVec{buffer2})
+		assertEqual(t, size4, size3)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+
+		assertEqual(t, sys.FDClose(ctx, conn2), wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn1, wasi.FDReadEvent)
+		size5, errno := sys.FDRead(ctx, conn1, []wasi.IOVec{buffer2})
+		assertEqual(t, size5, 0) // EOF
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		assertEqual(t, sys.FDClose(ctx, conn1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
 func testSocketDefaultBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
 	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
 		sys := newSystem(TestConfig{})
@@ -1271,4 +1233,22 @@ func sockIsNonBlocking(t *testing.T, ctx context.Context, sys wasi.System, sock 
 	stat, errno := sys.FDStatGet(ctx, sock)
 	assertEqual(t, errno, wasi.ESUCCESS)
 	return stat.Flags.Has(wasi.NonBlock)
+}
+
+func sockPoll(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD, eventType wasi.EventType) {
+	subs := []wasi.Subscription{
+		wasi.MakeSubscriptionFDReadWrite(
+			wasi.UserData(sock+1),
+			eventType,
+			wasi.SubscriptionFDReadWrite{FD: sock},
+		),
+	}
+	evs := make([]wasi.Event, len(subs))
+	numEvents, errno := sys.PollOneOff(ctx, subs, evs)
+	assertEqual(t, numEvents, 1)
+	assertEqual(t, errno, wasi.ESUCCESS)
+	assertEqual(t, evs[0], wasi.Event{
+		UserData:  wasi.UserData(sock + 1),
+		EventType: eventType,
+	})
 }
