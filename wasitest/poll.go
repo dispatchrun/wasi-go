@@ -83,10 +83,16 @@ var poll = testSuite{
 		defer stdoutW.Close()
 
 		ch := make(chan []byte)
+		defer func() {
+			for range ch {
+			}
+		}()
+
 		go func() {
 			b, err := io.ReadAll(stdoutR)
 			assertOK(t, err)
 			ch <- b
+			close(ch)
 		}()
 
 		sys := newSystem(TestConfig{
