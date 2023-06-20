@@ -349,6 +349,22 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
+	"cannot option of ipv4 stream socket with invalid level": testSocketSetOptionInvalidLevel(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"cannot option of ipv6 stream socket with invalid level": testSocketSetOptionInvalidLevel(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"cannot option of ipv4 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"cannot option of ipv6 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
 	"cannot bind a file descriptor which is not a socket": testNotSocket(
 		func(ctx context.Context, sys wasi.System, fd wasi.FD) wasi.Errno {
 			_, errno := sys.SockBind(ctx, fd, &wasi.Inet4Address{Addr: localIPv4})
@@ -983,6 +999,29 @@ func testSocketSetBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) t
 				assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 			})
 		}
+	}
+}
+
+func testSocketSetOptionInvalidLevel(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		const level = -1
+		const option = 0
+		assertEqual(t, sys.SockSetOpt(ctx, sock, level, option, wasi.IntValue(0)), wasi.EINVAL)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSetOptionInvalidArgument(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		const option = -1
+		assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, option, wasi.IntValue(0)), wasi.EINVAL)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
 
