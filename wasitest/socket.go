@@ -805,7 +805,7 @@ func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketTy
 		case wasi.EISCONN:
 		case wasi.ESUCCESS:
 		default:
-			t.Errorf("invalid error code returned on second call to connect: %w", errno)
+			t.Errorf("invalid error code returned on second call to connect: %s", errno)
 		}
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
