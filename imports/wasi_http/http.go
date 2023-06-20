@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/stealthrocket/wasi-go/imports/wasi_http/default_http"
-	"github.com/stealthrocket/wasi-go/imports/wasi_http/types"
 	"github.com/stealthrocket/wasi-go/imports/wasi_http/streams"
+	"github.com/stealthrocket/wasi-go/imports/wasi_http/types"
 	"github.com/tetratelabs/wazero"
 )
 

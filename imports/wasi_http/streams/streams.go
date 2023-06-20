@@ -16,7 +16,7 @@ type stream struct {
 }
 
 type streams struct {
-	streams            map[uint32]stream
+	streams          map[uint32]stream
 	streamHandleBase uint32
 }
 
