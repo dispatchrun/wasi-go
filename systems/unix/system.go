@@ -922,7 +922,15 @@ func (s *System) makeSocketAddress(sa unix.Sockaddr, in4 *wasi.Inet4Address, in6
 		in6.Port = t.Port
 		return in6, true
 	case *unix.SockaddrUnix:
-		un.Name = t.Name
+		if len(t.Name) == 0 {
+			// For consistency across platforms, replace empty unix socket
+			// addresses with @. On Linux, addresses where the first byte is
+			// a null byte are considered abstract unix sockets, and the first
+			// byte is replaced with @.
+			un.Name = "@"
+		} else {
+			un.Name = t.Name
+		}
 		return un, true
 	default:
 		return nil, false
