@@ -782,13 +782,27 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		return wasi.EINVAL
 	}
 
-	// Linux allows setting the socket buffer size to zero, but this is not
-	// portable so we instead refuse to support this option here.
-	if runtime.GOOS == "linux" {
+	// Treat setting negative buffer sizes as a special, invalid case to ensure
+	// portability across operating systems.
+	switch option {
+	case wasi.RecvBufferSize, wasi.SendBufferSize:
+		if intval < 0 {
+			return wasi.EINVAL
+		}
+	}
+
+	// Linux allows setting the socket buffer size to zero, but darwin does not,
+	// so we hardcode the limit for OSX.
+	if runtime.GOOS == "darwin" {
 		switch option {
 		case wasi.RecvBufferSize, wasi.SendBufferSize:
-			if intval <= 0 {
-				return wasi.EINVAL
+			const minBufferSize = 4 * 1024
+			const maxBufferSize = 4 * 1024 * 1024
+			switch {
+			case intval < minBufferSize:
+				intval = minBufferSize
+			case intval > maxBufferSize:
+				intval = maxBufferSize
 			}
 		}
 	}

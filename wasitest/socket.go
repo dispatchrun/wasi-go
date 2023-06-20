@@ -961,22 +961,21 @@ func testSocketSetBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) t
 					assertEqual(t, size, want)
 				})
 
-				t.Run("cannot set the socket buffer size to zero", func(t *testing.T) {
-					want := getBufferSize()
-					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(0)), wasi.EINVAL)
-					size := getBufferSize()
-					assertEqual(t, size, want)
-				})
-
-				t.Run("cannot set the socket buffer size to a negative value", func(t *testing.T) {
+				t.Run("negative socket buffer size are fobidden", func(t *testing.T) {
 					want := getBufferSize()
 					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(-1)), wasi.EINVAL)
 					size := getBufferSize()
 					assertEqual(t, size, want)
 				})
 
+				t.Run("small socket buffer sizes are capped to a minimum value", func(t *testing.T) {
+					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(0)), wasi.ESUCCESS)
+					size := getBufferSize()
+					assertNotEqual(t, size, 0)
+				})
+
 				t.Run("large socket buffer sizes are capped to a maximum value", func(t *testing.T) {
-					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(math.MaxInt32)), wasi.ENOBUFS)
+					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(math.MaxInt32)), wasi.ESUCCESS)
 					size := getBufferSize()
 					assertNotEqual(t, size, math.MaxInt32)
 				})
