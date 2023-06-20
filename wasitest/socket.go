@@ -975,6 +975,12 @@ func testSocketSetBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) t
 					assertEqual(t, size, want)
 				})
 
+				t.Run("large socket buffer sizes are capped to a maximum value", func(t *testing.T) {
+					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(math.MaxInt32)), wasi.ENOBUFS)
+					size := getBufferSize()
+					assertNotEqual(t, size, math.MaxInt32)
+				})
+
 				assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 			})
 		}
