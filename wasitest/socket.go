@@ -241,6 +241,14 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.DatagramSocket, &wasi.Inet6Address{Addr: localIPv6, Port: 53},
 	),
 
+	"failing to connect sets the socket error and getting the socket error clears it on ipv4 stream sockets": testSocketConnectError(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4, Port: 62431},
+	),
+
+	"failing to connect sets the socket error and getting the socket error clears it on ipv6 stream sockets": testSocketConnectError(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6, Port: 62432},
+	),
+
 	"cannot connect a listening ipv4 stream socket": testSocketConnectAfterListen(
 		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
 	),
@@ -555,6 +563,46 @@ func testSocketConnectOK(family wasi.ProtocolFamily, typ wasi.SocketType, bind w
 		assertEqual(t, evs[0], wasi.Event{
 			UserData:  42,
 			EventType: wasi.FDWriteEvent,
+		})
+	}
+}
+
+func testSocketConnectError(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockConnect(ctx, sock, bind)
+		assertNotEqual(t, addr, nil)
+		assertEqual(t, addr.Family(), bind.Family())
+		assertEqual(t, errno, wasi.EINPROGRESS)
+
+		subs := []wasi.Subscription{
+			wasi.MakeSubscriptionFDReadWrite(42, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
+				FD: sock,
+			}),
+		}
+		evs := make([]wasi.Event, len(subs))
+
+		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
+		assertEqual(t, numEvents, 1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		assertEqual(t, evs[0], wasi.Event{
+			UserData:  42,
+			EventType: wasi.FDWriteEvent,
+		})
+
+		t.Run("the error is reported after polling", func(t *testing.T) {
+			errno := sockErrno(t, ctx, sys, sock)
+			assertEqual(t, errno, wasi.ECONNREFUSED)
+		})
+
+		t.Run("the error is cleared on the second read", func(t *testing.T) {
+			errno := sockErrno(t, ctx, sys, sock)
+			assertEqual(t, errno, wasi.ESUCCESS)
 		})
 	}
 }
