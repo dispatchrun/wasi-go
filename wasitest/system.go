@@ -2,7 +2,6 @@ package wasitest
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/stealthrocket/wasi-go"
@@ -45,24 +44,6 @@ func (tests testSuite) run(t *testing.T, makeSystem MakeSystem) {
 			defer cancel()
 
 			tests[name](t, ctx, func(c TestConfig) wasi.System {
-				devNull := func(flag int) *os.File {
-					f, err := os.OpenFile(os.DevNull, flag, 0)
-					if err != nil {
-						t.Fatal(err)
-					}
-					return f
-				}
-
-				if c.Stdin == nil {
-					c.Stdin = devNull(os.O_RDONLY)
-				}
-				if c.Stdout == nil {
-					c.Stdout = devNull(os.O_WRONLY)
-				}
-				if c.Stderr == nil {
-					c.Stderr = devNull(os.O_WRONLY)
-				}
-
 				s, err := makeSystem(c)
 				if err != nil {
 					t.Fatalf("system initialization failed: %s", err)

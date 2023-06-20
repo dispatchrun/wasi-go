@@ -20,7 +20,13 @@ func (fd FD) FDAllocate(ctx context.Context, offset, length wasi.FileSize) wasi.
 }
 
 func (fd FD) FDClose(ctx context.Context) wasi.Errno {
-	err := ignoreEINTR(func() error { return unix.Close(int(fd)) })
+	// It's unclear what to do for EINTR on Linux, so do nothing and assume the
+	// file descriptor has been closed.
+	//
+	// See:
+	// - https://man7.org/linux/man-pages/man2/close.2.html
+	// - https://lwn.net/Articles/576478/
+	err := closeTraceEBADF(int(fd))
 	return makeErrno(err)
 }
 

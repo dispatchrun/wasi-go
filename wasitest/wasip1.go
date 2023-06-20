@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -23,11 +22,11 @@ import (
 type TestConfig struct {
 	Args    []string
 	Environ []string
-	Stdin   *os.File
-	Stdout  *os.File
-	Stderr  *os.File
-	RootFS  *os.File
+	Stdin   io.ReadCloser
+	Stdout  io.WriteCloser
+	Stderr  io.WriteCloser
 	Rand    io.Reader
+	RootFS  string
 	Now     func() time.Time
 }
 
@@ -82,13 +81,6 @@ func TestWASIP1(t *testing.T, filePaths []string, makeSystem MakeSystem) {
 			defer stderrR.Close()
 			defer stderrW.Close()
 
-			root, err := syscall.Open("/", syscall.O_DIRECTORY, 0)
-			if err != nil {
-				t.Fatal("root:", err)
-			}
-			rootFile := os.NewFile(uintptr(root), "/")
-			defer rootFile.Close()
-
 			stdinW.Close() // nothing to read on stdin
 			go io.Copy(os.Stdout, stdoutR)
 			go io.Copy(os.Stderr, stderrR)
@@ -103,9 +95,9 @@ func TestWASIP1(t *testing.T, filePaths []string, makeSystem MakeSystem) {
 				Stdin:  stdinR,
 				Stdout: stdoutW,
 				Stderr: stderrW,
-				RootFS: rootFile,
 				Rand:   rand.Reader,
 				Now:    time.Now,
+				RootFS: "/",
 			})
 			if err != nil {
 				t.Fatal("system:", err)

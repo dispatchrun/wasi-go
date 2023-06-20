@@ -3,7 +3,6 @@ package wasitest
 import (
 	"context"
 	"io"
-	"os"
 	"testing"
 	"time"
 
@@ -37,8 +36,7 @@ var poll = testSuite{
 	},
 
 	"read from stdin": func(t *testing.T, ctx context.Context, newSystem newSystem) {
-		stdinR, stdinW, err := os.Pipe()
-		assertOK(t, err)
+		stdinR, stdinW := io.Pipe()
 		defer stdinW.Close()
 		defer stdinR.Close()
 
@@ -80,20 +78,9 @@ var poll = testSuite{
 	},
 
 	"write to stdout": func(t *testing.T, ctx context.Context, newSystem newSystem) {
-		stdinR, stdinW, err := os.Pipe()
-		assertOK(t, err)
-		defer stdinR.Close()
-		defer stdinW.Close()
-
-		stdoutR, stdoutW, err := os.Pipe()
-		assertOK(t, err)
+		stdoutR, stdoutW := io.Pipe()
 		defer stdoutR.Close()
 		defer stdoutW.Close()
-
-		stderrR, stderrW, err := os.Pipe()
-		assertOK(t, err)
-		defer stderrR.Close()
-		defer stderrW.Close()
 
 		ch := make(chan []byte)
 		go func() {
@@ -103,9 +90,7 @@ var poll = testSuite{
 		}()
 
 		sys := newSystem(TestConfig{
-			Stdin:  stdinR,
 			Stdout: stdoutW,
-			Stderr: stderrW,
 		})
 
 		errno := sys.FDStatSetFlags(ctx, 1, wasi.NonBlock)

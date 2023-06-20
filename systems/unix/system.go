@@ -4,9 +4,11 @@ import (
 	"context"
 	"io"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/stealthrocket/wasi-go"
@@ -53,12 +55,9 @@ type System struct {
 	inet6   unix.SockaddrInet6
 	unix    unix.SockaddrUnix
 
-	// shutfds are a pair of file descriptors allocated to the read and write
-	// ends of a pipe. They are used to asynchronously interrupting calls to
-	// poll(2) by closing the write end of the pipe, causing the read end to
-	// become reading for reading and any polling on the fd to return.
-	mutex   sync.Mutex
-	shutfds [2]int
+	mutex sync.Mutex
+	wake  [2]*os.File
+	shut  atomic.Bool
 }
 
 var _ wasi.System = (*System)(nil)
@@ -119,21 +118,20 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	if len(subscriptions) == 0 || len(events) < len(subscriptions) {
 		return 0, wasi.EINVAL
 	}
-	wakefd, err := s.init()
+	r, _, err := s.init()
 	if err != nil {
 		return 0, makeErrno(err)
 	}
+	s.pollfds = append(s.pollfds[:0], unix.PollFd{
+		Fd:     int32(r.Fd()),
+		Events: unix.POLLIN | unix.POLLHUP,
+	})
 
 	realtimeEpoch := time.Duration(0)
 	monotonicEpoch := time.Duration(0)
 
 	timeout := time.Duration(-1)
 	timeoutEventIndex := -1
-
-	s.pollfds = append(s.pollfds[:0], unix.PollFd{
-		Fd:     int32(wakefd),
-		Events: unix.POLLIN | unix.POLLHUP,
-	})
 
 	numEvents := 0
 	for i := range events {
@@ -242,7 +240,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 		// poll(2) may cause spurious wake up, so we verify that the system
 		// has indeed been shutdown instead of relying on reading the events
 		// reported on the first pollfd.
-		if s.isShutdown() {
+		if s.shut.Load() {
 			// If the wake fd was notified it means the system was shut down,
 			// we report this by cancelling all subscriptions.
 			//
@@ -261,7 +259,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 			return len(subscriptions), wasi.ESUCCESS
 		}
 
-		if timeoutEventIndex >= 0 && deadline.Before(time.Now()) {
+		if timeoutEventIndex >= 0 && deadline.Before(time.Now().Add(time.Millisecond)) {
 			events[timeoutEventIndex] = wasi.Event{
 				UserData:  subscriptions[timeoutEventIndex].UserData,
 				EventType: subscriptions[timeoutEventIndex].EventType + 1,
@@ -379,7 +377,7 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 	}
 	peer := makeSocketAddress(sa)
 	if peer == nil {
-		_ = closeRetryOnEINTR(connfd)
+		_ = closeTraceEBADF(connfd)
 		return -1, nil, nil, wasi.ENOTSUP
 	}
 	guestfd := s.Register(FD(connfd), wasi.FDStat{
@@ -926,60 +924,55 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 }
 
 func (s *System) Close(ctx context.Context) error {
-	err := s.FileTable.Close(ctx)
-
+	s.shut.Store(true)
 	s.mutex.Lock()
-	fd0 := s.shutfds[0]
-	fd1 := s.shutfds[1]
-	s.shutfds[0] = -1
-	s.shutfds[1] = -1
+	r := s.wake[0]
+	w := s.wake[1]
+	s.wake[0] = nil
+	s.wake[1] = nil
 	s.mutex.Unlock()
 
-	if fd0 != 0 || fd1 != 0 { // true if the system was initialized
-		_ = closeRetryOnEINTR(fd0)
-		_ = closeRetryOnEINTR(fd1)
+	if r != nil {
+		r.Close()
 	}
-	return err
+	if w != nil {
+		w.Close()
+	}
+	return s.FileTable.Close(ctx)
 }
 
-// Shutdown may be called to asynchronously cancel all blocking operations on
+// Shutdown may be called asynchronously to cancel all blocking operations on
 // the system, causing calls such as PollOneOff to unblock and return an
 // error indicating that the system is shutting down.
 func (s *System) Shutdown(ctx context.Context) error {
-	_, err := s.init()
+	_, w, err := s.init()
 	if err != nil {
+		if err == context.Canceled {
+			err = nil // already shutdown
+		}
 		return err
 	}
-	s.shutdown()
-	return nil
+	s.shut.Store(true)
+	return w.Close()
 }
 
-func (s *System) init() (int, error) {
+func (s *System) init() (*os.File, *os.File, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if s.shutfds[0] == 0 && s.shutfds[1] == 0 {
-		if err := pipe(s.shutfds[:], unix.O_NONBLOCK); err != nil {
-			return -1, err
+
+	if s.wake[0] == nil {
+		if s.shut.Load() {
+			return nil, nil, context.Canceled
 		}
+		r, w, err := os.Pipe()
+		if err != nil {
+			return nil, nil, err
+		}
+		s.wake[0] = r
+		s.wake[1] = w
 	}
-	return s.shutfds[0], nil
-}
 
-func (s *System) shutdown() {
-	s.mutex.Lock()
-	fd := s.shutfds[1]
-	s.shutfds[1] = -1
-	s.mutex.Unlock()
-	if fd >= 0 {
-		_ = closeRetryOnEINTR(fd)
-	}
-}
-
-func (s *System) isShutdown() bool {
-	s.mutex.Lock()
-	ok := s.shutfds[1] == -1
-	s.mutex.Unlock()
-	return ok
+	return s.wake[0], s.wake[1], nil
 }
 
 func (s *System) toUnixSockAddress(addr wasi.SocketAddress) (sa unix.Sockaddr, ok bool) {

@@ -1,6 +1,7 @@
 package unix
 
 import (
+	"runtime/debug"
 	"unsafe"
 
 	"github.com/stealthrocket/wasi-go"
@@ -46,8 +47,18 @@ func handleEINTR(f func() (int, error)) (int, error) {
 	}
 }
 
-func closeRetryOnEINTR(fd int) error {
-	return ignoreEINTR(func() error { return unix.Close(fd) })
+func closeTraceEBADF(fd int) error {
+	if fd < 0 {
+		return unix.EBADF
+	}
+	err := unix.Close(fd)
+	if err != nil {
+		if err == unix.EBADF {
+			println("DEBUG: close", fd, "=> EBADF")
+			debug.PrintStack()
+		}
+	}
+	return err
 }
 
 func makeErrno(err error) wasi.Errno {

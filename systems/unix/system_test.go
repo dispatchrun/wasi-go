@@ -2,7 +2,7 @@ package unix_test
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -69,6 +69,11 @@ func makeSystem(config wasitest.TestConfig) (wasi.System, error) {
 			panic(sys.NewExitError(127 + uint32(code)))
 		},
 	}
+	defer func() {
+		if s != nil {
+			s.Close(context.Background())
+		}
+	}()
 
 	if now := config.Now; now != nil {
 		epoch := now()
@@ -82,66 +87,83 @@ func makeSystem(config wasitest.TestConfig) (wasi.System, error) {
 		s.RealtimePrecision = time.Microsecond
 	}
 
-	defer func() {
-		config.Stdin.Close()
-		config.Stdout.Close()
-		config.Stderr.Close()
-	}()
-	stdinFile := int(config.Stdin.Fd())
-	stdoutFile := int(config.Stdout.Fd())
-	stderrFile := int(config.Stderr.Fd())
-
-	stdin, err := dup(stdinFile)
+	stdin, err := pipe()
 	if err != nil {
-		return nil, fmt.Errorf("duplicating stdin (%d): %w", stdinFile, err)
+		return nil, err
 	}
-	stdout, err := dup(stdoutFile)
-	if err != nil {
-		return nil, fmt.Errorf("duplicating stdout (%d): %w", stdoutFile, err)
+	if config.Stdin == nil {
+		sysunix.Close(stdin[1])
+	} else {
+		f := os.NewFile(uintptr(stdin[1]), "/dev/stdin")
+		go copyAndClose(f, config.Stdin)
 	}
-	stderr, err := dup(stderrFile)
-	if err != nil {
-		return nil, fmt.Errorf("duplicating stderr (%d): %w", stderrFile, err)
-	}
-
-	s.Preopen(unix.FD(stdin), "/dev/stdin", wasi.FDStat{
-		FileType:   wasi.CharacterDeviceType,
-		RightsBase: wasi.AllRights,
-	})
-	s.Preopen(unix.FD(stdout), "/dev/stdout", wasi.FDStat{
-		FileType:   wasi.CharacterDeviceType,
-		RightsBase: wasi.AllRights,
-	})
-	s.Preopen(unix.FD(stderr), "/dev/stderr", wasi.FDStat{
+	s.Preopen(unix.FD(stdin[0]), "/dev/stdin", wasi.FDStat{
 		FileType:   wasi.CharacterDeviceType,
 		RightsBase: wasi.AllRights,
 	})
 
-	if config.RootFS != nil {
-		rootFile := int(config.RootFS.Fd())
-		root, err := dup(rootFile)
+	stdout, err := pipe()
+	if err != nil {
+		return nil, err
+	}
+	if config.Stdout == nil {
+		sysunix.Close(stdout[0])
+	} else {
+		f := os.NewFile(uintptr(stdout[0]), "/dev/stdout")
+		go copyAndClose(config.Stdout, f)
+	}
+	s.Preopen(unix.FD(stdout[1]), "/dev/stdout", wasi.FDStat{
+		FileType:   wasi.CharacterDeviceType,
+		RightsBase: wasi.AllRights,
+	})
+
+	stderr, err := pipe()
+	if err != nil {
+		return nil, err
+	}
+	if config.Stderr == nil {
+		sysunix.Close(stderr[0])
+	} else {
+		f := os.NewFile(uintptr(stderr[0]), "/dev/stderr")
+		go copyAndClose(config.Stderr, f)
+	}
+	s.Preopen(unix.FD(stderr[1]), "/dev/stderr", wasi.FDStat{
+		FileType:   wasi.CharacterDeviceType,
+		RightsBase: wasi.AllRights,
+	})
+
+	if config.RootFS != "" {
+		rootFS, err := sysunix.Open(config.RootFS, sysunix.O_DIRECTORY, 0)
 		if err != nil {
-			return nil, fmt.Errorf("duplicating rootfs (%d): %w", rootFile, err)
+			return nil, err
 		}
-		s.Preopen(unix.FD(root), "/", wasi.FDStat{
+		s.Preopen(unix.FD(rootFS), "/", wasi.FDStat{
 			FileType:         wasi.DirectoryType,
 			RightsBase:       wasi.AllRights,
 			RightsInheriting: wasi.AllRights,
 		})
 	}
 
-	return s, nil
+	ret := s
+	s = nil
+	return ret, nil
 }
 
-func dup(fd int) (int, error) {
-	syscall.ForkLock.Lock()
-	defer syscall.ForkLock.Unlock()
-	newfd, err := sysunix.Dup(fd)
-	if err != nil {
-		return -1, err
+func copyAndClose(w io.WriteCloser, r io.ReadCloser) {
+	defer w.Close()
+	defer r.Close()
+	_, _ = io.Copy(w, r)
+}
+
+func pipe() (fds [2]int, err error) {
+	syscall.ForkLock.RLock()
+	defer syscall.ForkLock.RUnlock()
+	if err := sysunix.Pipe(fds[:]); err != nil {
+		return fds, err
 	}
-	sysunix.CloseOnExec(newfd)
-	return newfd, nil
+	sysunix.CloseOnExec(fds[0])
+	sysunix.CloseOnExec(fds[1])
+	return fds, nil
 }
 
 func TestSystemPollAndShutdown(t *testing.T) {
@@ -311,12 +333,12 @@ func testSystem(f func(context.Context, *unix.System)) {
 	p := newSystem()
 	defer p.Close(ctx)
 
-	r, w, err := os.Pipe()
+	fds, err := pipe()
 	if err != nil {
 		panic(err)
 	}
-	p.Preopen(unix.FD(r.Fd()), "fd0", wasi.FDStat{RightsBase: wasi.AllRights})
-	p.Preopen(unix.FD(w.Fd()), "fd1", wasi.FDStat{RightsBase: wasi.AllRights})
+	p.Preopen(unix.FD(fds[0]), "fd0", wasi.FDStat{RightsBase: wasi.AllRights})
+	p.Preopen(unix.FD(fds[1]), "fd1", wasi.FDStat{RightsBase: wasi.AllRights})
 
 	f(ctx, p)
 }
