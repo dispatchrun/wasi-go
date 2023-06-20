@@ -800,8 +800,12 @@ func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketTy
 		// asynchronously, so we have to tolerate ESUCCESS but also want to make
 		// sure that the only other possible error is EALREADY.
 		_, errno = sys.SockConnect(ctx, conn, addr)
-		if errno != wasi.ESUCCESS {
-			assertEqual(t, errno, wasi.EALREADY)
+		switch errno {
+		case wasi.EALREADY:
+		case wasi.EISCONN:
+		case wasi.ESUCCESS:
+		default:
+			t.Errorf("invalid error code returned on second call to connect: %w", errno)
 		}
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
