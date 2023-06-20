@@ -12,28 +12,25 @@ import (
 
 type Response struct {
 	*http.Response
+	headerHandle uint32
 }
 
 type responses struct {
-	responses map[uint32]*Response
+	responses      map[uint32]*Response
 	baseResponseId uint32
 }
 
-var data = responses{ make(map[uint32]*Response), 0}
+var data = responses{make(map[uint32]*Response), 0}
 
 func MakeResponse(res *http.Response) uint32 {
 	data.baseResponseId++
-	data.responses[data.baseResponseId] = &Response{res}
+	data.responses[data.baseResponseId] = &Response{res, 0}
 	return data.baseResponseId
 }
 
 func GetResponse(handle uint32) (*Response, bool) {
 	res, ok := data.responses[handle]
 	return res, ok
-}
-
-func (r *Response) ResponseHeaders() http.Header {
-	return r.Header
 }
 
 func dropIncomingResponseFn(_ context.Context, mod api.Module, handle uint32) {
@@ -50,13 +47,15 @@ func incomingResponseStatusFn(_ context.Context, mod api.Module, handle uint32) 
 }
 
 func incomingResponseHeadersFn(_ context.Context, mod api.Module, handle uint32) uint32 {
-	_, found := GetResponse(handle)
+	res, found := GetResponse(handle)
 	if !found {
 		log.Printf("Unknown handle: %v", handle)
 		return 0
 	}
-	// TODO: implement generic fields.
-	return handle
+	if res.headerHandle == 0 {
+		res.headerHandle = MakeFields(Fields(res.Header))
+	}
+	return res.headerHandle
 }
 
 func incomingResponseConsumeFn(_ context.Context, mod api.Module, handle, ptr uint32) {
@@ -68,7 +67,7 @@ func incomingResponseConsumeFn(_ context.Context, mod api.Module, handle, ptr ui
 		data = le.AppendUint32(data, 1)
 	} else {
 		// 0 == ok, 1 == is_err
-		data = le.AppendUint32(data, 0)	
+		data = le.AppendUint32(data, 0)
 		stream := streams.Streams.NewInputStream(response.Body)
 		// This is the stream number
 		data = le.AppendUint32(data, stream)

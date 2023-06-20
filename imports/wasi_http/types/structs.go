@@ -50,6 +50,10 @@ func newFieldsFn(_ context.Context, mod api.Module, ptr, len uint32) uint32 {
 		}
 		fields[key] = append(fields[key], val)
 	}
+	return MakeFields(fields)
+}
+
+func MakeFields(fields Fields) uint32 {
 	f.baseFieldsId++
 	f.fields[f.baseFieldsId] = fields
 	return f.baseFieldsId
@@ -65,11 +69,10 @@ func allocateWriteString(ctx context.Context, m api.Module, s string) uint32 {
 }
 
 func fieldsEntriesFn(ctx context.Context, mod api.Module, handle, out_ptr uint32) {
-	r, found := GetResponse(handle)
+	headers, found := GetFields(handle)
 	if !found {
 		return
 	}
-	headers := r.ResponseHeaders()
 	l := uint32(len(headers))
 	// 8 bytes per string/string
 	ptr, err := common.Malloc(ctx, mod, l*16)
