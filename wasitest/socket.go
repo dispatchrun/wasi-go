@@ -2,6 +2,7 @@ package wasitest
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"github.com/stealthrocket/wasi-go"
@@ -240,11 +241,99 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.DatagramSocket, &wasi.Inet6Address{Addr: localIPv6, Port: 53},
 	),
 
-	"cannot connect a listening ipv4 socket": testSocketConnectAfterListen(
+	"failing to connect sets the socket error and getting the socket error clears it on ipv4 stream sockets": testSocketConnectError(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4, Port: 62431},
+	),
+
+	"failing to connect sets the socket error and getting the socket error clears it on ipv6 stream sockets": testSocketConnectError(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6, Port: 62432},
+	),
+
+	"cannot connect a listening ipv4 stream socket": testSocketConnectAfterListen(
 		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
 	),
 
-	"cannot connect a listening ipv6 socket": testSocketConnectAfterListen(
+	"cannot connect a listening ipv6 stream socket": testSocketConnectAfterListen(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"cannot connect a connected ipv4 stream socket": testSocketConnectAfterConnect(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"cannot connect a connected ipv6 stream socket": testSocketConnectAfterConnect(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"cannot connect to a connected ipv4 stream socket": testSocketConnectToConnected(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"cannot connect to a connected ipv6 stream socket": testSocketConnectToConnected(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"cannot connect an ipv4 stream socket to an address of the wrong family": testSocketConnectWrongFamily(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"cannot connect an ipv6 stream socket to an address of the wrong family": testSocketConnectWrongFamily(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"cannot listen on a connected ipv4 stream socket": testSocketListenAfterConnect(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"cannot listen on a connected ipv6 stream socket": testSocketListenAfterConnect(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"listen on an unbound ipv4 stream socket automatically binds it": testSocketListenBeforeBind(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"listen on an unbound ipv6 stream socket automatically binds it": testSocketListenBeforeBind(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"listen on a listening ipv4 stream socket is supported": testSocketListenAfterListen(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"listen on a listening ipv6 stream socket is supported": testSocketListenAfterListen(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"listen with a negative backlog on an ipv4 address is invalid": testSocketListenNegativeBacklog(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"listen with a negative backlog on an ipv6 address is invalid": testSocketListenNegativeBacklog(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"listen with a large backlog on an ipv4 address is supported": testSocketListenLargeBacklog(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"listen with a large backlog on an ipv6 address is supported": testSocketListenLargeBacklog(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"cannot accept on an ipv4 stream socket which is not listening": testSocketAcceptBeforeListen(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"cannot accept on an ipv6 stream socket which is not listening": testSocketAcceptBeforeListen(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"cannot accept on a connected ipv4 stream socket": testSocketAcceptAfterConnect(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"cannot accept on a connected ipv6 stream socket": testSocketAcceptAfterConnect(
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
@@ -290,6 +379,38 @@ var socket = testSuite{
 
 	"can shutdown ipv4 stream socket after accepting": testSocketConnectAndShutdown(
 		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"the default buffer sizes are not zero on ipv4 stream sockets": testSocketDefaultBufferSizes(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"the default buffer sizes are not zero on ipv6 stream sockets": testSocketDefaultBufferSizes(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"can set the buffer sizes of ipv4 stream sockets": testSocketSetBufferSizes(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"can set the buffer sizes of ipv6 stream sockets": testSocketSetBufferSizes(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"cannot set option of ipv4 stream socket with invalid level": testSocketSetOptionInvalidLevel(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"cannot set option of ipv6 stream socket with invalid level": testSocketSetOptionInvalidLevel(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"cannot set option of ipv4 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"cannot set option of ipv6 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
+		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
 	"cannot bind a file descriptor which is not a socket": testNotSocket(
@@ -478,10 +599,48 @@ func testSocketConnectOK(family wasi.ProtocolFamily, typ wasi.SocketType, bind w
 		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
 		assertEqual(t, numEvents, 1)
 		assertEqual(t, errno, wasi.ESUCCESS)
-
 		assertEqual(t, evs[0], wasi.Event{
 			UserData:  42,
 			EventType: wasi.FDWriteEvent,
+		})
+	}
+}
+
+func testSocketConnectError(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockConnect(ctx, sock, bind)
+		assertNotEqual(t, addr, nil)
+		assertEqual(t, addr.Family(), bind.Family())
+		assertEqual(t, errno, wasi.EINPROGRESS)
+
+		subs := []wasi.Subscription{
+			wasi.MakeSubscriptionFDReadWrite(42, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
+				FD: sock,
+			}),
+		}
+		evs := make([]wasi.Event, len(subs))
+
+		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
+		assertEqual(t, numEvents, 1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, evs[0], wasi.Event{
+			UserData:  42,
+			EventType: wasi.FDWriteEvent,
+		})
+
+		t.Run("the error is reported after polling", func(t *testing.T) {
+			errno := sockErrno(t, ctx, sys, sock)
+			assertEqual(t, errno, wasi.ECONNREFUSED)
+		})
+
+		t.Run("the error is cleared on the second read", func(t *testing.T) {
+			errno := sockErrno(t, ctx, sys, sock)
+			assertEqual(t, errno, wasi.ESUCCESS)
 		})
 	}
 }
@@ -710,6 +869,224 @@ func testSocketConnectAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTyp
 	}
 }
 
+func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn, addr)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+
+		// The second call to connect(2) may race since the connection is done
+		// asynchronously, so we have to tolerate ESUCCESS but also want to make
+		// sure that the only other possible error is EALREADY.
+		_, errno = sys.SockConnect(ctx, conn, addr)
+		if errno != wasi.ESUCCESS {
+			assertEqual(t, errno, wasi.EALREADY)
+		}
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+	}
+}
+
+func testSocketConnectToConnected(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+
+		conn1, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr1, errno := sys.SockConnect(ctx, conn1, addr)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+		assertNotEqual(t, addr1, nil)
+
+		conn2, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr2, errno := sys.SockConnect(ctx, conn2, addr1)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+		assertNotEqual(t, addr2, nil)
+
+		subs := []wasi.Subscription{
+			wasi.MakeSubscriptionFDReadWrite(42, wasi.FDWriteEvent, wasi.SubscriptionFDReadWrite{
+				FD: conn2,
+			}),
+		}
+		evs := make([]wasi.Event, len(subs))
+
+		numEvents, errno := sys.PollOneOff(ctx, subs, evs)
+		assertEqual(t, numEvents, 1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, evs[0], wasi.Event{
+			UserData:  42,
+			EventType: wasi.FDWriteEvent,
+		})
+
+		assertEqual(t, sockErrno(t, ctx, sys, conn2), wasi.ECONNREFUSED)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn2), wasi.ESUCCESS)
+	}
+}
+
+func testSocketConnectWrongFamily(family wasi.ProtocolFamily, typ wasi.SocketType, addr wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, sock, addr)
+		assertEqual(t, errno, wasi.EAFNOSUPPORT)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenBeforeBind(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ESUCCESS)
+
+		addr, errno := sys.SockLocalAddress(ctx, sock)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertNotEqual(t, addr, nil)
+
+		switch a := addr.(type) {
+		case *wasi.Inet4Address:
+			var zero [4]byte
+			assertEqual(t, a.Addr, zero)
+			assertNotEqual(t, a.Port, 0)
+		case *wasi.Inet6Address:
+			var zero [16]byte
+			assertEqual(t, a.Addr, zero)
+			assertNotEqual(t, a.Port, 0)
+		default:
+			t.Errorf("invalid socket address type: %T", a)
+		}
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn, addr)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+		assertEqual(t, sys.SockListen(ctx, conn, 0), wasi.EINVAL)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenAfterListen(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenNegativeBacklog(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, -1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenLargeBacklog(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, math.MaxInt32), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketAcceptBeforeListen(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, peer, addr, errno := sys.SockAccept(ctx, sock, wasi.NonBlock)
+		assertEqual(t, conn, ^wasi.FD(0))
+		assertEqual(t, peer, nil)
+		assertEqual(t, addr, nil)
+		assertEqual(t, errno, wasi.EINVAL)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketAcceptAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 0), wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn, addr)
+		assertEqual(t, errno, wasi.EINPROGRESS)
+
+		fd, peer, addr, errno := sys.SockAccept(ctx, conn, wasi.NonBlock)
+		assertEqual(t, fd, ^wasi.FD(0))
+		assertEqual(t, peer, nil)
+		assertEqual(t, addr, nil)
+		assertEqual(t, errno, wasi.EINVAL)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+	}
+}
+
 func testSocketShutdownInvalidArgument(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
 	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
 		sys := newSystem(TestConfig{})
@@ -745,6 +1122,124 @@ func testSocketShutdownAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTy
 	}
 }
 
+func testSocketDefaultBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		tests := []struct {
+			scenario string
+			option   wasi.SocketOption
+		}{
+			{scenario: "recv buffer size", option: wasi.RecvBufferSize},
+			{scenario: "send buffer size", option: wasi.SendBufferSize},
+		}
+
+		for _, test := range tests {
+			t.Run(test.scenario, func(t *testing.T) {
+				bufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, test.option)
+				assertNotEqual(t, bufferSize, 0)
+			})
+		}
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSetBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		tests := []struct {
+			scenario string
+			option   wasi.SocketOption
+		}{
+			{scenario: "recv buffer size", option: wasi.RecvBufferSize},
+			{scenario: "send buffer size", option: wasi.SendBufferSize},
+		}
+
+		for _, test := range tests {
+			t.Run(test.scenario, func(t *testing.T) {
+				sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+				assertEqual(t, errno, wasi.ESUCCESS)
+
+				defaultBufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, test.option)
+				assertNotEqual(t, defaultBufferSize, 0)
+
+				setBufferSize := func(size wasi.IntValue) {
+					t.Helper()
+					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, size), wasi.ESUCCESS)
+				}
+
+				getBufferSize := func() wasi.IntValue {
+					t.Helper()
+					return sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, test.option)
+				}
+
+				t.Run("grow the socket buffer size", func(t *testing.T) {
+					want := 2 * defaultBufferSize
+					setBufferSize(want)
+					size := getBufferSize()
+					assertEqual(t, size, want)
+				})
+
+				t.Run("shrink the socket buffer size", func(t *testing.T) {
+					want := defaultBufferSize / 2
+					setBufferSize(want)
+					size := getBufferSize()
+					assertEqual(t, size, want)
+				})
+
+				t.Run("negative socket buffer size are fobidden", func(t *testing.T) {
+					want := getBufferSize()
+					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(-1)), wasi.EINVAL)
+					size := getBufferSize()
+					assertEqual(t, size, want)
+				})
+
+				t.Run("small socket buffer sizes are capped to a minimum value", func(t *testing.T) {
+					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(0)), wasi.ESUCCESS)
+					size := getBufferSize()
+					assertNotEqual(t, size, 0)
+				})
+
+				t.Run("large socket buffer sizes are capped to a maximum value", func(t *testing.T) {
+					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(math.MaxInt32)), wasi.ESUCCESS)
+					size := getBufferSize()
+					assertNotEqual(t, size, math.MaxInt32)
+				})
+
+				assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+			})
+		}
+	}
+}
+
+func testSocketSetOptionInvalidLevel(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		const level = -1
+		const option = 0
+		assertEqual(t, sys.SockSetOpt(ctx, sock, level, option, wasi.IntValue(0)), wasi.EINVAL)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSetOptionInvalidArgument(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		const option = -1
+		assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, option, wasi.IntValue(0)), wasi.EINVAL)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
 func sockOpen(t *testing.T, ctx context.Context, sys wasi.System, family wasi.ProtocolFamily, typ wasi.SocketType, proto wasi.Protocol) (wasi.FD, wasi.Errno) {
 	t.Helper()
 	sock, errno := sys.SockOpen(ctx, family, typ, proto, wasi.AllRights, wasi.AllRights)
@@ -757,15 +1252,22 @@ func sockOpen(t *testing.T, ctx context.Context, sys wasi.System, family wasi.Pr
 	return sock, errno
 }
 
-func sockErrno(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD) wasi.Errno {
-	opt, errno := sys.SockGetOpt(ctx, sock, wasi.SocketLevel, wasi.QuerySocketError)
+func sockOption[T wasi.SocketOptionValue](t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) T {
+	t.Helper()
+	opt, errno := sys.SockGetOpt(ctx, sock, level, option)
 	assertEqual(t, errno, wasi.ESUCCESS)
-	val, ok := opt.(wasi.IntValue)
+	val, ok := opt.(T)
 	assertEqual(t, ok, true)
-	return wasi.Errno(val)
+	return val
+}
+
+func sockErrno(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD) wasi.Errno {
+	t.Helper()
+	return wasi.Errno(sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, wasi.QuerySocketError))
 }
 
 func sockIsNonBlocking(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD) bool {
+	t.Helper()
 	stat, errno := sys.FDStatGet(ctx, sock)
 	assertEqual(t, errno, wasi.ESUCCESS)
 	return stat.Flags.Has(wasi.NonBlock)

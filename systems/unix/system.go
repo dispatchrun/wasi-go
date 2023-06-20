@@ -564,10 +564,17 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 	}
 	err := ignoreEINTR(func() error { return unix.Connect(int(socket), sa) })
 	if err != nil && err != unix.EINPROGRESS {
+		switch err {
+		// Linux gives EINVAL only when trying to connect to an ipv4 address
+		// from an ipv6 address. Darwin does not seem to return EINVAL but it
+		// documents that it might if the address family does not match, so we
+		// normalize the the error value here.
+		case unix.EINVAL:
+			err = unix.EAFNOSUPPORT
 		// Darwin gives EOPNOTSUPP when trying to connect a socket that is
 		// already connected or already listening. Align on the Linux behavior
 		// here and convert the error to EISCONN.
-		if err == unix.EOPNOTSUPP {
+		case unix.EOPNOTSUPP:
 			err = unix.EISCONN
 		}
 		return nil, makeErrno(err)
@@ -640,6 +647,7 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
+
 	var sysLevel int
 	switch level {
 	case wasi.SocketLevel:
@@ -649,6 +657,7 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	default:
 		return nil, wasi.EINVAL
 	}
+
 	var sysOption int
 	switch option {
 	case wasi.ReuseAddress:
@@ -709,6 +718,12 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		}
 	case wasi.QuerySocketError:
 		value = int(makeErrno(unix.Errno(value)))
+	case wasi.RecvBufferSize, wasi.SendBufferSize:
+		// Linux doubles the socket buffer sizes, so we adjust the value here
+		// to ensure the behavior is portable across operating systems.
+		if runtime.GOOS == "linux" {
+			value /= 2
+		}
 	}
 
 	return wasi.IntValue(value), errno
@@ -719,6 +734,7 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
+
 	var sysLevel int
 	switch level {
 	case wasi.SocketLevel:
@@ -728,6 +744,7 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	default:
 		return wasi.EINVAL
 	}
+
 	var sysOption int
 	switch option {
 	case wasi.ReuseAddress:
@@ -766,10 +783,37 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	default:
 		return wasi.EINVAL
 	}
+
 	intval, ok := value.(wasi.IntValue)
 	if !ok {
 		return wasi.EINVAL
 	}
+
+	// Treat setting negative buffer sizes as a special, invalid case to ensure
+	// portability across operating systems.
+	switch option {
+	case wasi.RecvBufferSize, wasi.SendBufferSize:
+		if intval < 0 {
+			return wasi.EINVAL
+		}
+	}
+
+	// Linux allows setting the socket buffer size to zero, but darwin does not,
+	// so we hardcode the limit for OSX.
+	if runtime.GOOS == "darwin" {
+		switch option {
+		case wasi.RecvBufferSize, wasi.SendBufferSize:
+			const minBufferSize = 4 * 1024
+			const maxBufferSize = 4 * 1024 * 1024
+			switch {
+			case intval < minBufferSize:
+				intval = minBufferSize
+			case intval > maxBufferSize:
+				intval = maxBufferSize
+			}
+		}
+	}
+
 	err := ignoreEINTR(func() error {
 		return unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
 	})
