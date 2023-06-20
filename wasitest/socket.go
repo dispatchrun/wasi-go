@@ -248,6 +248,14 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
+	"cannot listen an unbound ipv4 socket": testSocketListenBeforeBind(
+		wasi.InetFamily, wasi.StreamSocket,
+	),
+
+	"cannot listen an unbound ipv6 socket": testSocketListenBeforeBind(
+		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
 	"cannot shutdown an ipv4 stream socket with an invalid argument": testSocketShutdownInvalidArgument(
 		wasi.InetFamily, wasi.StreamSocket,
 	),
@@ -706,6 +714,16 @@ func testSocketConnectAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		_, errno = sys.SockConnect(ctx, sock, bind)
 		assertEqual(t, errno, wasi.EISCONN)
 
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenBeforeBind(family wasi.ProtocolFamily, typ wasi.SocketType) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.EDESTADDRREQ)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
