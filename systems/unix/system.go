@@ -562,6 +562,33 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 	if !ok {
 		return nil, wasi.EINVAL
 	}
+
+	// In some cases, Linux allows sockets to be connected to addreses of a
+	// different family (e.g. AF_INET datagram sockets connecting to AF_INET6
+	// addresses). This is not portable, until we have a clear use case it is
+	// wiser to disallow it, valid programs should use address families that
+	// match the socket domain.
+	if runtime.GOOS == "linux" {
+		domain, err := ignoreEINTR2(func() (int, error) {
+			return unix.GetsockoptInt(int(socket), unix.SOL_SOCKET, unix.SO_DOMAIN)
+		})
+		if err != nil {
+			return nil, makeErrno(err)
+		}
+		family := wasi.UnspecifiedFamily
+		switch domain {
+		case unix.AF_INET:
+			family = wasi.InetFamily
+		case unix.AF_INET6:
+			family = wasi.Inet6Family
+		case unix.AF_UNIX:
+			family = wasi.UnixFamily
+		}
+		if family != peer.Family() {
+			return nil, wasi.EAFNOSUPPORT
+		}
+	}
+
 	err := ignoreEINTR(func() error { return unix.Connect(int(socket), sa) })
 	if err != nil && err != unix.EINPROGRESS {
 		switch err {
@@ -570,7 +597,7 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 		// documents that it might if the address family does not match, so we
 		// normalize the the error value here.
 		case unix.EINVAL:
-			err = unix.EAFNOSUPPORT
+			err = wasi.EAFNOSUPPORT
 		// Darwin gives EOPNOTSUPP when trying to connect a socket that is
 		// already connected or already listening. Align on the Linux behavior
 		// here and convert the error to EISCONN.

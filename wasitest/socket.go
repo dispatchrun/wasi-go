@@ -1537,19 +1537,25 @@ func testSocketSendAndReceiveLargerThanRecvBufferSize(family wasi.ProtocolFamily
 		assertEqual(t, size1, wasi.Size(len(buffer1)))
 		assertEqual(t, errno, wasi.ESUCCESS)
 
-		buffer1[0] = '4'
-		buffer1[1] = '2'
-		size2, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{buffer1[:2]}, 0, sockAddr)
+		size2, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{[]byte("42")}, 0, sockAddr)
 		assertEqual(t, size2, 2)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
 
 		size3, roflags, raddr, errno := sys.SockRecvFrom(ctx, sock, []wasi.IOVec{buffer2}, 0)
-		assertEqual(t, size3, 2)
+		// The actual behavior here is not portable, the message may or may not
+		// be dropped depending on the implementation. However, there are only
+		// two valid behaviors, either the message is received or it's dropped,
+		// so we accept either.
+		if int(size3) == len(buffer1) {
+			assertEqual(t, string(buffer2[:size3]), string(buffer1[:size3]))
+		} else {
+			assertEqual(t, size3, 2)
+			assertEqual(t, string(buffer2[:2]), "42")
+		}
 		assertEqual(t, roflags, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, string(buffer2[:2]), "42")
 		assertDeepEqual(t, raddr, connAddr)
 
 		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
