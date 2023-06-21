@@ -91,5 +91,5 @@ func pwritev(fd int, iovs [][]byte, offset int64) (int, error) {
 }
 
 func getsocketdomain(fd int) (int, error) {
-	return unix.GetsockoptInt(int(socket), unix.SOL_SOCKET, unix.SO_DOMAIN)
+	return unix.GetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_DOMAIN)
 }
