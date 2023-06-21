@@ -570,7 +570,7 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 	// match the socket domain.
 	if runtime.GOOS == "linux" {
 		domain, err := ignoreEINTR2(func() (int, error) {
-			return unix.GetsockoptInt(int(socket), unix.SOL_SOCKET, unix.SO_DOMAIN)
+			return getsocketdomain(int(socket))
 		})
 		if err != nil {
 			return nil, makeErrno(err)
@@ -597,7 +597,7 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 		// documents that it might if the address family does not match, so we
 		// normalize the the error value here.
 		case unix.EINVAL:
-			err = wasi.EAFNOSUPPORT
+			err = unix.EAFNOSUPPORT
 		// Darwin gives EOPNOTSUPP when trying to connect a socket that is
 		// already connected or already listening. Align on the Linux behavior
 		// here and convert the error to EISCONN.
