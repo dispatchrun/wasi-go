@@ -33,7 +33,7 @@ func assertEqual[T comparable](t *testing.T, got, want T) {
 func assertNotEqual[T comparable](t *testing.T, got, want T) {
 	if got == want {
 		t.Helper()
-		t.Fatalf("%T values must not be equal\ndo not want = %+v\ngot        = %+v", want, want, got)
+		t.Fatalf("%T values must not be equal\ndo not want = %+v\ngot         = %+v", want, want, got)
 	}
 }
 

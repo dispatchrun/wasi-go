@@ -141,7 +141,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	for i := range subscriptions {
 		sub := &subscriptions[i]
 
-		var pollEvent int16 = unix.POLLIN | unix.POLLHUP
+		var pollEvent int16 = unix.POLLPRI | unix.POLLIN | unix.POLLHUP
 		switch sub.EventType {
 		case wasi.FDWriteEvent:
 			pollEvent = unix.POLLOUT
