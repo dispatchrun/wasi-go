@@ -563,7 +563,7 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 		return nil, wasi.EINVAL
 	}
 
-	// In some cases, Linux allows sockets to be connected to addreses of a
+	// In some cases, Linux allows sockets to be connected to addresses of a
 	// different family (e.g. AF_INET datagram sockets connecting to AF_INET6
 	// addresses). This is not portable, until we have a clear use case it is
 	// wiser to disallow it, valid programs should use address families that
