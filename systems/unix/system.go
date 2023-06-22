@@ -141,7 +141,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	for i := range subscriptions {
 		sub := &subscriptions[i]
 
-		var pollEvent int16 = unix.POLLIN | unix.POLLHUP
+		var pollEvent int16 = unix.POLLPRI | unix.POLLIN | unix.POLLHUP
 		switch sub.EventType {
 		case wasi.FDWriteEvent:
 			pollEvent = unix.POLLOUT
@@ -562,6 +562,33 @@ func (s *System) SockConnect(ctx context.Context, fd wasi.FD, peer wasi.SocketAd
 	if !ok {
 		return nil, wasi.EINVAL
 	}
+
+	// In some cases, Linux allows sockets to be connected to addresses of a
+	// different family (e.g. AF_INET datagram sockets connecting to AF_INET6
+	// addresses). This is not portable, until we have a clear use case it is
+	// wiser to disallow it, valid programs should use address families that
+	// match the socket domain.
+	if runtime.GOOS == "linux" {
+		domain, err := ignoreEINTR2(func() (int, error) {
+			return getsocketdomain(int(socket))
+		})
+		if err != nil {
+			return nil, makeErrno(err)
+		}
+		family := wasi.UnspecifiedFamily
+		switch domain {
+		case unix.AF_INET:
+			family = wasi.InetFamily
+		case unix.AF_INET6:
+			family = wasi.Inet6Family
+		case unix.AF_UNIX:
+			family = wasi.UnixFamily
+		}
+		if family != peer.Family() {
+			return nil, wasi.EAFNOSUPPORT
+		}
+	}
+
 	err := ignoreEINTR(func() error { return unix.Connect(int(socket), sa) })
 	if err != nil && err != unix.EINPROGRESS {
 		switch err {

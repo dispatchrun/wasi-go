@@ -1,6 +1,7 @@
 package wasitest
 
 import (
+	"bytes"
 	"context"
 	"math"
 	"testing"
@@ -14,7 +15,14 @@ var (
 
 	unknownIPv4 = [4]byte{123, 234, 123, 234}
 	unknownIPv6 = [16]byte{15: 2}
+
+	randomPort = 20000
 )
+
+func nextPort() int {
+	randomPort++
+	return randomPort
+}
 
 var socket = testSuite{
 	"can create a tcp socket for ipv4": testSocketOpenOK(
@@ -102,19 +110,19 @@ var socket = testSuite{
 	),
 
 	"bind an ipv4 stream socket to a port selects that port": testSocketBindOK(
-		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4, Port: 41200},
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
 	),
 
 	"bind an ipv4 datagram socket to a port selects that port": testSocketBindOK(
-		wasi.InetFamily, wasi.DatagramSocket, &wasi.Inet4Address{Addr: localIPv4, Port: 41201},
+		wasi.InetFamily, wasi.DatagramSocket, &wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
 	),
 
 	"bind an ipv6 stream socket to a port selects that port": testSocketBindOK(
-		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6, Port: 41202},
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
 	),
 
 	"bind an ipv6 datagram socket to a port selects that port": testSocketBindOK(
-		wasi.Inet6Family, wasi.DatagramSocket, &wasi.Inet6Address{Addr: localIPv6, Port: 41203},
+		wasi.Inet6Family, wasi.DatagramSocket, &wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
 	),
 
 	"bind an ipv4 stream socket to port zero selects a random port": testSocketBindOK(
@@ -207,13 +215,13 @@ var socket = testSuite{
 
 	"cannot bind an ipv4 datagram socket that was already connected": testSocketBindAfterConnect(
 		wasi.InetFamily, wasi.DatagramSocket,
-		&wasi.Inet4Address{Addr: localIPv4, Port: 53},
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
 		&wasi.Inet4Address{Addr: localIPv4},
 	),
 
 	"cannot bind an ipv6 datagram socket that was already connected": testSocketBindAfterConnect(
 		wasi.Inet6Family, wasi.DatagramSocket,
-		&wasi.Inet6Address{Addr: localIPv6, Port: 53},
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
 		&wasi.Inet6Address{Addr: localIPv6},
 	),
 
@@ -234,19 +242,19 @@ var socket = testSuite{
 	),
 
 	"can connect a ipv4 datagram socket": testSocketConnectOK(
-		wasi.InetFamily, wasi.DatagramSocket, &wasi.Inet4Address{Addr: localIPv4, Port: 53},
+		wasi.InetFamily, wasi.DatagramSocket, &wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
 	),
 
 	"can connect a ipv6 datagram socket": testSocketConnectOK(
-		wasi.Inet6Family, wasi.DatagramSocket, &wasi.Inet6Address{Addr: localIPv6, Port: 53},
+		wasi.Inet6Family, wasi.DatagramSocket, &wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
 	),
 
 	"failing to connect sets the socket error and getting the socket error clears it on ipv4 stream sockets": testSocketConnectError(
-		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4, Port: 62431},
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
 	),
 
 	"failing to connect sets the socket error and getting the socket error clears it on ipv6 stream sockets": testSocketConnectError(
-		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6, Port: 62432},
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
 	),
 
 	"cannot connect a listening ipv4 stream socket": testSocketConnectAfterListen(
@@ -257,12 +265,20 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
-	"cannot connect a connected ipv4 stream socket": testSocketConnectAfterConnect(
-		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	"cannot connect a connected ipv4 stream socket": testSocketReconnectStream(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
 	),
 
-	"cannot connect a connected ipv6 stream socket": testSocketConnectAfterConnect(
-		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	"cannot connect a connected ipv6 stream socket": testSocketReconnectStream(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"can reconnect an ipv4 datagram socket": testSocketReconnectDatagram(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+	),
+
+	"can reconnect an ipv6 datagram socket": testSocketReconnectDatagram(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
 	),
 
 	"cannot connect to a connected ipv4 stream socket": testSocketConnectToConnected(
@@ -281,12 +297,28 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
 	),
 
+	"cannot connect an ipv4 datagram socket to an address of the wrong family": testSocketConnectWrongFamily(
+		wasi.InetFamily, wasi.DatagramSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"cannot connect an ipv6 datagram socket to an address of the wrong family": testSocketConnectWrongFamily(
+		wasi.Inet6Family, wasi.DatagramSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
 	"cannot listen on a connected ipv4 stream socket": testSocketListenAfterConnect(
 		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
 	),
 
 	"cannot listen on a connected ipv6 stream socket": testSocketListenAfterConnect(
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"cannot listen on ipv4 datagram sockets": testSocketListenDatagram(
+		wasi.InetFamily, wasi.DatagramSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"can listen on ipv6 datagram sockets": testSocketListenDatagram(
+		wasi.Inet6Family, wasi.DatagramSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
 	"listen on an unbound ipv4 stream socket automatically binds it": testSocketListenBeforeBind(
@@ -327,6 +359,14 @@ var socket = testSuite{
 
 	"cannot accept on an ipv6 stream socket which is not listening": testSocketAcceptBeforeListen(
 		wasi.Inet6Family, wasi.StreamSocket,
+	),
+
+	"cannot accept on an ipv4 datagram socket": testSocketAcceptDatagram(
+		wasi.InetFamily,
+	),
+
+	"cannot accept on an ipv6 datagram socket": testSocketAcceptDatagram(
+		wasi.Inet6Family,
 	),
 
 	"cannot accept on a connected ipv4 stream socket": testSocketAcceptAfterConnect(
@@ -389,12 +429,12 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
-	"can set the buffer sizes of ipv4 stream sockets": testSocketSetBufferSizes(
-		wasi.InetFamily, wasi.StreamSocket,
+	"the default buffer sizes are not zero on ipv4 datagram sockets": testSocketDefaultBufferSizes(
+		wasi.InetFamily, wasi.DatagramSocket,
 	),
 
-	"can set the buffer sizes of ipv6 stream sockets": testSocketSetBufferSizes(
-		wasi.Inet6Family, wasi.StreamSocket,
+	"the default buffer sizes are not zero on ipv6 datagram sockets": testSocketDefaultBufferSizes(
+		wasi.Inet6Family, wasi.DatagramSocket,
 	),
 
 	"cannot set option of ipv4 stream socket with invalid level": testSocketSetOptionInvalidLevel(
@@ -405,6 +445,14 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
+	"cannot set option of ipv4 datagram socket with invalid level": testSocketSetOptionInvalidLevel(
+		wasi.InetFamily, wasi.DatagramSocket,
+	),
+
+	"cannot set option of ipv6 datagram socket with invalid level": testSocketSetOptionInvalidLevel(
+		wasi.Inet6Family, wasi.DatagramSocket,
+	),
+
 	"cannot set option of ipv4 stream socket with invalid argument": testSocketSetOptionInvalidArgument(
 		wasi.InetFamily, wasi.StreamSocket,
 	),
@@ -413,12 +461,100 @@ var socket = testSuite{
 		wasi.Inet6Family, wasi.StreamSocket,
 	),
 
-	"connected ipv4 stream sockets can send and receive data": testSocketSendAndReceive(
-		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	"cannot set option of ipv4 datagram socket with invalid argument": testSocketSetOptionInvalidArgument(
+		wasi.InetFamily, wasi.DatagramSocket,
 	),
 
-	"connected ipv6 stream sockets can send and receive data": testSocketSendAndReceive(
-		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	"cannot set option of ipv6 datagram socket with invalid argument": testSocketSetOptionInvalidArgument(
+		wasi.Inet6Family, wasi.DatagramSocket,
+	),
+
+	"connected ipv4 stream sockets can send and receive data": testSocketSendAndReceiveStream(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"connected ipv6 stream sockets can send and receive data": testSocketSendAndReceiveStream(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"connected ipv4 datagram sockets can send and receive data": testSocketSendAndReceiveConnectedDatagram(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"connected ipv6 datagram sockets can send and receive data": testSocketSendAndReceiveConnectedDatagram(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"unconnected ipv4 datagram sockets can send and receive data": testSocketSendAndReceiveNotConnectedDatagram(
+		wasi.InetFamily,
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+	),
+
+	"unconnected ipv6 datagram sockets can send and receive data": testSocketSendAndReceiveNotConnectedDatagram(
+		wasi.Inet6Family,
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+	),
+
+	"large messages are truncated when sent on ipv4 datagram sockets": testSocketSendAndReceiveTruncatedDatagram(
+		wasi.InetFamily,
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+	),
+
+	"large messages are truncated when sent on ipv6 datagram sockets": testSocketSendAndReceiveTruncatedDatagram(
+		wasi.Inet6Family,
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+	),
+
+	"can send messages to unbound addresses on a ipv4 datagram socket": testSocketSendDatagramToNowhere(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+	),
+
+	"can send messages to unbound addresses on a ipv6 datagram socket": testSocketSendDatagramToNowhere(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+	),
+
+	"cannot bind an ipv4 datagram socket after sending a message": testSocketBindAfterSendDatagram(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+	),
+
+	"cannot bind an ipv6 datagram socket after sending a message": testSocketBindAfterSendDatagram(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+	),
+
+	"cannot receive on an unbound ipv4 datagram socket": testSocketReceiveBeforeBindDatagram(
+		wasi.InetFamily,
+	),
+
+	"cannot receive on an unbound ipv6 datagram socket": testSocketReceiveBeforeBindDatagram(
+		wasi.Inet6Family,
+	),
+
+	"drop messages larger than the ipv4 datagram socket receive buffer size": testSocketSendAndReceiveLargerThanRecvBufferSize(
+		wasi.InetFamily,
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+	),
+
+	"drop messages larger than the ipv6 datagram socket receive buffer size": testSocketSendAndReceiveLargerThanRecvBufferSize(
+		wasi.Inet6Family,
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+	),
+
+	"cannot send a message larger than the ipv4 datagram socket send buffer size": testSocketSendAndReceiveLargerThanSendBufferSize(
+		wasi.InetFamily,
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+	),
+
+	"cannot send a message larger than the ipv6 datagram socket send buffer size": testSocketSendAndReceiveLargerThanSendBufferSize(
+		wasi.Inet6Family,
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
 	),
 
 	"cannot bind a file descriptor which is not a socket": testNotSocket(
@@ -579,6 +715,20 @@ func testSocketListenOK(family wasi.ProtocolFamily, typ wasi.SocketType, bind wa
 		_, errno = sys.SockBind(ctx, sock, bind)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketListenDatagram(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ENOTSUP)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
@@ -779,9 +929,10 @@ func testSocketConnectAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTyp
 	}
 }
 
-func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+func testSocketReconnectStream(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
 	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
 		sys := newSystem(TestConfig{})
+		typ := wasi.StreamSocket
 
 		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
@@ -810,6 +961,31 @@ func testSocketConnectAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketTy
 
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+	}
+}
+
+func testSocketReconnectDatagram(family wasi.ProtocolFamily, addr wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, sock, addr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		switch a := addr.(type) {
+		case *wasi.Inet4Address:
+			a.Port = nextPort()
+		case *wasi.Inet6Address:
+			a.Port = nextPort()
+		}
+
+		_, errno = sys.SockConnect(ctx, sock, addr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
 
@@ -960,6 +1136,24 @@ func testSocketAcceptBeforeListen(family wasi.ProtocolFamily, typ wasi.SocketTyp
 	}
 }
 
+func testSocketAcceptDatagram(family wasi.ProtocolFamily) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, peer, addr, errno := sys.SockAccept(ctx, sock, wasi.NonBlock)
+		assertEqual(t, conn, ^wasi.FD(0))
+		assertEqual(t, peer, nil)
+		assertEqual(t, addr, nil)
+		assertEqual(t, errno, wasi.ENOTSUP)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
 func testSocketAcceptAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
 	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
 		sys := newSystem(TestConfig{})
@@ -1023,9 +1217,10 @@ func testSocketShutdownAfterListen(family wasi.ProtocolFamily, typ wasi.SocketTy
 	}
 }
 
-func testSocketSendAndReceive(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+func testSocketSendAndReceiveStream(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
 	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
 		sys := newSystem(TestConfig{})
+		typ := wasi.StreamSocket
 
 		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
@@ -1080,6 +1275,316 @@ func testSocketSendAndReceive(family wasi.ProtocolFamily, typ wasi.SocketType, b
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		assertEqual(t, sys.FDClose(ctx, conn1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendAndReceiveConnectedDatagram(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockAddr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		connAddr, errno := sys.SockConnect(ctx, conn, sockAddr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 32)
+
+		size1, errno := sys.SockSend(ctx, conn, []wasi.IOVec{buffer1}, 0)
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
+		size2, roflags, raddr, errno := sys.SockRecvFrom(ctx, sock, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size2, size1)
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+		assertDeepEqual(t, raddr, connAddr)
+
+		buffer1 = []byte("How are you?")
+		sockPoll(t, ctx, sys, sock, wasi.FDWriteEvent)
+		size3, errno := sys.SockSendTo(ctx, sock, []wasi.IOVec{buffer1}, 0, connAddr)
+		assertEqual(t, size3, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn, wasi.FDReadEvent)
+		size4, roflags, raddr, errno := sys.SockRecvFrom(ctx, conn, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size4, size3)
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+		assertDeepEqual(t, raddr, sockAddr)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendAndReceiveNotConnectedDatagram(family wasi.ProtocolFamily, addr1, addr2 wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockAddr, errno := sys.SockBind(ctx, sock, addr1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		connAddr, errno := sys.SockBind(ctx, conn, addr2)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 32)
+
+		size1, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{buffer1}, 0, sockAddr)
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
+		size2, roflags, raddr, errno := sys.SockRecvFrom(ctx, sock, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size2, size1)
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+		assertDeepEqual(t, raddr, connAddr)
+
+		buffer1 = []byte("How are you?")
+		sockPoll(t, ctx, sys, sock, wasi.FDWriteEvent)
+		size3, errno := sys.SockSendTo(ctx, sock, []wasi.IOVec{buffer1}, 0, connAddr)
+		assertEqual(t, size3, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn, wasi.FDReadEvent)
+		size4, roflags, raddr, errno := sys.SockRecvFrom(ctx, conn, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size4, size3)
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+		assertDeepEqual(t, raddr, sockAddr)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendAndReceiveTruncatedDatagram(family wasi.ProtocolFamily, addr1, addr2 wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockAddr, errno := sys.SockBind(ctx, sock, addr1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		connAddr, errno := sys.SockBind(ctx, conn, addr2)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 10)
+
+		size1, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{buffer1}, 0, sockAddr)
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
+		size2, roflags, raddr, errno := sys.SockRecvFrom(ctx, sock, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size2, wasi.Size(len(buffer2)))
+		assertEqual(t, roflags, wasi.RecvDataTruncated)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2), string(buffer1[:len(buffer2)]))
+		assertDeepEqual(t, raddr, connAddr)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendDatagramToNowhere(family wasi.ProtocolFamily, addr wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+		msg := []byte("Hello, World!")
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		size, errno := sys.SockSendTo(ctx, sock, []wasi.IOVec{msg}, 0, addr)
+		assertEqual(t, size, wasi.Size(len(msg)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		laddr, errno := sys.SockLocalAddress(ctx, sock)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, laddr.Family(), addr.Family())
+
+		switch a := laddr.(type) {
+		case *wasi.Inet4Address:
+			var zero [4]byte
+			assertEqual(t, a.Addr, zero)
+			assertNotEqual(t, a.Port, 0)
+		case *wasi.Inet6Address:
+			var zero [16]byte
+			assertEqual(t, a.Addr, zero)
+			assertNotEqual(t, a.Port, 0)
+		default:
+			t.Errorf("invalid socket address type: %T", a)
+		}
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketBindAfterSendDatagram(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+		msg := []byte("Hello, World!")
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		size, errno := sys.SockSendTo(ctx, sock, []wasi.IOVec{msg}, 0, bind)
+		assertEqual(t, size, wasi.Size(len(msg)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.EINVAL)
+		assertDeepEqual(t, addr, nil)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketReceiveBeforeBindDatagram(family wasi.ProtocolFamily) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+		buf := make([]byte, 32)
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		size, roflags, raddr, errno := sys.SockRecvFrom(ctx, sock, []wasi.IOVec{buf}, 0)
+		assertEqual(t, size, ^wasi.Size(0))
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.EAGAIN)
+		assertDeepEqual(t, raddr, nil)
+
+		laddr, errno := sys.SockLocalAddress(ctx, sock)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, laddr.Family(), family)
+
+		switch a := laddr.(type) {
+		case *wasi.Inet4Address:
+			var zero [4]byte
+			assertEqual(t, a.Addr, zero)
+			assertEqual(t, a.Port, 0)
+		case *wasi.Inet6Address:
+			var zero [16]byte
+			assertEqual(t, a.Addr, zero)
+			assertEqual(t, a.Port, 0)
+		default:
+			t.Errorf("invalid socket address type: %T", a)
+		}
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendAndReceiveLargerThanRecvBufferSize(family wasi.ProtocolFamily, addr1, addr2 wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockAddr, errno := sys.SockBind(ctx, sock, addr1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		connAddr, errno := sys.SockBind(ctx, conn, addr2)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		errno = sys.SockSetOpt(ctx, sock, wasi.SocketLevel, wasi.RecvBufferSize, wasi.IntValue(4096))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		recvBufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, wasi.RecvBufferSize)
+		buffer1 := bytes.Repeat([]byte{'@'}, int(recvBufferSize+1))
+		buffer2 := make([]byte, len(buffer1))
+
+		size1, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{buffer1}, 0, sockAddr)
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		size2, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{[]byte("42")}, 0, sockAddr)
+		assertEqual(t, size2, 2)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
+
+		size3, roflags, raddr, errno := sys.SockRecvFrom(ctx, sock, []wasi.IOVec{buffer2}, 0)
+		// The actual behavior here is not portable, the message may or may not
+		// be dropped depending on the implementation. However, there are only
+		// two valid behaviors, either the message is received or it's dropped,
+		// so we accept either.
+		if int(size3) == len(buffer1) {
+			assertEqual(t, string(buffer2[:size3]), string(buffer1[:size3]))
+		} else {
+			assertEqual(t, size3, 2)
+			assertEqual(t, string(buffer2[:2]), "42")
+		}
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertDeepEqual(t, raddr, connAddr)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendAndReceiveLargerThanSendBufferSize(family wasi.ProtocolFamily, addr1, addr2 wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockAddr, errno := sys.SockBind(ctx, sock, addr1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sendBufferSize := sockOption[wasi.IntValue](t, ctx, sys, conn, wasi.SocketLevel, wasi.RecvBufferSize)
+		buffer1 := bytes.Repeat([]byte{'@'}, int(sendBufferSize+1))
+
+		size1, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{buffer1}, 0, sockAddr)
+		assertEqual(t, size1, 0)
+		assertEqual(t, errno, wasi.EMSGSIZE)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }

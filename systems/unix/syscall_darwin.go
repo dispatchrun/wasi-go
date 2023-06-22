@@ -242,3 +242,7 @@ func pwritev(fd int, iovs [][]byte, offset int64) (int, error) {
 	}
 	return written, nil
 }
+
+func getsocketdomain(fd int) (int, error) {
+	return 0, unix.ENOSYS
+}
