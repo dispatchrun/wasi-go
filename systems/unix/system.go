@@ -714,14 +714,27 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	case wasi.Linger:
 		// This returns a struct linger value.
 		return nil, wasi.ENOTSUP // TODO: implement SO_LINGER
-	case wasi.RecvTimeout, wasi.SendTimeout:
+	case wasi.RecvTimeout:
 		// These return a struct timeval value.
-		return nil, wasi.ENOTSUP // TODO: implement SO_RCVTIMEO, SO_SNDTIMEO
+		sysOption = unix.SO_RCVTIMEO
+	case wasi.SendTimeout:
+		sysOption = unix.SO_SNDTIMEO
 	case wasi.BindToDevice:
 		// This returns a string value.
 		return nil, wasi.ENOTSUP // TODO: implement SO_BINDTODEVICE
 	default:
 		return nil, wasi.EINVAL
+	}
+
+	switch option {
+	case wasi.RecvTimeout, wasi.SendTimeout:
+		tv, err := ignoreEINTR2(func() (*unix.Timeval, error) {
+			return unix.GetsockoptTimeval(int(socket), sysLevel, sysOption)
+		})
+		if err != nil {
+			return nil, makeErrno(err)
+		}
+		return wasi.TimeValue(tv.Nano()), wasi.ESUCCESS
 	}
 
 	value, err := ignoreEINTR2(func() (int, error) {
@@ -801,9 +814,10 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	case wasi.Linger:
 		// This accepts a struct linger value.
 		return wasi.ENOTSUP // TODO: implement SO_LINGER
-	case wasi.RecvTimeout, wasi.SendTimeout:
-		// These accept a struct timeval value.
-		return wasi.ENOTSUP // TODO: implement SO_RCVTIMEO, SO_SNDTIMEO
+	case wasi.RecvTimeout:
+		sysOption = unix.SO_RCVTIMEO
+	case wasi.SendTimeout:
+		sysOption = unix.SO_SNDTIMEO
 	case wasi.BindToDevice:
 		// This accepts a string value.
 		return wasi.ENOTSUP // TODO: implement SO_BINDTODEVICE
@@ -811,7 +825,16 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		return wasi.EINVAL
 	}
 
-	intval, ok := value.(wasi.IntValue)
+	var intval wasi.IntValue
+	var timeval wasi.TimeValue
+	var ok bool
+
+	switch option {
+	case wasi.RecvTimeout, wasi.SendTimeout:
+		timeval, ok = value.(wasi.TimeValue)
+	default:
+		intval, ok = value.(wasi.IntValue)
+	}
 	if !ok {
 		return wasi.EINVAL
 	}
@@ -841,9 +864,18 @@ func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 		}
 	}
 
-	err := ignoreEINTR(func() error {
-		return unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
-	})
+	var err error
+	switch option {
+	case wasi.RecvTimeout, wasi.SendTimeout:
+		tv := unix.NsecToTimeval(int64(timeval))
+		err = ignoreEINTR(func() error {
+			return unix.SetsockoptTimeval(int(socket), sysLevel, sysOption, &tv)
+		})
+	default:
+		err = ignoreEINTR(func() error {
+			return unix.SetsockoptInt(int(socket), sysLevel, sysOption, int(intval))
+		})
+	}
 	return makeErrno(err)
 }
 

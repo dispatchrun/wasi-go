@@ -5,6 +5,7 @@ import (
 	"context"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stealthrocket/wasi-go"
 )
@@ -238,6 +239,14 @@ var socket = testSuite{
 	),
 
 	"can connect two ipv6 stream sockets": testSocketConnectAndAccept(
+		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"can accpet on ipv4 stream sockets in blocking mode": testSocketConnectAndAcceptBlocking(
+		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"can accept on ipv6 stream sockets in blocking mode": testSocketConnectAndAcceptBlocking(
 		wasi.Inet6Family, wasi.StreamSocket, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
@@ -477,11 +486,43 @@ var socket = testSuite{
 		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
+	"connected ipv4 stream sockets can send and receive data in blocking mode": testSocketSendAndReceiveStreamBlocking(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"connected ipv6 stream sockets can send and receive data in blocking mode": testSocketSendAndReceiveStreamBlocking(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"timeout unblocks ipv4 stream sockets waiting for data in blocking mode": testSocketTimeoutStreamBlocking(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"timeout unblocks ipv6 stream sockets waiting for data in blocking mode": testSocketTimeoutStreamBlocking(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"timeout unblocks ipv4 datagram sockets waiting for data in blocking mode": testSocketTimeoutDatagramBlocking(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"timeout unblocks ipv6 datagram sockets waiting for data in blocking mode": testSocketTimeoutDatagramBlocking(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
 	"connected ipv4 datagram sockets can send and receive data": testSocketSendAndReceiveConnectedDatagram(
 		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
 	),
 
 	"connected ipv6 datagram sockets can send and receive data": testSocketSendAndReceiveConnectedDatagram(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"connected ipv4 datagram sockets can send and receive data in blocking mode": testSocketSendAndReceiveConnectedDatagramBlocking(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"connected ipv6 datagram sockets can send and receive data in blocking mode": testSocketSendAndReceiveConnectedDatagramBlocking(
 		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
@@ -492,6 +533,18 @@ var socket = testSuite{
 	),
 
 	"unconnected ipv6 datagram sockets can send and receive data": testSocketSendAndReceiveNotConnectedDatagram(
+		wasi.Inet6Family,
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
+	),
+
+	"unconnected ipv4 datagram sockets can send and receive data in blocking mode": testSocketSendAndReceiveNotConnectedDatagramBlocking(
+		wasi.InetFamily,
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+		&wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
+	),
+
+	"unconnected ipv6 datagram sockets can send and receive data in blocking mode": testSocketSendAndReceiveNotConnectedDatagramBlocking(
 		wasi.Inet6Family,
 		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
 		&wasi.Inet6Address{Addr: localIPv6, Port: nextPort()},
@@ -802,6 +855,50 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 
 		sockPoll(t, ctx, sys, client, wasi.FDWriteEvent)
 		sockPoll(t, ctx, sys, server, wasi.FDReadEvent)
+
+		accept, remoteAddr, localAddr, errno := sys.SockAccept(ctx, server, wasi.NonBlock)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertNotEqual(t, accept, ^wasi.FD(0))
+		assertDeepEqual(t, localAddr, serverAddr)
+		assertDeepEqual(t, remoteAddr, clientAddr)
+		assertEqual(t, sockIsNonBlocking(t, ctx, sys, accept), true)
+
+		localAddr, errno = sys.SockLocalAddress(ctx, accept)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertDeepEqual(t, localAddr, serverAddr)
+
+		remoteAddr, errno = sys.SockRemoteAddress(ctx, accept)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertDeepEqual(t, remoteAddr, clientAddr)
+
+		assertEqual(t, sys.FDClose(ctx, accept), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, client), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, server), wasi.ESUCCESS)
+	}
+}
+
+func testSocketConnectAndAcceptBlocking(family wasi.ProtocolFamily, typ wasi.SocketType, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+
+		server, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, server, false)
+
+		serverAddr, errno := sys.SockBind(ctx, server, bind)
+		assertNotEqual(t, serverAddr, nil)
+		assertEqual(t, serverAddr.Family(), bind.Family())
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, server, 10), wasi.ESUCCESS)
+
+		client, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, client, false)
+
+		clientAddr, errno := sys.SockConnect(ctx, client, serverAddr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertNotEqual(t, clientAddr, nil)
+		assertEqual(t, clientAddr.Family(), bind.Family())
 
 		accept, remoteAddr, localAddr, errno := sys.SockAccept(ctx, server, wasi.NonBlock)
 		assertEqual(t, errno, wasi.ESUCCESS)
@@ -1279,6 +1376,175 @@ func testSocketSendAndReceiveStream(family wasi.ProtocolFamily, bind wasi.Socket
 	}
 }
 
+func testSocketSendAndReceiveStreamBlocking(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.StreamSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, sock, false)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ESUCCESS)
+
+		conn1, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, conn1, false)
+
+		_, errno = sys.SockConnect(ctx, conn1, addr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn2, _, _, errno := sys.SockAccept(ctx, sock, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 32)
+
+		size1, errno := sys.FDWrite(ctx, conn1, []wasi.IOVec{buffer1})
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn2, wasi.FDReadEvent)
+		size2, errno := sys.FDRead(ctx, conn2, []wasi.IOVec{buffer2})
+		assertEqual(t, size2, size1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+
+		buffer1 = []byte("How are you?")
+		size3, errno := sys.FDWrite(ctx, conn2, []wasi.IOVec{buffer1})
+		assertEqual(t, size3, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn1, wasi.FDReadEvent)
+		size4, errno := sys.FDRead(ctx, conn1, []wasi.IOVec{buffer2})
+		assertEqual(t, size4, size3)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+
+		assertEqual(t, sys.FDClose(ctx, conn2), wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn1, wasi.FDReadEvent)
+		size5, errno := sys.FDRead(ctx, conn1, []wasi.IOVec{buffer2})
+		assertEqual(t, size5, 0) // EOF
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		assertEqual(t, sys.FDClose(ctx, conn1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketTimeoutStreamBlocking(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.StreamSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, sock, false)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ESUCCESS)
+
+		conn1, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, conn1, false)
+
+		_, errno = sys.SockConnect(ctx, conn1, addr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn2, _, _, errno := sys.SockAccept(ctx, sock, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		const recvTimeout = 20 * time.Millisecond
+		const sendTimeout = 40 * time.Millisecond
+
+		errno = sys.SockSetOpt(ctx, conn1,
+			wasi.SocketLevel,
+			wasi.RecvTimeout,
+			wasi.TimeValue(recvTimeout))
+		assertEqual(t, errno, wasi.ESUCCESS)
+		errno = sys.SockSetOpt(ctx, conn1,
+			wasi.SocketLevel,
+			wasi.SendTimeout,
+			wasi.TimeValue(sendTimeout),
+		)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockRecvTimeout := sockOption[wasi.TimeValue](t, ctx, sys, conn1,
+			wasi.SocketLevel,
+			wasi.RecvTimeout)
+		assertEqual(t, sockRecvTimeout, wasi.TimeValue(recvTimeout))
+		sockSendTimeout := sockOption[wasi.TimeValue](t, ctx, sys, conn1,
+			wasi.SocketLevel,
+			wasi.SendTimeout)
+		assertEqual(t, sockSendTimeout, wasi.TimeValue(sendTimeout))
+
+		buffer := make([]byte, 10)
+		start := time.Now()
+
+		n, _, errno := sys.SockRecv(ctx, conn1, []wasi.IOVec{buffer}, 0)
+		assertEqual(t, n, ^wasi.Size(0))
+		assertEqual(t, errno, wasi.EAGAIN)
+
+		delay := time.Since(start)
+		assertEqual(t, delay >= recvTimeout && delay < sendTimeout, true)
+
+		assertEqual(t, sys.FDClose(ctx, conn2), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, conn1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketTimeoutDatagramBlocking(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, sock, false)
+
+		const recvTimeout = 20 * time.Millisecond
+		const sendTimeout = 40 * time.Millisecond
+
+		errno = sys.SockSetOpt(ctx, sock,
+			wasi.SocketLevel,
+			wasi.RecvTimeout,
+			wasi.TimeValue(recvTimeout))
+		assertEqual(t, errno, wasi.ESUCCESS)
+		errno = sys.SockSetOpt(ctx, sock,
+			wasi.SocketLevel,
+			wasi.SendTimeout,
+			wasi.TimeValue(sendTimeout),
+		)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockRecvTimeout := sockOption[wasi.TimeValue](t, ctx, sys, sock,
+			wasi.SocketLevel,
+			wasi.RecvTimeout)
+		assertEqual(t, sockRecvTimeout, wasi.TimeValue(recvTimeout))
+		sockSendTimeout := sockOption[wasi.TimeValue](t, ctx, sys, sock,
+			wasi.SocketLevel,
+			wasi.SendTimeout)
+		assertEqual(t, sockSendTimeout, wasi.TimeValue(sendTimeout))
+
+		buffer := make([]byte, 10)
+		start := time.Now()
+
+		n, _, errno := sys.SockRecv(ctx, sock, []wasi.IOVec{buffer}, 0)
+		assertEqual(t, n, ^wasi.Size(0))
+		assertEqual(t, errno, wasi.EAGAIN)
+
+		delay := time.Since(start)
+		assertEqual(t, delay >= recvTimeout && delay < sendTimeout, true)
+
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
 func testSocketSendAndReceiveConnectedDatagram(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
 	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
 		sys := newSystem(TestConfig{})
@@ -1330,6 +1596,56 @@ func testSocketSendAndReceiveConnectedDatagram(family wasi.ProtocolFamily, bind 
 	}
 }
 
+func testSocketSendAndReceiveConnectedDatagramBlocking(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, sock, false)
+
+		sockAddr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, conn, false)
+
+		connAddr, errno := sys.SockConnect(ctx, conn, sockAddr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 32)
+
+		size1, errno := sys.SockSend(ctx, conn, []wasi.IOVec{buffer1}, 0)
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		size2, roflags, raddr, errno := sys.SockRecvFrom(ctx, sock, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size2, size1)
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+		assertDeepEqual(t, raddr, connAddr)
+
+		buffer1 = []byte("How are you?")
+		size3, errno := sys.SockSendTo(ctx, sock, []wasi.IOVec{buffer1}, 0, connAddr)
+		assertEqual(t, size3, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		size4, roflags, raddr, errno := sys.SockRecvFrom(ctx, conn, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size4, size3)
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+		assertDeepEqual(t, raddr, sockAddr)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
 func testSocketSendAndReceiveNotConnectedDatagram(family wasi.ProtocolFamily, addr1, addr2 wasi.SocketAddress) testFunc {
 	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
 		sys := newSystem(TestConfig{})
@@ -1369,6 +1685,56 @@ func testSocketSendAndReceiveNotConnectedDatagram(family wasi.ProtocolFamily, ad
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		sockPoll(t, ctx, sys, conn, wasi.FDReadEvent)
+		size4, roflags, raddr, errno := sys.SockRecvFrom(ctx, conn, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size4, size3)
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+		assertDeepEqual(t, raddr, sockAddr)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendAndReceiveNotConnectedDatagramBlocking(family wasi.ProtocolFamily, addr1, addr2 wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, sock, false)
+
+		sockAddr, errno := sys.SockBind(ctx, sock, addr1)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, conn, false)
+
+		connAddr, errno := sys.SockBind(ctx, conn, addr2)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 32)
+
+		size1, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{buffer1}, 0, sockAddr)
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		size2, roflags, raddr, errno := sys.SockRecvFrom(ctx, sock, []wasi.IOVec{buffer2}, 0)
+		assertEqual(t, size2, size1)
+		assertEqual(t, roflags, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
+		assertDeepEqual(t, raddr, connAddr)
+
+		buffer1 = []byte("How are you?")
+		size3, errno := sys.SockSendTo(ctx, sock, []wasi.IOVec{buffer1}, 0, connAddr)
+		assertEqual(t, size3, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
 		size4, roflags, raddr, errno := sys.SockRecvFrom(ctx, conn, []wasi.IOVec{buffer2}, 0)
 		assertEqual(t, size4, size3)
 		assertEqual(t, roflags, 0)
@@ -1712,11 +2078,19 @@ func sockOpen(t *testing.T, ctx context.Context, sys wasi.System, family wasi.Pr
 	sock, errno := sys.SockOpen(ctx, family, typ, proto, wasi.AllRights, wasi.AllRights)
 	skipIfNotImplemented(t, errno)
 	if errno == wasi.ESUCCESS {
-		assertEqual(t, sys.FDStatSetFlags(ctx, sock, wasi.NonBlock), wasi.ESUCCESS)
-		assertEqual(t, sockIsNonBlocking(t, ctx, sys, sock), true)
-		assertEqual(t, sockErrno(t, ctx, sys, sock), wasi.ESUCCESS)
+		setNonBlock(t, ctx, sys, sock, true)
 	}
 	return sock, errno
+}
+
+func setNonBlock(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD, nonBlock bool) {
+	flags := wasi.FDFlags(0)
+	if nonBlock {
+		flags |= wasi.NonBlock
+	}
+	assertEqual(t, sys.FDStatSetFlags(ctx, sock, flags), wasi.ESUCCESS)
+	assertEqual(t, sockIsNonBlocking(t, ctx, sys, sock), nonBlock)
+	assertEqual(t, sockErrno(t, ctx, sys, sock), wasi.ESUCCESS)
 }
 
 func sockOption[T wasi.SocketOptionValue](t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) T {
