@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 )
 
 // RIFlags are flags provided to SockRecv.
@@ -468,6 +469,15 @@ func (IntValue) sockopt() {}
 
 func (i IntValue) String() string {
 	return strconv.Itoa(int(i))
+}
+
+// TimeValue is used to represent socket options with a duration value.
+type TimeValue Timestamp
+
+func (TimeValue) sockopt() {}
+
+func (tv TimeValue) String() string {
+	return time.Duration(tv).String()
 }
 
 // SocketsNotSupported is a helper type intended to be embeded in
