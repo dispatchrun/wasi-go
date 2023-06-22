@@ -56,8 +56,9 @@ OPTIONS:
    --non-blocking-stdio
       Enable non-blocking stdio
 
-   --wasi-http
-      Enable wasi-http client support
+   --http <MODE>
+      Optionally enable wasi-http client support and select a
+	  version {none, auto, v1}
 
    -v, --version
       Print the version and exit
@@ -74,10 +75,10 @@ var (
 	dials            stringList
 	socketExt        string
 	pprofAddr        string
+	wasiHttp         string
 	trace            bool
 	nonBlockingStdio bool
 	version          bool
-	wasiHttp         bool
 )
 
 func main() {
@@ -90,11 +91,11 @@ func main() {
 	flagSet.Var(&dials, "dial", "")
 	flagSet.StringVar(&socketExt, "sockets", "auto", "")
 	flagSet.StringVar(&pprofAddr, "pprof-addr", "", "")
+	flagSet.StringVar(&wasiHttp, "http", "auto", "")
 	flagSet.BoolVar(&trace, "trace", false, "")
 	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
 	flagSet.BoolVar(&version, "version", false, "")
 	flagSet.BoolVar(&version, "v", false, "")
-	flagSet.BoolVar(&wasiHttp, "wasi-http", false, "")
 	flagSet.Parse(os.Args[1:])
 
 	if version {
@@ -164,7 +165,18 @@ func run(wasmFile string, args []string) error {
 	}
 	defer system.Close(ctx)
 
-	if wasiHttp {
+	importWasi := false
+	switch wasiHttp {
+	case "auto":
+		importWasi = wasi_http.DetectWasiHttp(wasmModule)
+	case "v1":
+		importWasi = true
+	case "none":
+		importWasi = false
+	default:
+		return fmt.Errorf("invalid value for -http '%v', expected 'auto', 'v1' or 'none'", wasiHttp)
+	}
+	if importWasi {
 		if err := wasi_http.Instantiate(ctx, runtime); err != nil {
 			return err
 		}

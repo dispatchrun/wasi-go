@@ -21,3 +21,19 @@ func Instantiate(ctx context.Context, rt wazero.Runtime) error {
 	}
 	return nil
 }
+
+func DetectWasiHttp(module wazero.CompiledModule) bool {
+	functions := module.ImportedFunctions()
+	hasWasiHttp := false
+	for _, f := range functions {
+		moduleName, name, ok := f.Import()
+		if !ok || moduleName != default_http.ModuleName {
+			continue
+		}
+		switch name {
+		case "handle":
+			hasWasiHttp = true
+		}
+	}
+	return hasWasiHttp
+}

@@ -59,10 +59,10 @@ func (s *streams) NewOutputStream(writer io.Writer) uint32 {
 func (s *streams) Read(handle uint32, data []byte) (int, bool, error) {
 	stream, found := s.streams[handle]
 	if !found {
-		return 0, false, fmt.Errorf("Stream not found", handle)
+		return 0, false, fmt.Errorf("stream not found: %d", handle)
 	}
 	if stream.reader == nil {
-		return 0, false, fmt.Errorf("Not a readable stream")
+		return 0, false, fmt.Errorf("not a readable stream: %d", handle)
 	}
 
 	n, err := stream.reader.Read(data)
@@ -75,10 +75,10 @@ func (s *streams) Read(handle uint32, data []byte) (int, bool, error) {
 func (s *streams) Write(handle uint32, data []byte) (int, error) {
 	stream, found := s.streams[handle]
 	if !found {
-		return 0, fmt.Errorf("Stream not found", handle)
+		return 0, fmt.Errorf("stream not found: %d", handle)
 	}
 	if stream.writer == nil {
-		return 0, fmt.Errorf("Not a writeable stream")
+		return 0, fmt.Errorf("not a writeable stream: %d", handle)
 	}
 	return stream.writer.Write(data)
 }

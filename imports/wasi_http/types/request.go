@@ -114,7 +114,7 @@ func newOutgoingRequestFn(_ context.Context, mod api.Module,
 	request.Scheme = "https"
 	if scheme_is_some == 1 {
 		if scheme == 0 {
-			request.Scheme = "https"
+			request.Scheme = "http"
 		}
 		if scheme == 2 {
 			d, ok := mod.Memory().Read(uint32(scheme_ptr), uint32(scheme_len))
