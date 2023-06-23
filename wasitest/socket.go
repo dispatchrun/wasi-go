@@ -486,6 +486,14 @@ var socket = testSuite{
 		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
+	"connected ipv4 stream sockets can send and peek data": testSocketSendAndPeekStream(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"connected ipv6 stream sockets can send and peek data": testSocketSendAndPeekStream(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
 	"connected ipv4 stream sockets can send and receive data in blocking mode": testSocketSendAndReceiveStreamBlocking(
 		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
 	),
@@ -515,6 +523,14 @@ var socket = testSuite{
 	),
 
 	"connected ipv6 datagram sockets can send and receive data": testSocketSendAndReceiveConnectedDatagram(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
+	"connected ipv4 datagram sockets can send and peek data": testSocketSendAndPeekConnectedDatagram(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"connected ipv6 datagram sockets can send and peek data": testSocketSendAndPeekConnectedDatagram(
 		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
@@ -1435,6 +1451,68 @@ func testSocketSendAndReceiveStreamBlocking(family wasi.ProtocolFamily, bind was
 	}
 }
 
+func testSocketSendAndPeekStream(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.StreamSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, sys.SockListen(ctx, sock, 10), wasi.ESUCCESS)
+
+		conn1, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn1, addr)
+		if errno != wasi.ESUCCESS {
+			assertEqual(t, errno, wasi.EINPROGRESS)
+		}
+
+		sockPoll(t, ctx, sys, conn1, wasi.FDWriteEvent)
+		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
+
+		conn2, _, _, errno := sys.SockAccept(ctx, sock, wasi.NonBlock)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 32)
+
+		size1, errno := sys.FDWrite(ctx, conn1, []wasi.IOVec{buffer1})
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, conn2, wasi.FDReadEvent)
+
+		for i := range buffer1 {
+			size2, flags, errno := sys.SockRecv(ctx, conn2, []wasi.IOVec{buffer2[:i+1]}, wasi.RecvPeek)
+			assertEqual(t, size2, wasi.Size(i+1))
+			assertEqual(t, flags, wasi.ROFlags(0))
+			assertEqual(t, errno, wasi.ESUCCESS)
+			assertEqual(t, string(buffer1[:size2]), string(buffer2[:size2]))
+		}
+
+		size3, flags, errno := sys.SockRecv(ctx, conn2, []wasi.IOVec{buffer2[:7]}, 0)
+		assertEqual(t, size3, wasi.Size(7))
+		assertEqual(t, flags, wasi.ROFlags(0))
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer1[:size3]), string(buffer2[:size3]))
+
+		for i := range buffer1[size3:] {
+			size4, flags, errno := sys.SockRecv(ctx, conn2, []wasi.IOVec{buffer2[:i+1]}, wasi.RecvPeek)
+			assertEqual(t, size4, wasi.Size(i+1))
+			assertEqual(t, flags, wasi.ROFlags(0))
+			assertEqual(t, errno, wasi.ESUCCESS)
+			assertEqual(t, string(buffer1[size3:size3+size4]), string(buffer2[:size4]))
+		}
+
+		assertEqual(t, sys.FDClose(ctx, conn1), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
 func testSocketTimeoutStreamBlocking(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
 	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
 		sys := newSystem(TestConfig{})
@@ -1778,6 +1856,61 @@ func testSocketSendAndReceiveTruncatedDatagram(family wasi.ProtocolFamily, addr1
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, string(buffer2), string(buffer1[:len(buffer2)]))
 		assertDeepEqual(t, raddr, connAddr)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendAndPeekConnectedDatagram(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		addr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn, addr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer1 := []byte("Hello, World!")
+		buffer2 := make([]byte, 32)
+
+		size1, errno := sys.FDWrite(ctx, conn, []wasi.IOVec{buffer1})
+		assertEqual(t, size1, wasi.Size(len(buffer1)))
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
+
+		for i := range buffer1 {
+			n := i + 1
+			wantFlags := wasi.ROFlags(0)
+			if n < len(buffer1) {
+				wantFlags = wasi.RecvDataTruncated
+			}
+			size2, flags, errno := sys.SockRecv(ctx, sock, []wasi.IOVec{buffer2[:n]}, wasi.RecvPeek)
+			assertEqual(t, size2, wasi.Size(n))
+			assertEqual(t, flags, wantFlags)
+			assertEqual(t, errno, wasi.ESUCCESS)
+			assertEqual(t, string(buffer1[:n]), string(buffer2[:n]))
+		}
+
+		size3, flags, errno := sys.SockRecv(ctx, sock, []wasi.IOVec{buffer2[:7]}, 0)
+		assertEqual(t, size3, wasi.Size(7))
+		assertEqual(t, flags, wasi.RecvDataTruncated)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, string(buffer1[:size3]), string(buffer2[:size3]))
+
+		size4, flags, errno := sys.SockRecv(ctx, sock, []wasi.IOVec{buffer2}, wasi.RecvPeek)
+		assertEqual(t, size4, ^wasi.Size(0))
+		assertEqual(t, flags, wasi.ROFlags(0))
+		assertEqual(t, errno, wasi.EAGAIN)
 
 		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
