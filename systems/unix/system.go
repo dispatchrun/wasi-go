@@ -1019,6 +1019,7 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 			}
 			inet4Addr := wasi.Inet4Address{Port: port}
 			copy(inet4Addr.Addr[:], ip)
+			addr.Family = wasi.InetFamily
 			addr.Address = &inet4Addr
 		} else {
 			if hints.Family == wasi.InetFamily {
@@ -1026,6 +1027,7 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 			}
 			inet6Addr := wasi.Inet6Address{Port: port}
 			copy(inet6Addr.Addr[:], ip)
+			addr.Family = wasi.Inet6Family
 			addr.Address = &inet6Addr
 		}
 		addrs = append(addrs, addr)
