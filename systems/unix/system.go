@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/stealthrocket/wasi-go"
+	"golang.org/x/exp/slices"
 	"golang.org/x/sys/unix"
 )
 
@@ -916,7 +917,7 @@ func (s *System) SockRemoteAddress(ctx context.Context, fd wasi.FD) (wasi.Socket
 }
 
 func (s *System) SockAddressInfo(ctx context.Context, name, service string, hints wasi.AddressInfo, results []wasi.AddressInfo) (int, wasi.Errno) {
-	if cap(results) == 0 {
+	if len(results) == 0 {
 		return 0, wasi.EINVAL
 	}
 	// TODO: support AI_ADDRCONFIG, AI_CANONNAME, AI_V4MAPPED, AI_V4MAPPED_CFG, AI_ALL
@@ -1008,10 +1009,8 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 		return 0, wasi.ECANCELED // TODO: better errors on name resolution failure
 	}
 
-	if len(ips) > cap(results) {
-		ips = ips[:cap(results)]
-	}
-	results = results[:0]
+	addrs := make([]wasi.AddressInfo, 0, 16)
+
 	for _, ip := range ips {
 		var addr wasi.AddressInfo
 		if ipv4 := ip.To4(); ipv4 != nil {
@@ -1029,9 +1028,14 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 			copy(inet6Addr.Addr[:], ip)
 			addr.Address = &inet6Addr
 		}
-		results = append(results, addr)
+		addrs = append(addrs, addr)
 	}
-	return len(results), wasi.ESUCCESS
+
+	slices.SortStableFunc(addrs, func(a1, a2 wasi.AddressInfo) bool {
+		return a1.Family < a2.Family
+	})
+
+	return copy(results, addrs), wasi.ESUCCESS
 }
 
 func (s *System) Close(ctx context.Context) error {
