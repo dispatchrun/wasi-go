@@ -3,7 +3,6 @@ package wasi_snapshot_preview1
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"unsafe"
 
@@ -280,8 +279,6 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 	count := 0
 	for _, addrinfo := range m.addrinfo[:n] {
 		res := resPtr.Load()
-		fmt.Printf("result pointer = %#v\n", resPtr)
-		fmt.Printf("next pointer   = %#v\n", res.Next)
 		if res.Address == 0 {
 			return Errno(wasi.EFAULT)
 		}
