@@ -3,6 +3,7 @@ package wasi_snapshot_preview1
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"unsafe"
 
@@ -276,10 +277,11 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 	// but then doesn't set ai_canonnamelen... Argh.
 	mem := resPtrPtr.Memory()
 	resPtr := resPtrPtr.Load()
-	results := m.addrinfo[:n]
 	count := 0
-	for {
+	for _, addrinfo := range m.addrinfo[:n] {
 		res := resPtr.Load()
+		fmt.Printf("result pointer = %#v\n", resPtr)
+		fmt.Printf("next pointer   = %#v\n", res.Next)
 		if res.Address == 0 {
 			return Errno(wasi.EFAULT)
 		}
@@ -304,7 +306,7 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 		if !ok {
 			return Errno(wasi.EFAULT)
 		}
-		switch addr := results[0].Address.(type) {
+		switch addr := addrinfo.Address.(type) {
 		case *wasi.Inet4Address:
 			if len(addrData) < 6 {
 				return Errno(wasi.EFAULT)
@@ -325,11 +327,10 @@ func (m *Module) WasmEdgeSockAddrInfo(ctx context.Context, name String, service 
 		res.CanonicalNameLength = 0 // Not yet supported
 		resPtr.Store(res)
 		count++
-		results = results[1:]
-		if res.Next == 0 || len(results) == 0 {
+		if res.Next == 0 {
 			break
 		}
-		resPtr = Ptr[wasmEdgeAddressInfo](resPtr.Memory(), res.Next)
+		resPtr = Ptr[wasmEdgeAddressInfo](mem, res.Next)
 	}
 	resLengthPtr.Store(Uint32(count))
 	return Errno(wasi.ESUCCESS)
