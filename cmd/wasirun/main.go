@@ -34,13 +34,13 @@ OPTIONS:
    --dir <DIR>
       Grant access to the specified host directory
 
-   --listen <ADDR>
+   --listen <ADDR:PORT>
       Grant access to a socket listening on the specified address
 
-   --dial <ADDR[:PORT]>
+   --dial <ADDR:PORT>
       Grant access to a socket connected to the specified address
 
-   --dns-server <ADDR>
+   --dns-server <ADDR:PORT>
       Sets the address of the DNS server to use for name resolution
 
    --env <NAME=VAL>
@@ -50,7 +50,7 @@ OPTIONS:
       Enable a sockets extension, either {none, auto, path_open,
       wasmedgev1, wasmedgev2}
 
-   --pprof-addr <ADDR>
+   --pprof-addr <ADDR:PORT>
       Start a pprof server listening on the specified address
 
    --trace
