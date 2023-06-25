@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -33,11 +34,14 @@ OPTIONS:
    --dir <DIR>
       Grant access to the specified host directory
 
-   --listen <ADDR>
+   --listen <ADDR:PORT>
       Grant access to a socket listening on the specified address
 
-   --dial <ADDR>
+   --dial <ADDR:PORT>
       Grant access to a socket connected to the specified address
+
+   --dns-server <ADDR:PORT>
+      Sets the address of the DNS server to use for name resolution
 
    --env <NAME=VAL>
       Pass an environment variable to the module
@@ -46,7 +50,7 @@ OPTIONS:
       Enable a sockets extension, either {none, auto, path_open,
       wasmedgev1, wasmedgev2}
 
-   --pprof-addr <ADDR>
+   --pprof-addr <ADDR:PORT>
       Start a pprof server listening on the specified address
 
    --trace
@@ -68,6 +72,7 @@ var (
 	dirs             stringList
 	listens          stringList
 	dials            stringList
+	dnsServer        string
 	socketExt        string
 	pprofAddr        string
 	trace            bool
@@ -83,6 +88,7 @@ func main() {
 	flagSet.Var(&dirs, "dir", "")
 	flagSet.Var(&listens, "listen", "")
 	flagSet.Var(&dials, "dial", "")
+	flagSet.StringVar(&dnsServer, "dns-server", "", "")
 	flagSet.StringVar(&socketExt, "sockets", "auto", "")
 	flagSet.StringVar(&pprofAddr, "pprof-addr", "", "")
 	flagSet.BoolVar(&trace, "trace", false, "")
@@ -104,6 +110,24 @@ func main() {
 	if len(args) == 0 {
 		printUsage()
 		os.Exit(1)
+	}
+
+	if dnsServer != "" {
+		_, dnsServerPort, _ := net.SplitHostPort(dnsServer)
+		net.DefaultResolver.PreferGo = true
+		net.DefaultResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+			var d net.Dialer
+			if dnsServerPort != "" {
+				address = dnsServer
+			} else {
+				_, port, err := net.SplitHostPort(address)
+				if err != nil {
+					return nil, net.InvalidAddrError(address)
+				}
+				address = net.JoinHostPort(dnsServer, port)
+			}
+			return d.DialContext(ctx, network, address)
+		}
 	}
 
 	if err := run(args[0], args[1:]); err != nil {

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/stealthrocket/wasi-go"
-	"golang.org/x/exp/slices"
 	"golang.org/x/sys/unix"
 )
 
@@ -967,7 +966,7 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 	if hints.Flags.Has(wasi.NumericService) {
 		port, err = strconv.Atoi(service)
 	} else {
-		port, err = net.LookupPort(network, service)
+		port, err = net.DefaultResolver.LookupPort(ctx, network, service)
 	}
 	if err != nil || port < 0 || port > 65535 {
 		return 0, wasi.EINVAL // EAI_NONAME / EAI_SERVICE
@@ -989,55 +988,61 @@ func (s *System) SockAddressInfo(ctx context.Context, name, service string, hint
 			ip = net.IPv4zero
 		}
 	}
-	if ip != nil {
-		results = results[:1]
-		results[0] = wasi.AddressInfo{}
+
+	makeAddressInfo := func(ip net.IP, port int) wasi.AddressInfo {
+		addrInfo := wasi.AddressInfo{
+			Flags:      hints.Flags,
+			SocketType: hints.SocketType,
+			Protocol:   hints.Protocol,
+		}
 		if ipv4 := ip.To4(); ipv4 != nil {
 			inet4Addr := &wasi.Inet4Address{Port: port}
 			copy(inet4Addr.Addr[:], ipv4)
-			results[0].Address = inet4Addr
+			addrInfo.Family = wasi.InetFamily
+			addrInfo.Address = inet4Addr
 		} else {
 			inet6Addr := &wasi.Inet6Address{Port: port}
 			copy(inet6Addr.Addr[:], ip)
-			results[0].Address = inet6Addr
+			addrInfo.Family = wasi.Inet6Family
+			addrInfo.Address = inet6Addr
 		}
+		return addrInfo
+	}
+
+	if ip != nil {
+		results[0] = makeAddressInfo(ip, port)
 		return 1, wasi.ESUCCESS
 	}
 
-	ips, err := net.LookupIP(name)
+	// LookupIP requires the network to be one of "ip", "ip4", or "ip6".
+	switch network {
+	case "tcp", "udp":
+		network = "ip"
+	case "tcp4", "udp4":
+		network = "ip4"
+	case "tcp6", "udp6":
+		network = "ip6"
+	}
+
+	ips, err := net.DefaultResolver.LookupIP(ctx, network, name)
 	if err != nil {
 		return 0, wasi.ECANCELED // TODO: better errors on name resolution failure
 	}
 
-	addrs := make([]wasi.AddressInfo, 0, 16)
+	addrs4 := make([]wasi.AddressInfo, 0, 8)
+	addrs6 := make([]wasi.AddressInfo, 0, 8)
 
 	for _, ip := range ips {
-		var addr wasi.AddressInfo
-		if ipv4 := ip.To4(); ipv4 != nil {
-			if hints.Family == wasi.Inet6Family {
-				continue
-			}
-			inet4Addr := wasi.Inet4Address{Port: port}
-			copy(inet4Addr.Addr[:], ip)
-			addr.Family = wasi.InetFamily
-			addr.Address = &inet4Addr
+		if ip.To4() != nil {
+			addrs4 = append(addrs4, makeAddressInfo(ip, port))
 		} else {
-			if hints.Family == wasi.InetFamily {
-				continue
-			}
-			inet6Addr := wasi.Inet6Address{Port: port}
-			copy(inet6Addr.Addr[:], ip)
-			addr.Family = wasi.Inet6Family
-			addr.Address = &inet6Addr
+			addrs6 = append(addrs6, makeAddressInfo(ip, port))
 		}
-		addrs = append(addrs, addr)
 	}
 
-	slices.SortStableFunc(addrs, func(a1, a2 wasi.AddressInfo) bool {
-		return a1.Family < a2.Family
-	})
-
-	return copy(results, addrs), wasi.ESUCCESS
+	n := copy(results[0:], addrs4)
+	n += copy(results[n:], addrs6)
+	return n, wasi.ESUCCESS
 }
 
 func (s *System) Close(ctx context.Context) error {
