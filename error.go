@@ -2,6 +2,7 @@ package wasi
 
 import (
 	"fmt"
+	"syscall"
 )
 
 // Errno are the error codes returned by functions.
@@ -262,6 +263,15 @@ func (e Errno) Name() string {
 	}
 	return fmt.Sprintf("errno(%d)", int(e))
 }
+
+// Syscall convers the error to a native error number of the host platform.
+//
+// The method does the inverse of passing the syscall.Errno value to
+// wasi.MakeErrno tho some error numbers may differ on the host platform,
+// therefore there is no guarantee that the wasi.Errno value obtained by a
+// call to wasi.MakeErrno will yield the same syscall.Errno returned by this
+// method.
+func (e Errno) Syscall() syscall.Errno { return errnoToSyscall(e) }
 
 var errorStrings = [...]string{
 	ESUCCESS:        "OK",

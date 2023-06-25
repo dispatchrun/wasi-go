@@ -1,7 +1,6 @@
 package wasi
 
 import (
-	"fmt"
 	"syscall"
 )
 
@@ -222,6 +221,6 @@ func syscallErrnoToWASI(err syscall.Errno) Errno {
 	// case syscall.EXFULL:
 
 	default:
-		panic(fmt.Errorf("unexpected syscall.Errno(%d): %v", int(err), err))
+		panic("unsupported syscall errno: " + err.Error())
 	}
 }
