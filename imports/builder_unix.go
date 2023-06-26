@@ -19,7 +19,7 @@ import (
 
 // Instantiate compiles and instantiates the WASI module and binds it to
 // the specified context.
-func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxret context.Context, system wasi.System, err error) {
+func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxret context.Context, sys wasi.System, err error) {
 	if len(b.errors) > 0 {
 		return ctx, nil, errors.Join(b.errors...)
 	}
@@ -80,9 +80,9 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		Rand:               rand,
 		Exit:               exit,
 	}
-	system = unixSystem
+	system := wasi.System(unixSystem)
 	defer func() {
-		if err != nil {
+		if system != nil {
 			system.Close(context.Background())
 		}
 	}()
@@ -187,7 +187,9 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 	)
 
 	ctx = wazergo.WithModuleInstance(ctx, instance)
-	return ctx, system, nil
+	sys = system
+	system = nil
+	return ctx, sys, nil
 }
 
 func dup(fd int) (int, error) {
