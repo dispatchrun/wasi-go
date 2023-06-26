@@ -97,7 +97,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		system = wrap(system)
 	}
 
-	for _, stdio := range []struct {
+	for fd, stdio := range []struct {
 		fd   int
 		open int
 		path string
@@ -109,6 +109,15 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		var err error
 		if stdio.fd < 0 {
 			stdio.fd, err = syscall.Open(stdio.path, stdio.open, 0)
+			// Some systems may not allow opening stdio files on /dev, fallback
+			// duplicating the process file descriptors which comes with the
+			// limitation that setting the file descriptors to non-blocking will
+			// also impact the behavior of stdio streams on the host.
+			//
+			// See: https://github.com/gitpod-io/gitpod/issues/17551
+			if errors.Is(err, syscall.EPERM) {
+				stdio.fd, err = dup(fd)
+			}
 		} else {
 			stdio.fd, err = dup(stdio.fd)
 		}
