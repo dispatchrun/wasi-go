@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"syscall"
 
 	"github.com/stealthrocket/wasi-go"
@@ -114,7 +113,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 			stdio.fd, err = dup(stdio.fd)
 		}
 		if err != nil {
-			return ctx, nil, fmt.Errorf("unable to create %s: %w", strings.TrimPrefix("/dev/", stdio.path), err)
+			return ctx, nil, fmt.Errorf("unable to open %s: %w", stdio.path, err)
 		}
 		rights := wasi.FileRights
 		if descriptor.IsATTY(stdio.fd) {
