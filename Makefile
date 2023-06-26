@@ -59,7 +59,7 @@ testdata/go/%.wasm: testdata/go/%.go
 testdata/tinygo/%.wasm: testdata/tinygo/%.go
 	tinygo build -target=wasi -o $@ $<
 
-wasirun:
+wasirun: go.mod $(wasirun.src)
 	go build -o wasirun ./cmd/wasirun
 
 wasi-libc: testdata/.sysroot/lib/wasm32-wasi/libc.a
