@@ -115,7 +115,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 			// also impact the behavior of stdio streams on the host.
 			//
 			// See: https://github.com/gitpod-io/gitpod/issues/17551
-			if errors.Is(err, syscall.EPERM) {
+			if errors.Is(err, syscall.EACCES) {
 				stdio.fd, err = dup(fd)
 			}
 		} else {
