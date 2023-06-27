@@ -363,12 +363,12 @@ type System interface {
 	// SockGetOpt gets a socket option.
 	//
 	// Note: This is similar to getsockopt in POSIX.
-	SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (SocketOptionValue, Errno)
+	SockGetOpt(ctx context.Context, fd FD, option SocketOption) (SocketOptionValue, Errno)
 
 	// SockSetOpt sets a socket option.
 	//
 	// Note: This is similar to setsockopt in POSIX.
-	SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value SocketOptionValue) Errno
+	SockSetOpt(ctx context.Context, fd FD, option SocketOption, value SocketOptionValue) Errno
 
 	// SockLocalAddress gets the local address of the socket.
 	//
