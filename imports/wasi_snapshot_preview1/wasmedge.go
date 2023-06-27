@@ -132,7 +132,7 @@ func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs Li
 }
 
 func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Bytes) Errno {
-	opt := wasi.SocketOption((int64(level) << 32) | int64(option))
+	opt := wasi.MakeSocketOption(wasi.SocketOptionLevel(level), int32(option))
 
 	var val wasi.SocketOptionValue
 	switch opt {
@@ -160,14 +160,14 @@ func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, 
 		return Errno(wasi.ENOTSUP)
 
 	default:
-		val = wasi.StringValue(value)
+		val = wasi.BytesValue(value)
 	}
 
 	return Errno(m.WASI.SockSetOpt(ctx, wasi.FD(fd), opt, val))
 }
 
 func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
-	opt := wasi.SocketOption((int64(level) << 32) | int64(option))
+	opt := wasi.MakeSocketOption(wasi.SocketOptionLevel(level), int32(option))
 
 	// Only int options are supported for now.
 	switch opt {

@@ -340,6 +340,10 @@ func (s SocketOption) Level() SocketOptionLevel {
 	return SocketOptionLevel(s >> 32)
 }
 
+func MakeSocketOption(level SocketOptionLevel, option int32) SocketOption {
+	return (SocketOption(level) << 32) | SocketOption(option)
+}
+
 // SOL_SOCKET level options.
 const (
 	ReuseAddress SocketOption = (SocketOption(SocketLevel) << 32) | iota
@@ -488,12 +492,12 @@ func (tv TimeValue) String() string {
 	return time.Duration(tv).String()
 }
 
-// StringValue is used to represent an arbitrary socket option value.
-type StringValue string
+// BytesValue is used to represent an arbitrary socket option value.
+type BytesValue []byte
 
-func (StringValue) sockopt() {}
+func (BytesValue) sockopt() {}
 
-func (s StringValue) String() string {
+func (s BytesValue) String() string {
 	return string(s)
 }
 
