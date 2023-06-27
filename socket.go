@@ -318,9 +318,8 @@ func (st SocketType) String() string {
 type SocketOptionLevel int32
 
 const (
-	SocketLevel   SocketOptionLevel = 0 // SOL_SOCKET
-	TcpLevel      SocketOptionLevel = 6 // IPPROTO_TCP
-	ReservedLevel SocketOptionLevel = 0x74696d65
+	SocketLevel SocketOptionLevel = 0 // SOL_SOCKET
+	TcpLevel    SocketOptionLevel = 6 // IPPROTO_TCP
 )
 
 func (sl SocketOptionLevel) String() string {
