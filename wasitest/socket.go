@@ -668,14 +668,14 @@ var socket = testSuite{
 
 	"cannot get socket options on a file descriptor which is not a socket": testNotSocket(
 		func(ctx context.Context, sys wasi.System, fd wasi.FD) wasi.Errno {
-			_, errno := sys.SockGetOpt(ctx, fd, wasi.SocketLevel, wasi.QuerySocketType)
+			_, errno := sys.SockGetOpt(ctx, fd, wasi.QuerySocketType)
 			return errno
 		},
 	),
 
 	"cannot set socket options on a file descriptor which is not a socket": testNotSocket(
 		func(ctx context.Context, sys wasi.System, fd wasi.FD) wasi.Errno {
-			return sys.SockSetOpt(ctx, fd, wasi.SocketLevel, wasi.SendBufferSize, wasi.IntValue(4096))
+			return sys.SockSetOpt(ctx, fd, wasi.SendBufferSize, wasi.IntValue(4096))
 		},
 	),
 }
@@ -696,7 +696,7 @@ func testSocketType(family wasi.ProtocolFamily, typ wasi.SocketType, proto wasi.
 		sock, errno := sockOpen(t, ctx, sys, family, wasi.AnySocket, proto)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
-		opt, errno := sys.SockGetOpt(ctx, sock, wasi.SocketLevel, wasi.QuerySocketType)
+		opt, errno := sys.SockGetOpt(ctx, sock, wasi.QuerySocketType)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		val, ok := opt.(wasi.IntValue)
@@ -1540,24 +1540,18 @@ func testSocketTimeoutStreamBlocking(family wasi.ProtocolFamily, bind wasi.Socke
 		const sendTimeout = 40 * time.Millisecond
 
 		errno = sys.SockSetOpt(ctx, conn1,
-			wasi.SocketLevel,
 			wasi.RecvTimeout,
 			wasi.TimeValue(recvTimeout))
 		assertEqual(t, errno, wasi.ESUCCESS)
 		errno = sys.SockSetOpt(ctx, conn1,
-			wasi.SocketLevel,
 			wasi.SendTimeout,
 			wasi.TimeValue(sendTimeout),
 		)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
-		sockRecvTimeout := sockOption[wasi.TimeValue](t, ctx, sys, conn1,
-			wasi.SocketLevel,
-			wasi.RecvTimeout)
+		sockRecvTimeout := sockOption[wasi.TimeValue](t, ctx, sys, conn1, wasi.RecvTimeout)
 		assertEqual(t, sockRecvTimeout, wasi.TimeValue(recvTimeout))
-		sockSendTimeout := sockOption[wasi.TimeValue](t, ctx, sys, conn1,
-			wasi.SocketLevel,
-			wasi.SendTimeout)
+		sockSendTimeout := sockOption[wasi.TimeValue](t, ctx, sys, conn1, wasi.SendTimeout)
 		assertEqual(t, sockSendTimeout, wasi.TimeValue(sendTimeout))
 
 		buffer := make([]byte, 10)
@@ -1589,24 +1583,18 @@ func testSocketTimeoutDatagramBlocking(family wasi.ProtocolFamily, bind wasi.Soc
 		const sendTimeout = 40 * time.Millisecond
 
 		errno = sys.SockSetOpt(ctx, sock,
-			wasi.SocketLevel,
 			wasi.RecvTimeout,
 			wasi.TimeValue(recvTimeout))
 		assertEqual(t, errno, wasi.ESUCCESS)
 		errno = sys.SockSetOpt(ctx, sock,
-			wasi.SocketLevel,
 			wasi.SendTimeout,
 			wasi.TimeValue(sendTimeout),
 		)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
-		sockRecvTimeout := sockOption[wasi.TimeValue](t, ctx, sys, sock,
-			wasi.SocketLevel,
-			wasi.RecvTimeout)
+		sockRecvTimeout := sockOption[wasi.TimeValue](t, ctx, sys, sock, wasi.RecvTimeout)
 		assertEqual(t, sockRecvTimeout, wasi.TimeValue(recvTimeout))
-		sockSendTimeout := sockOption[wasi.TimeValue](t, ctx, sys, sock,
-			wasi.SocketLevel,
-			wasi.SendTimeout)
+		sockSendTimeout := sockOption[wasi.TimeValue](t, ctx, sys, sock, wasi.SendTimeout)
 		assertEqual(t, sockSendTimeout, wasi.TimeValue(sendTimeout))
 
 		buffer := make([]byte, 10)
@@ -2025,10 +2013,10 @@ func testSocketSendAndReceiveLargerThanRecvBufferSize(family wasi.ProtocolFamily
 		connAddr, errno := sys.SockBind(ctx, conn, addr2)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
-		errno = sys.SockSetOpt(ctx, sock, wasi.SocketLevel, wasi.RecvBufferSize, wasi.IntValue(4096))
+		errno = sys.SockSetOpt(ctx, sock, wasi.RecvBufferSize, wasi.IntValue(4096))
 		assertEqual(t, errno, wasi.ESUCCESS)
 
-		recvBufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, wasi.RecvBufferSize)
+		recvBufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.RecvBufferSize)
 		buffer1 := bytes.Repeat([]byte{'@'}, int(recvBufferSize+1))
 		buffer2 := make([]byte, len(buffer1))
 
@@ -2076,7 +2064,7 @@ func testSocketSendAndReceiveLargerThanSendBufferSize(family wasi.ProtocolFamily
 		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
-		sendBufferSize := sockOption[wasi.IntValue](t, ctx, sys, conn, wasi.SocketLevel, wasi.RecvBufferSize)
+		sendBufferSize := sockOption[wasi.IntValue](t, ctx, sys, conn, wasi.RecvBufferSize)
 		buffer1 := bytes.Repeat([]byte{'@'}, int(sendBufferSize+1))
 
 		size1, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{buffer1}, 0, sockAddr)
@@ -2105,7 +2093,7 @@ func testSocketDefaultBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketTyp
 
 		for _, test := range tests {
 			t.Run(test.scenario, func(t *testing.T) {
-				bufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, test.option)
+				bufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, test.option)
 				assertNotEqual(t, bufferSize, 0)
 			})
 		}
@@ -2131,17 +2119,17 @@ func testSocketSetBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) t
 				sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
 				assertEqual(t, errno, wasi.ESUCCESS)
 
-				defaultBufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, test.option)
+				defaultBufferSize := sockOption[wasi.IntValue](t, ctx, sys, sock, test.option)
 				assertNotEqual(t, defaultBufferSize, 0)
 
 				setBufferSize := func(size wasi.IntValue) {
 					t.Helper()
-					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, size), wasi.ESUCCESS)
+					assertEqual(t, sys.SockSetOpt(ctx, sock, test.option, size), wasi.ESUCCESS)
 				}
 
 				getBufferSize := func() wasi.IntValue {
 					t.Helper()
-					return sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, test.option)
+					return sockOption[wasi.IntValue](t, ctx, sys, sock, test.option)
 				}
 
 				t.Run("grow the socket buffer size", func(t *testing.T) {
@@ -2160,19 +2148,19 @@ func testSocketSetBufferSizes(family wasi.ProtocolFamily, typ wasi.SocketType) t
 
 				t.Run("negative socket buffer size are fobidden", func(t *testing.T) {
 					want := getBufferSize()
-					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(-1)), wasi.EINVAL)
+					assertEqual(t, sys.SockSetOpt(ctx, sock, test.option, wasi.IntValue(-1)), wasi.EINVAL)
 					size := getBufferSize()
 					assertEqual(t, size, want)
 				})
 
 				t.Run("small socket buffer sizes are capped to a minimum value", func(t *testing.T) {
-					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(0)), wasi.ESUCCESS)
+					assertEqual(t, sys.SockSetOpt(ctx, sock, test.option, wasi.IntValue(0)), wasi.ESUCCESS)
 					size := getBufferSize()
 					assertNotEqual(t, size, 0)
 				})
 
 				t.Run("large socket buffer sizes are capped to a maximum value", func(t *testing.T) {
-					assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, test.option, wasi.IntValue(math.MaxInt32)), wasi.ESUCCESS)
+					assertEqual(t, sys.SockSetOpt(ctx, sock, test.option, wasi.IntValue(math.MaxInt32)), wasi.ESUCCESS)
 					size := getBufferSize()
 					assertNotEqual(t, size, math.MaxInt32)
 				})
@@ -2188,9 +2176,8 @@ func testSocketSetOptionInvalidLevel(family wasi.ProtocolFamily, typ wasi.Socket
 		sys := newSystem(TestConfig{})
 		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
-		const level = -1
-		const option = 0
-		assertEqual(t, sys.SockSetOpt(ctx, sock, level, option, wasi.IntValue(0)), wasi.EINVAL)
+		const option = (-1) << 32
+		assertEqual(t, sys.SockSetOpt(ctx, sock, option, wasi.IntValue(0)), wasi.EINVAL)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
@@ -2201,7 +2188,7 @@ func testSocketSetOptionInvalidArgument(family wasi.ProtocolFamily, typ wasi.Soc
 		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
 		const option = -1
-		assertEqual(t, sys.SockSetOpt(ctx, sock, wasi.SocketLevel, option, wasi.IntValue(0)), wasi.EINVAL)
+		assertEqual(t, sys.SockSetOpt(ctx, sock, option, wasi.IntValue(0)), wasi.EINVAL)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
 	}
 }
@@ -2226,9 +2213,9 @@ func setNonBlock(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.F
 	assertEqual(t, sockErrno(t, ctx, sys, sock), wasi.ESUCCESS)
 }
 
-func sockOption[T wasi.SocketOptionValue](t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) T {
+func sockOption[T wasi.SocketOptionValue](t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD, option wasi.SocketOption) T {
 	t.Helper()
-	opt, errno := sys.SockGetOpt(ctx, sock, level, option)
+	opt, errno := sys.SockGetOpt(ctx, sock, option)
 	assertEqual(t, errno, wasi.ESUCCESS)
 	val, ok := opt.(T)
 	assertEqual(t, ok, true)
@@ -2237,7 +2224,7 @@ func sockOption[T wasi.SocketOptionValue](t *testing.T, ctx context.Context, sys
 
 func sockErrno(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD) wasi.Errno {
 	t.Helper()
-	return wasi.Errno(sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.SocketLevel, wasi.QuerySocketError))
+	return wasi.Errno(sockOption[wasi.IntValue](t, ctx, sys, sock, wasi.QuerySocketError))
 }
 
 func sockIsNonBlocking(t *testing.T, ctx context.Context, sys wasi.System, sock wasi.FD) bool {
