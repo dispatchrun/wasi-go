@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"net"
 	"syscall"
 )
 
@@ -18,9 +21,17 @@ func makeErrno(err error) Errno {
 }
 
 func makeErrnoSlow(err error) Errno {
-	if err == context.Canceled {
+	switch {
+	case errors.Is(err, context.Canceled):
 		return ECANCELED
+	case errors.Is(err, context.DeadlineExceeded):
+		return ETIMEDOUT
+	case errors.Is(err, io.ErrUnexpectedEOF),
+		errors.Is(err, fs.ErrClosed),
+		errors.Is(err, net.ErrClosed):
+		return EIO
 	}
+
 	var sysErrno syscall.Errno
 	if errors.As(err, &sysErrno) {
 		if sysErrno == 0 {
@@ -28,12 +39,19 @@ func makeErrnoSlow(err error) Errno {
 		}
 		return syscallErrnoToWASI(sysErrno)
 	}
+
+	var wasiErrno Errno
+	if errors.As(err, &wasiErrno) {
+		return wasiErrno
+	}
+
 	var timeout interface{ Timeout() bool }
 	if errors.As(err, &timeout) {
 		if timeout.Timeout() {
 			return ETIMEDOUT
 		}
 	}
+
 	panic(fmt.Errorf("unexpected error: %v", err))
 }
 
