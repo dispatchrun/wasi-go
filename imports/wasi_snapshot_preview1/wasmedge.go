@@ -23,7 +23,7 @@ var WasmEdgeV1 = Extension{
 	"sock_send_to":      wazergo.F6((*Module).WasmEdgeSockSendTo),
 	"sock_recv_from":    wazergo.F6((*Module).WasmEdgeV1SockRecvFrom),
 	"sock_getsockopt":   wazergo.F5((*Module).WasmEdgeSockGetOpt),
-	"sock_setsockopt":   wazergo.F5((*Module).WasmEdgeSockSetOpt),
+	"sock_setsockopt":   wazergo.F4((*Module).WasmEdgeSockSetOpt),
 	"sock_getlocaladdr": wazergo.F4((*Module).WasmEdgeV1SockLocalAddr),
 	"sock_getpeeraddr":  wazergo.F4((*Module).WasmEdgeV1SockPeerAddr),
 	"sock_getaddrinfo":  wazergo.F6((*Module).WasmEdgeSockAddrInfo),
@@ -42,7 +42,7 @@ var WasmEdgeV2 = Extension{
 	"sock_send_to":      wazergo.F6((*Module).WasmEdgeSockSendTo),
 	"sock_recv_from":    wazergo.F7((*Module).WasmEdgeV2SockRecvFrom),
 	"sock_getsockopt":   wazergo.F5((*Module).WasmEdgeSockGetOpt),
-	"sock_setsockopt":   wazergo.F5((*Module).WasmEdgeSockSetOpt),
+	"sock_setsockopt":   wazergo.F4((*Module).WasmEdgeSockSetOpt),
 	"sock_getlocaladdr": wazergo.F3((*Module).WasmEdgeV2SockLocalAddr),
 	"sock_getpeeraddr":  wazergo.F3((*Module).WasmEdgeV2SockPeerAddr),
 	"sock_getaddrinfo":  wazergo.F6((*Module).WasmEdgeSockAddrInfo),
@@ -131,22 +131,37 @@ func (m *Module) WasmEdgeV2SockRecvFrom(ctx context.Context, fd Int32, iovecs Li
 	return Errno(wasi.ESUCCESS)
 }
 
-func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {
+func (m *Module) WasmEdgeSockSetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Bytes) Errno {
 	// See socket.go
-	switch wasi.SocketOptionLevel(level) {
+	wasilevel := wasi.SocketOptionLevel(level)
+	switch wasilevel {
 	case wasi.TcpLevel:
 		option += 0x1000
+	case wasi.ReservedLevel:
+		option += 0x9000
 	}
-	// Only int options are supported for now.
-	switch wasi.SocketOption(option) {
-	case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout, wasi.BindToDevice:
-		// These accept struct linger / struct timeval / string.
-		return Errno(wasi.ENOTSUP)
+
+	var val wasi.SocketOptionValue
+
+	// Reserved level take arbitrary values.
+	if wasilevel == wasi.ReservedLevel {
+		val = wasi.StringValue(value)
+	} else {
+		// Not supported for now.
+		switch wasi.SocketOption(option) {
+		case wasi.Linger, wasi.RecvTimeout, wasi.SendTimeout, wasi.BindToDevice:
+			// These accept struct linger / struct timeval / string.
+			return Errno(wasi.ENOTSUP)
+		}
+
+		// Options default to integer values.
+		if len(value) != 4 {
+			return Errno(wasi.EINVAL)
+		}
+		val = wasi.IntValue(binary.LittleEndian.Uint32(value))
 	}
-	if valueLen != 4 {
-		return Errno(wasi.EINVAL)
-	}
-	return Errno(m.WASI.SockSetOpt(ctx, wasi.FD(fd), wasi.SocketOptionLevel(level), wasi.SocketOption(option), wasi.IntValue(value.Load())))
+
+	return Errno(m.WASI.SockSetOpt(ctx, wasi.FD(fd), wasilevel, wasi.SocketOption(option), val))
 }
 
 func (m *Module) WasmEdgeSockGetOpt(ctx context.Context, fd Int32, level Int32, option Int32, value Pointer[Int32], valueLen Int32) Errno {

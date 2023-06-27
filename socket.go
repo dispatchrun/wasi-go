@@ -318,14 +318,19 @@ func (st SocketType) String() string {
 type SocketOptionLevel int32
 
 const (
-	SocketLevel SocketOptionLevel = 0 // SOL_SOCKET
-	TcpLevel    SocketOptionLevel = 6 // IPPROTO_TCP
+	SocketLevel   SocketOptionLevel = 0 // SOL_SOCKET
+	TcpLevel      SocketOptionLevel = 6 // IPPROTO_TCP
+	ReservedLevel SocketOptionLevel = 0x74696d65
 )
 
 func (sl SocketOptionLevel) String() string {
 	switch sl {
 	case SocketLevel:
 		return "SocketLevel"
+	case TcpLevel:
+		return "TcpLevel"
+	case ReservedLevel:
+		return "ReservedLevel"
 	default:
 		return fmt.Sprintf("SocketOptionLevel(%d)", sl)
 	}
@@ -354,6 +359,8 @@ const (
 
 	// 0x1000 + iota are IPPROTO_TCP level options.
 	TcpNoDelay SocketOption = 0x1000 + iota
+
+	// >= 0x9000 are reserved.
 )
 
 func (so SocketOption) String() string {
@@ -478,6 +485,15 @@ func (TimeValue) sockopt() {}
 
 func (tv TimeValue) String() string {
 	return time.Duration(tv).String()
+}
+
+// StringValue is used to represent an arbitrary socket option value.
+type StringValue string
+
+func (StringValue) sockopt() {}
+
+func (s StringValue) String() string {
+	return string(s)
 }
 
 // SocketsNotSupported is a helper type intended to be embeded in
