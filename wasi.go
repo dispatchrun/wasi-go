@@ -126,6 +126,10 @@ func (t *FileTable[T]) Preopen(file T, path string, stat FDStat) FD {
 	return fd
 }
 
+func (t *FileTable[T]) PreopenFD(fd FD) {
+	t.preopens.Assign(fd, "")
+}
+
 func (t *FileTable[T]) Register(file T, stat FDStat) FD {
 	stat.RightsBase &= AllRights
 	stat.RightsInheriting &= AllRights
