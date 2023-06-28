@@ -669,14 +669,14 @@ func (s *System) SockRecvFrom(ctx context.Context, fd wasi.FD, iovecs []wasi.IOV
 	}
 }
 
-func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption) (wasi.SocketOptionValue, wasi.Errno) {
+func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, option wasi.SocketOption) (wasi.SocketOptionValue, wasi.Errno) {
 	socket, _, errno := s.LookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return nil, errno
 	}
 
 	var sysLevel int
-	switch level {
+	switch option.Level() {
 	case wasi.SocketLevel:
 		sysLevel = unix.SOL_SOCKET
 	case wasi.TcpLevel:
@@ -769,14 +769,14 @@ func (s *System) SockGetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOp
 	return wasi.IntValue(value), errno
 }
 
-func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, level wasi.SocketOptionLevel, option wasi.SocketOption, value wasi.SocketOptionValue) wasi.Errno {
+func (s *System) SockSetOpt(ctx context.Context, fd wasi.FD, option wasi.SocketOption, value wasi.SocketOptionValue) wasi.Errno {
 	socket, _, errno := s.LookupSocketFD(fd, 0)
 	if errno != wasi.ESUCCESS {
 		return errno
 	}
 
 	var sysLevel int
-	switch level {
+	switch option.Level() {
 	case wasi.SocketLevel:
 		sysLevel = unix.SOL_SOCKET
 	case wasi.TcpLevel:

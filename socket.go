@@ -326,17 +326,27 @@ func (sl SocketOptionLevel) String() string {
 	switch sl {
 	case SocketLevel:
 		return "SocketLevel"
+	case TcpLevel:
+		return "TcpLevel"
 	default:
 		return fmt.Sprintf("SocketOptionLevel(%d)", sl)
 	}
 }
 
 // SocketOption is a socket option that can be queried or set.
-type SocketOption int32
+type SocketOption int64
 
+func (s SocketOption) Level() SocketOptionLevel {
+	return SocketOptionLevel(s >> 32)
+}
+
+func MakeSocketOption(level SocketOptionLevel, option int32) SocketOption {
+	return (SocketOption(level) << 32) | SocketOption(option)
+}
+
+// SOL_SOCKET level options.
 const (
-	// SOL_SOCKET level options.
-	ReuseAddress SocketOption = iota
+	ReuseAddress SocketOption = (SocketOption(SocketLevel) << 32) | iota
 	QuerySocketType
 	QuerySocketError
 	DontRoute
@@ -351,9 +361,11 @@ const (
 	SendTimeout
 	QueryAcceptConnections
 	BindToDevice
+)
 
-	// 0x1000 + iota are IPPROTO_TCP level options.
-	TcpNoDelay SocketOption = 0x1000 + iota
+// IPPROTO_TCP level options
+const (
+	TcpNoDelay SocketOption = (SocketOption(TcpLevel) << 32) | (15)
 )
 
 func (so SocketOption) String() string {
@@ -391,7 +403,7 @@ func (so SocketOption) String() string {
 	case TcpNoDelay:
 		return "TcpNoDelay"
 	default:
-		return fmt.Sprintf("SocketOption(%d)", so)
+		return fmt.Sprintf("SocketOption(%d|%d)", so.Level(), int32(so))
 	}
 }
 
@@ -478,6 +490,15 @@ func (TimeValue) sockopt() {}
 
 func (tv TimeValue) String() string {
 	return time.Duration(tv).String()
+}
+
+// BytesValue is used to represent an arbitrary socket option value.
+type BytesValue []byte
+
+func (BytesValue) sockopt() {}
+
+func (s BytesValue) String() string {
+	return string(s)
 }
 
 // SocketsNotSupported is a helper type intended to be embeded in
