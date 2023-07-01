@@ -526,6 +526,14 @@ var socket = testSuite{
 		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
+	"connected ipv4 datagram sockets can send datat to a specific address": testSocketSendToConnectedDatagram(
+		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
+	),
+
+	"connected ipv6 datagram sockets can send data to a specific address": testSocketSendToConnectedDatagram(
+		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
+	),
+
 	"connected ipv4 datagram sockets can send and peek data": testSocketSendAndPeekConnectedDatagram(
 		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
 	),
@@ -1656,6 +1664,34 @@ func testSocketSendAndReceiveConnectedDatagram(family wasi.ProtocolFamily, bind 
 		assertEqual(t, errno, wasi.ESUCCESS)
 		assertEqual(t, string(buffer2[:len(buffer1)]), string(buffer1))
 		assertDeepEqual(t, raddr, sockAddr)
+
+		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
+		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
+	}
+}
+
+func testSocketSendToConnectedDatagram(family wasi.ProtocolFamily, bind wasi.SocketAddress) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{})
+		typ := wasi.DatagramSocket
+
+		sock, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		sockAddr, errno := sys.SockBind(ctx, sock, bind)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		conn, errno := sockOpen(t, ctx, sys, family, typ, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		_, errno = sys.SockConnect(ctx, conn, sockAddr)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		buffer := []byte("Hello, World!")
+
+		size1, errno := sys.SockSendTo(ctx, conn, []wasi.IOVec{buffer}, 0, sockAddr)
+		assertEqual(t, size1, wasi.Size(0))
+		assertEqual(t, errno, wasi.EISCONN)
 
 		assertEqual(t, sys.FDClose(ctx, conn), wasi.ESUCCESS)
 		assertEqual(t, sys.FDClose(ctx, sock), wasi.ESUCCESS)
