@@ -526,11 +526,11 @@ var socket = testSuite{
 		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
-	"connected ipv4 datagram sockets can send datat to a specific address": testSocketSendToConnectedDatagram(
+	"connected ipv4 datagram sockets cannot send data to a specific address": testSocketSendToConnectedDatagram(
 		wasi.InetFamily, &wasi.Inet4Address{Addr: localIPv4},
 	),
 
-	"connected ipv6 datagram sockets can send data to a specific address": testSocketSendToConnectedDatagram(
+	"connected ipv6 datagram sockets cannot send data to a specific address": testSocketSendToConnectedDatagram(
 		wasi.Inet6Family, &wasi.Inet6Address{Addr: localIPv6},
 	),
 
