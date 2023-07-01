@@ -2,6 +2,7 @@ package unix
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -626,6 +627,20 @@ func (s *System) SockSendTo(ctx context.Context, fd wasi.FD, iovecs []wasi.IOVec
 	socket, _, errno := s.LookupSocketFD(fd, wasi.FDWriteRight)
 	if errno != wasi.ESUCCESS {
 		return 0, errno
+	}
+	// Linux is more permissive than darwin and allows the use of sendto
+	// even when the socket is connected.
+	//
+	// To align on the more restrictive darwin behavior here we make a check to
+	// verify whether the socket has a peer and proactively deny the function if
+	// that's the case.
+	if runtime.GOOS == "linux" {
+		_, err := ignoreEINTR2(func() (unix.Sockaddr, error) {
+			return unix.Getpeername(int(socket))
+		})
+		if !errors.Is(err, unix.ENOTCONN) {
+			return 0, wasi.EISCONN
+		}
 	}
 	sa, ok := s.toUnixSockAddress(addr)
 	if !ok {
