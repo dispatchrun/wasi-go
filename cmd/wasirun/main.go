@@ -13,6 +13,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports"
+	"github.com/stealthrocket/wasi-go/imports/wasi_http"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/sys"
 )
@@ -59,6 +60,10 @@ OPTIONS:
    --non-blocking-stdio
       Enable non-blocking stdio
 
+   --http <MODE>
+      Optionally enable wasi-http client support and select a
+	  version {none, auto, v1}
+
    -v, --version
       Print the version and exit
 
@@ -75,6 +80,7 @@ var (
 	dnsServer        string
 	socketExt        string
 	pprofAddr        string
+	wasiHttp         string
 	trace            bool
 	nonBlockingStdio bool
 	version          bool
@@ -91,6 +97,7 @@ func main() {
 	flagSet.StringVar(&dnsServer, "dns-server", "", "")
 	flagSet.StringVar(&socketExt, "sockets", "auto", "")
 	flagSet.StringVar(&pprofAddr, "pprof-addr", "", "")
+	flagSet.StringVar(&wasiHttp, "http", "auto", "")
 	flagSet.BoolVar(&trace, "trace", false, "")
 	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
 	flagSet.BoolVar(&version, "version", false, "")
@@ -181,6 +188,23 @@ func run(wasmFile string, args []string) error {
 		return err
 	}
 	defer system.Close(ctx)
+
+	importWasi := false
+	switch wasiHttp {
+	case "auto":
+		importWasi = wasi_http.DetectWasiHttp(wasmModule)
+	case "v1":
+		importWasi = true
+	case "none":
+		importWasi = false
+	default:
+		return fmt.Errorf("invalid value for -http '%v', expected 'auto', 'v1' or 'none'", wasiHttp)
+	}
+	if importWasi {
+		if err := wasi_http.Instantiate(ctx, runtime); err != nil {
+			return err
+		}
+	}
 
 	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
