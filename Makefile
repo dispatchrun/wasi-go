@@ -55,7 +55,7 @@ testdata/.sysroot/lib/wasm32-wasi/libc.a: testdata/.wasi-libc
 
 testdata/c/%.c: wasi-libc
 testdata/c/%.wasm: testdata/c/%.c
-	clang $< -o $@ -Wall -Os -target wasm32-unknown-wasi 
+	clang $< -o $@ -Wall -Os -target wasm32-unknown-wasi --sysroot testdata/.sysroot
 
 testdata/c/http/http.wasm: testdata/c/http/http.c
 	clang $< -o $@ -Wall -Os -target wasm32-unknown-wasi testdata/c/http/proxy.c testdata/c/http/proxy_component_type.o
