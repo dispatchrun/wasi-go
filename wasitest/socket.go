@@ -772,7 +772,7 @@ func testSocketPollBeforeConnectStream(family wasi.ProtocolFamily) testFunc {
 		assertEqual(t, errno, wasi.ESUCCESS)
 		switch n {
 		default:
-			t.Fatalf("wrong number of events: want 1 or 2 but got %d", n)
+			t.Fatalf("wrong number of events: want 1 or 3 but got %d", n)
 		case 1:
 			// Darwin reports that sockets are not ready for read/write before
 			// being connected.
