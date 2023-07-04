@@ -134,6 +134,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 	timeout := time.Duration(-1)
 	timeoutEventIndex := -1
 
+	events = events[:len(subscriptions)]
 	numEvents := 0
 	for i := range events {
 		events[i] = wasi.Event{}
@@ -306,7 +307,7 @@ func (s *System) PollOneOff(ctx context.Context, subscriptions []wasi.Subscripti
 		// buffer.
 		n = 0
 
-		for _, e := range events[:len(subscriptions)] {
+		for _, e := range events {
 			if e.EventType != 0 {
 				e.EventType--
 				events[n] = e

@@ -56,6 +56,7 @@ var poll = testSuite{
 			n, err := io.WriteString(stdinW, "Hello, World!")
 			assertOK(t, err)
 			assertEqual(t, n, 13)
+			assertEqual(t, stdinW.Close(), nil)
 		}()
 
 		subs := []wasi.Subscription{
