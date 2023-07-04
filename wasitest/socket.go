@@ -910,8 +910,10 @@ func testSocketConnectOK(family wasi.ProtocolFamily, typ wasi.SocketType, bind w
 		addr, errno := sys.SockConnect(ctx, sock, bind)
 		assertNotEqual(t, addr, nil)
 		assertEqual(t, addr.Family(), bind.Family())
-		if errno != wasi.ESUCCESS {
+		if typ == wasi.StreamSocket {
 			assertEqual(t, errno, wasi.EINPROGRESS)
+		} else {
+			assertEqual(t, errno, wasi.ESUCCESS)
 		}
 
 		sockPoll(t, ctx, sys, sock, wasi.FDWriteEvent)
@@ -961,8 +963,10 @@ func testSocketConnectAndAccept(family wasi.ProtocolFamily, typ wasi.SocketType,
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		clientAddr, errno := sys.SockConnect(ctx, client, serverAddr)
-		if errno != wasi.ESUCCESS {
+		if typ == wasi.StreamSocket {
 			assertEqual(t, errno, wasi.EINPROGRESS)
+		} else {
+			assertEqual(t, errno, wasi.ESUCCESS)
 		}
 		assertNotEqual(t, clientAddr, nil)
 		assertEqual(t, clientAddr.Family(), bind.Family())
@@ -1050,8 +1054,10 @@ func testSocketConnectAndShutdown(family wasi.ProtocolFamily, typ wasi.SocketTyp
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		_, errno = sys.SockConnect(ctx, client, addr)
-		if errno != wasi.ESUCCESS {
+		if typ == wasi.StreamSocket {
 			assertEqual(t, errno, wasi.EINPROGRESS)
+		} else {
+			assertEqual(t, errno, wasi.ESUCCESS)
 		}
 
 		sockPoll(t, ctx, sys, client, wasi.FDWriteEvent)
@@ -1111,8 +1117,10 @@ func testSocketBindAfterConnect(family wasi.ProtocolFamily, typ wasi.SocketType,
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		_, errno = sys.SockConnect(ctx, sock, bind1)
-		if errno != wasi.ESUCCESS {
+		if typ == wasi.StreamSocket {
 			assertEqual(t, errno, wasi.EINPROGRESS)
+		} else {
+			assertEqual(t, errno, wasi.ESUCCESS)
 		}
 
 		_, errno = sys.SockBind(ctx, sock, bind2)
@@ -1444,9 +1452,7 @@ func testSocketSendAndReceiveStream(family wasi.ProtocolFamily, bind wasi.Socket
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		_, errno = sys.SockConnect(ctx, conn1, addr)
-		if errno != wasi.ESUCCESS {
-			assertEqual(t, errno, wasi.EINPROGRESS)
-		}
+		assertEqual(t, errno, wasi.EINPROGRESS)
 
 		sockPoll(t, ctx, sys, conn1, wasi.FDWriteEvent)
 		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
@@ -1565,9 +1571,7 @@ func testSocketSendAndPeekStream(family wasi.ProtocolFamily, bind wasi.SocketAdd
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		_, errno = sys.SockConnect(ctx, conn1, addr)
-		if errno != wasi.ESUCCESS {
-			assertEqual(t, errno, wasi.EINPROGRESS)
-		}
+		assertEqual(t, errno, wasi.EINPROGRESS)
 
 		sockPoll(t, ctx, sys, conn1, wasi.FDWriteEvent)
 		sockPoll(t, ctx, sys, sock, wasi.FDReadEvent)
