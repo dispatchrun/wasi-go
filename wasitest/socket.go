@@ -3,7 +3,6 @@ package wasitest
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -770,13 +769,33 @@ func testSocketPollBeforeConnectStream(family wasi.ProtocolFamily) testFunc {
 		evs := make([]wasi.Event, len(subs))
 
 		n, errno := sys.PollOneOff(ctx, subs, evs)
-		fmt.Println(evs[:n])
 		assertEqual(t, errno, wasi.ESUCCESS)
-		assertEqual(t, n, 1)
-		assertEqual(t, evs[0], wasi.Event{
-			UserData:  1,
-			EventType: wasi.ClockEvent,
-		})
+		switch n {
+		default:
+			t.Fatalf("wrong number of events: want 1 or 2 but got %d", n)
+		case 1:
+			// Darwin reports that sockets are not ready for read/write before
+			// being connected.
+			assertEqual(t, evs[0], wasi.Event{
+				UserData:  1,
+				EventType: wasi.ClockEvent,
+			})
+		case 3:
+			// Linux reports that sockets are ready for read/write before being
+			// connected.
+			assertEqual(t, evs[0], wasi.Event{
+				UserData:  1,
+				EventType: wasi.ClockEvent,
+			})
+			assertEqual(t, evs[1], wasi.Event{
+				UserData:  2,
+				EventType: wasi.FDReadEvent,
+			})
+			assertEqual(t, evs[2], wasi.Event{
+				UserData:  3,
+				EventType: wasi.FDWriteEvent,
+			})
+		}
 	}
 }
 
