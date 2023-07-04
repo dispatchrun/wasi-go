@@ -3,6 +3,7 @@ package wasitest
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -109,6 +110,14 @@ var socket = testSuite{
 	"udp sockets for ipv6 are of datagram type": testSocketType(
 		wasi.Inet6Family, wasi.DatagramSocket, wasi.UDPProtocol,
 	),
+
+	"unconnected ipv4 stream sockets are not ready for reading or writing": testSocketPollBeforeConnectStream(wasi.InetFamily),
+
+	"unconnected ipv6 stream sockets are not ready for reading or writing": testSocketPollBeforeConnectStream(wasi.Inet6Family),
+
+	"unconnected ipv4 datagram sockets are ready for writing but not for reading": testSocketPollBeforeConnectDatagram(wasi.InetFamily),
+
+	"unconnected ipv6 datagram sockets are ready for writing but not for reading": testSocketPollBeforeConnectDatagram(wasi.Inet6Family),
 
 	"bind an ipv4 stream socket to a port selects that port": testSocketBindOK(
 		wasi.InetFamily, wasi.StreamSocket, &wasi.Inet4Address{Addr: localIPv4, Port: nextPort()},
@@ -729,6 +738,87 @@ func testSocketOpenError(family wasi.ProtocolFamily, typ wasi.SocketType, proto 
 		sock, errno := sockOpen(t, ctx, sys, family, typ, proto)
 		assertEqual(t, sock, ^wasi.FD(0))
 		assertEqual(t, errno, want)
+	}
+}
+
+func testSocketPollBeforeConnectStream(family wasi.ProtocolFamily) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{
+			Now: time.Now,
+		})
+
+		sock, errno := sockOpen(t, ctx, sys, family, wasi.StreamSocket, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		subs := []wasi.Subscription{
+			wasi.MakeSubscriptionClock(
+				wasi.UserData(1),
+				wasi.SubscriptionClock{ID: wasi.Monotonic, Timeout: 0, Precision: 1},
+			),
+			wasi.MakeSubscriptionFDReadWrite(
+				wasi.UserData(2),
+				wasi.FDReadEvent,
+				wasi.SubscriptionFDReadWrite{FD: sock},
+			),
+			wasi.MakeSubscriptionFDReadWrite(
+				wasi.UserData(3),
+				wasi.FDWriteEvent,
+				wasi.SubscriptionFDReadWrite{FD: sock},
+			),
+		}
+
+		evs := make([]wasi.Event, len(subs))
+
+		n, errno := sys.PollOneOff(ctx, subs, evs)
+		fmt.Println(evs[:n])
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, n, 1)
+		assertEqual(t, evs[0], wasi.Event{
+			UserData:  1,
+			EventType: wasi.ClockEvent,
+		})
+	}
+}
+
+func testSocketPollBeforeConnectDatagram(family wasi.ProtocolFamily) testFunc {
+	return func(t *testing.T, ctx context.Context, newSystem newSystem) {
+		sys := newSystem(TestConfig{
+			Now: time.Now,
+		})
+
+		sock, errno := sockOpen(t, ctx, sys, family, wasi.DatagramSocket, 0)
+		assertEqual(t, errno, wasi.ESUCCESS)
+
+		subs := []wasi.Subscription{
+			wasi.MakeSubscriptionClock(
+				wasi.UserData(1),
+				wasi.SubscriptionClock{ID: wasi.Monotonic, Timeout: 0, Precision: 1},
+			),
+			wasi.MakeSubscriptionFDReadWrite(
+				wasi.UserData(2),
+				wasi.FDReadEvent,
+				wasi.SubscriptionFDReadWrite{FD: sock},
+			),
+			wasi.MakeSubscriptionFDReadWrite(
+				wasi.UserData(3),
+				wasi.FDWriteEvent,
+				wasi.SubscriptionFDReadWrite{FD: sock},
+			),
+		}
+
+		evs := make([]wasi.Event, len(subs))
+
+		n, errno := sys.PollOneOff(ctx, subs, evs)
+		assertEqual(t, errno, wasi.ESUCCESS)
+		assertEqual(t, n, 2)
+		assertEqual(t, evs[0], wasi.Event{
+			UserData:  1,
+			EventType: wasi.ClockEvent,
+		})
+		assertEqual(t, evs[1], wasi.Event{
+			UserData:  3,
+			EventType: wasi.FDWriteEvent,
+		})
 	}
 }
 
