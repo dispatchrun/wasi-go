@@ -126,7 +126,7 @@ func main() {
 	}
 
 	if envInherit {
-		envs = append(os.Environ()[:], envs...)
+		envs = append(append([]string{}, os.Environ()...), envs...)
 	}
 
 	if dnsServer != "" {
