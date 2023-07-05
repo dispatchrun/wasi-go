@@ -44,8 +44,12 @@ OPTIONS:
    --dns-server <ADDR:PORT>
       Sets the address of the DNS server to use for name resolution
 
+   --env-inherit
+      Inherits all environment variables from the calling process
+
    --env <NAME=VAL>
-      Pass an environment variable to the module
+      Pass an environment variable to the module. Overrides
+      any inherited environment variables from --env-inherit
 
    --sockets <NAME>
       Enable a sockets extension, either {none, auto, path_open,
@@ -62,7 +66,7 @@ OPTIONS:
 
    --http <MODE>
       Optionally enable wasi-http client support and select a
-	  version {none, auto, v1}
+      version {none, auto, v1}
 
    -v, --version
       Print the version and exit
@@ -73,6 +77,7 @@ OPTIONS:
 }
 
 var (
+	envInherit       bool
 	envs             stringList
 	dirs             stringList
 	listens          stringList
@@ -90,6 +95,7 @@ func main() {
 	flagSet := flag.NewFlagSet("wasirun", flag.ExitOnError)
 	flagSet.Usage = printUsage
 
+	flagSet.BoolVar(&envInherit, "env-inherit", false, "")
 	flagSet.Var(&envs, "env", "")
 	flagSet.Var(&dirs, "dir", "")
 	flagSet.Var(&listens, "listen", "")
@@ -117,6 +123,10 @@ func main() {
 	if len(args) == 0 {
 		printUsage()
 		os.Exit(1)
+	}
+
+	if envInherit {
+		envs = append(append([]string{}, os.Environ()...), envs...)
 	}
 
 	if dnsServer != "" {
