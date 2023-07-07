@@ -32,6 +32,19 @@ This library provides all the socket capabilities specified in WASI preview 1,
 as well as a full support for a socket API which is ABI-compatible with the
 extensions implemented in the [wasmedge][wasmedge] runtime.
 
+Applications interested in taking advantage of the socket extensions may be
+interested in those libraries:
+
+| Language | Library                                                   |
+| -------- | --------------------------------------------------------- |
+| Go       | [stealthrocket/net][net-go]                               |
+| Python   | [stealthrocket/timecraft (Python SDK)][timecraft-python]  |
+| Rust     | [second-state/wasmedge_wasi_socket][wasmedge-wasi-socket] |
+
+[net-go]:               https://github.com/stealthrocket/net
+[timecraft-python]:     https://github.com/stealthrocket/timecraft/tree/main/python
+[wasmedge-wasi-socket]: https://github.com/second-state/wasmedge_wasi_socket
+
 :zap: **Performance**
 
 The provided implementation of WASI is a thin zero-allocation layer around OS
@@ -52,6 +65,15 @@ and keep up with the evolving WASI specification.
 package that ships with the [wazero][wazero] runtime. For example, the `wasi-go`
 package does not build on Windows, nor does it allow customization of the file
 systems via a `fs.FS`.
+
+The following table describes how users should think about capabilities of
+wazero and wasi-go:
+
+| Feature                    | `wazero/imports/wasi_snapshot_preview1` | `wasi-go/imports/wasi_snapshot_preview1` |
+| -------------------------- | --------------------------------------- | ---------------------------------------- |
+| WASI preview 1             | ✅                                      | ✅                                       |
+| Windows Support            | ✅                                      | ❌                                       |
+| WasmEdge Socket Extensions | ❌                                      | ✅                                       |
 
 ## Usage
 
