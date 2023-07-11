@@ -21,8 +21,10 @@ func testMaxOpenFiles(t *testing.T, ctx context.Context, newSystem newSystem) {
 		MaxOpenFiles: 10,
 	})
 
+	const rights = wasi.DirectoryRights
+
 	for i := 0; i < 10; i++ {
-		_, errno := sys.PathOpen(ctx, 3, 0, ".", wasi.OpenDirectory, wasi.AllRights, wasi.AllRights, 0)
+		_, errno := sys.PathOpen(ctx, 3, 0, ".", wasi.OpenDirectory, rights, rights, 0)
 		if errno == wasi.ENFILE {
 			break
 		}
@@ -30,7 +32,7 @@ func testMaxOpenFiles(t *testing.T, ctx context.Context, newSystem newSystem) {
 	}
 
 	for i := 0; i < 10; i++ {
-		_, errno := sys.PathOpen(ctx, 3, 0, ".", wasi.OpenDirectory, wasi.AllRights, wasi.AllRights, 0)
+		_, errno := sys.PathOpen(ctx, 3, 0, ".", wasi.OpenDirectory, rights, rights, 0)
 		assertEqual(t, errno, wasi.ENFILE)
 	}
 }
@@ -46,8 +48,10 @@ func testMaxOpenDirs(t *testing.T, ctx context.Context, newSystem newSystem) {
 	assertOK(t, os.WriteFile(filepath.Join(tmp, "file-2"), []byte("2"), 0666))
 	assertOK(t, os.WriteFile(filepath.Join(tmp, "file-3"), []byte("3"), 0666))
 
+	const rights = wasi.DirectoryRights
+
 	for i := 0; i < 10; i++ {
-		d, errno := sys.PathOpen(ctx, 3, 0, ".", wasi.OpenDirectory, wasi.AllRights, wasi.AllRights, 0)
+		d, errno := sys.PathOpen(ctx, 3, 0, ".", wasi.OpenDirectory, rights, rights, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		dirEntry := [1]wasi.DirEntry{}
@@ -57,7 +61,7 @@ func testMaxOpenDirs(t *testing.T, ctx context.Context, newSystem newSystem) {
 	}
 
 	for i := 0; i < 10; i++ {
-		d, errno := sys.PathOpen(ctx, 3, 0, ".", wasi.OpenDirectory, wasi.AllRights, wasi.AllRights, 0)
+		d, errno := sys.PathOpen(ctx, 3, 0, ".", wasi.OpenDirectory, rights, rights, 0)
 		assertEqual(t, errno, wasi.ESUCCESS)
 
 		dirEntry := [1]wasi.DirEntry{}
