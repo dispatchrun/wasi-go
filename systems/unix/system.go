@@ -377,6 +377,10 @@ func (s *System) SockAccept(ctx context.Context, fd wasi.FD, flags wasi.FDFlags)
 	if err != nil {
 		return -1, nil, nil, makeErrno(err)
 	}
+	if s.MaxOpenFiles > 0 && s.NumOpenFiles() >= s.MaxOpenFiles {
+		unix.Close(connfd)
+		return -1, nil, nil, wasi.ENFILE
+	}
 	peer := makeSocketAddress(sa)
 	if peer == nil {
 		_ = closeTraceEBADF(connfd)
@@ -514,6 +518,10 @@ func (s *System) SockOpen(ctx context.Context, pf wasi.ProtocolFamily, socketTyp
 		sysProtocol = unix.IPPROTO_UDP
 	default:
 		return -1, wasi.EINVAL
+	}
+
+	if s.MaxOpenFiles > 0 && s.NumOpenFiles() >= s.MaxOpenFiles {
+		return -1, wasi.ENFILE
 	}
 
 	fd, err := ignoreEINTR2(func() (int, error) {

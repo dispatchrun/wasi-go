@@ -116,6 +116,11 @@ func (fd FD) FDWrite(ctx context.Context, iovecs []wasi.IOVec) (wasi.Size, wasi.
 }
 
 func (fd FD) FDOpenDir(ctx context.Context) (wasi.Dir, wasi.Errno) {
+	if _, err := ignoreEINTR2(func() (int64, error) {
+		return lseek(int(fd), 0, 0)
+	}); err != nil {
+		return nil, makeErrno(err)
+	}
 	return &dirbuf{fd: int(fd)}, wasi.ESUCCESS
 }
 

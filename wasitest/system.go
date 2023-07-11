@@ -12,6 +12,7 @@ import (
 // TestSystem is a test suite which validates the behavior of wasi.System
 // implementations.
 func TestSystem(t *testing.T, makeSystem MakeSystem) {
+	t.Run("file", file.runFunc(makeSystem))
 	t.Run("proc", proc.runFunc(makeSystem))
 	t.Run("poll", poll.runFunc(makeSystem))
 	t.Run("socket", socket.runFunc(makeSystem))

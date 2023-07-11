@@ -69,6 +69,8 @@ func makeSystem(config wasitest.TestConfig) (wasi.System, error) {
 			panic(sys.NewExitError(127 + uint32(code)))
 		},
 	}
+	s.MaxOpenFiles = config.MaxOpenFiles
+	s.MaxOpenDirs = config.MaxOpenDirs
 	defer func() {
 		if s != nil {
 			s.Close(context.Background())

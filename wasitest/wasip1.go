@@ -28,6 +28,9 @@ type TestConfig struct {
 	Rand    io.Reader
 	RootFS  string
 	Now     func() time.Time
+	// Limits, zero means none.
+	MaxOpenFiles int
+	MaxOpenDirs  int
 }
 
 // MakeSystem is a function used to create a system to run the test suites
