@@ -94,6 +94,15 @@ type Dir interface {
 //		...
 //	}
 type FileTable[T File[T]] struct {
+	// Limit the number of files that may be opened on the table.
+	//
+	// Zero means no limit.
+	MaxOpenFiles int
+	// Limit the number of directories that may be opened.
+	//
+	// Zero means no limit.
+	MaxOpenDirs int
+
 	files    descriptor.Table[FD, fileEntry[T]]
 	preopens descriptor.Table[FD, string]
 	dirs     map[FD]Dir
@@ -134,6 +143,18 @@ func (t *FileTable[T]) Register(file T, stat FDStat) FD {
 	stat.RightsBase &= AllRights
 	stat.RightsInheriting &= AllRights
 	return t.files.Insert(fileEntry[T]{file: file, stat: stat})
+}
+
+func (t *FileTable[T]) NumPreopens() int {
+	return t.preopens.Len()
+}
+
+func (t *FileTable[T]) NumOpenFiles() int {
+	return t.files.Len()
+}
+
+func (t *FileTable[T]) NumOpenDirs() int {
+	return len(t.dirs)
 }
 
 func (t *FileTable[T]) LookupFD(fd FD, rights Rights) (file T, stat FDStat, errno Errno) {
@@ -385,8 +406,12 @@ func (t *FileTable[T]) FDReadDir(ctx context.Context, fd FD, entries []DirEntry,
 	if len(entries) == 0 {
 		return 0, EINVAL
 	}
+
 	d := t.dirs[fd]
 	if d == nil {
+		if t.MaxOpenDirs > 0 && t.NumOpenDirs() >= t.MaxOpenDirs {
+			return 0, ENFILE
+		}
 		d, errno = f.file.FDOpenDir(ctx)
 		if errno != ESUCCESS {
 			return 0, errno
@@ -396,7 +421,13 @@ func (t *FileTable[T]) FDReadDir(ctx context.Context, fd FD, entries []DirEntry,
 		}
 		t.dirs[fd] = d
 	}
-	return d.FDReadDir(ctx, entries, cookie, bufferSizeBytes)
+
+	n, errno := d.FDReadDir(ctx, entries, cookie, bufferSizeBytes)
+	if errno == ESUCCESS && n == 0 { // EOF?
+		delete(t.dirs, fd)
+		d.FDCloseDir(ctx)
+	}
+	return n, errno
 }
 
 func (t *FileTable[T]) FDRenumber(ctx context.Context, from, to FD) Errno {
@@ -522,6 +553,10 @@ func (t *FileTable[T]) PathOpen(ctx context.Context, fd FD, lookupFlags LookupFl
 		if !d.stat.RightsBase.Has(PathFileStatSetSizeRight) {
 			return -1, ENOTCAPABLE
 		}
+	}
+
+	if t.MaxOpenFiles > 0 && t.NumOpenFiles() >= t.MaxOpenFiles {
+		return -1, ENFILE
 	}
 
 	newFile, errno := d.file.PathOpen(ctx, lookupFlags, path, openFlags, rightsBase, rightsInheriting, fdFlags)

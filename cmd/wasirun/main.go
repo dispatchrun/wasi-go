@@ -64,6 +64,12 @@ OPTIONS:
    --non-blocking-stdio
       Enable non-blocking stdio
 
+   --max-open-files <N>
+      Limit the number of files that may be opened by the module
+
+   --max-open-dirs <N>
+      Limit the number of directories that may be opened by the module
+
    --http <MODE>
       Optionally enable wasi-http client support and select a
       version {none, auto, v1}
@@ -89,6 +95,8 @@ var (
 	trace            bool
 	nonBlockingStdio bool
 	version          bool
+	maxOpenFiles     int
+	maxOpenDirs      int
 )
 
 func main() {
@@ -108,6 +116,8 @@ func main() {
 	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
 	flagSet.BoolVar(&version, "version", false, "")
 	flagSet.BoolVar(&version, "v", false, "")
+	flagSet.IntVar(&maxOpenFiles, "max-open-files", 1024, "")
+	flagSet.IntVar(&maxOpenDirs, "max-open-dirs", 1024, "")
 	flagSet.Parse(os.Args[1:])
 
 	if version {
@@ -190,7 +200,9 @@ func run(wasmFile string, args []string) error {
 		WithDials(dials...).
 		WithNonBlockingStdio(nonBlockingStdio).
 		WithSocketsExtension(socketExt, wasmModule).
-		WithTracer(trace, os.Stderr)
+		WithTracer(trace, os.Stderr).
+		WithMaxOpenFiles(maxOpenFiles).
+		WithMaxOpenDirs(maxOpenDirs)
 
 	var system wasi.System
 	ctx, system, err = builder.Instantiate(ctx, runtime)

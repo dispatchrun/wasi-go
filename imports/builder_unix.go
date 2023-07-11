@@ -80,6 +80,9 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		Rand:               rand,
 		Exit:               exit,
 	}
+	unixSystem.MaxOpenFiles = b.maxOpenFiles
+	unixSystem.MaxOpenDirs = b.maxOpenDirs
+
 	system := wasi.System(unixSystem)
 	defer func() {
 		if system != nil {
