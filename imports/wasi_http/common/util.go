@@ -2,6 +2,8 @@ package common
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 	"log"
 
 	"github.com/tetratelabs/wazero/api"
@@ -22,4 +24,36 @@ func ReadString(mod api.Module, ptr, len uint32) (string, bool) {
 		return "", false
 	}
 	return string(data), true
+}
+
+func WriteString(ctx context.Context, module api.Module, ptr uint32, str string) error {
+	data := []byte(str)
+	strPtr, err := Malloc(ctx, module, uint32(len(data)))
+	if err != nil {
+		return err
+	}
+	if !module.Memory().WriteString(strPtr, str) {
+		return fmt.Errorf("failed to write string")
+	}
+	data = []byte{}
+	data = binary.LittleEndian.AppendUint32(data, strPtr)
+	data = binary.LittleEndian.AppendUint32(data, uint32(len(str)))
+	if !module.Memory().Write(ptr, data) {
+		return fmt.Errorf("failed to write struct")
+	}
+
+	return nil
+}
+
+func WriteUint32(ctx context.Context, mod api.Module, val uint32) (uint32, error) {
+	ptr, err := Malloc(ctx, mod, 4)
+	if err != nil {
+		return 0, err
+	}
+	data := []byte{}
+	data = binary.LittleEndian.AppendUint32(data, val)
+	if !mod.Memory().Write(ptr, data) {
+		return 0, fmt.Errorf("failed to write uint32")
+	}
+	return ptr, nil
 }

@@ -23,6 +23,14 @@ func GetFields(handle uint32) (Fields, bool) {
 	return fields, found
 }
 
+func DeleteFields(handle uint32) {
+	delete(f.fields, handle)
+}
+
+func dropFieldsFn(_ context.Context, handle uint32) {
+	DeleteFields(handle)
+}
+
 func newFieldsFn(_ context.Context, mod api.Module, ptr, len uint32) uint32 {
 	data, ok := mod.Memory().Read(ptr, len*16)
 	if !ok {

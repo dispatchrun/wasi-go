@@ -73,6 +73,14 @@ OPTIONS:
    --http <MODE>
       Optionally enable wasi-http client support and select a
       version {none, auto, v1}
+	
+   --http-server-addr <host:port>
+      If present, assume run this module as an http server which
+	  listens for requests on this address.
+
+   --http-server-path <path>
+      If present, and --http-server-addr is not empty, serve WebAssembly
+	  on this URL prefix path. Default is '/'	
 
    -v, --version
       Print the version and exit
@@ -92,6 +100,8 @@ var (
 	socketExt        string
 	pprofAddr        string
 	wasiHttp         string
+	wasiHttpAddr     string
+	wasiHttpPath     string
 	trace            bool
 	nonBlockingStdio bool
 	version          bool
@@ -112,6 +122,8 @@ func main() {
 	flagSet.StringVar(&socketExt, "sockets", "auto", "")
 	flagSet.StringVar(&pprofAddr, "pprof-addr", "", "")
 	flagSet.StringVar(&wasiHttp, "http", "auto", "")
+	flagSet.StringVar(&wasiHttpAddr, "http-server-addr", "", "")
+	flagSet.StringVar(&wasiHttpPath, "http-server-path", "/", "")
 	flagSet.BoolVar(&trace, "trace", false, "")
 	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
 	flagSet.BoolVar(&version, "version", false, "")
@@ -231,6 +243,12 @@ func run(wasmFile string, args []string) error {
 	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
 		return err
+	}
+	if len(wasiHttpAddr) > 0 {
+		http.HandleFunc(wasiHttpPath, func(w http.ResponseWriter, r *http.Request) {
+			wasi_http.HandleHTTP(w, r, instance)
+		})
+		return http.ListenAndServe(wasiHttpAddr, nil)
 	}
 	return instance.Close(ctx)
 }
