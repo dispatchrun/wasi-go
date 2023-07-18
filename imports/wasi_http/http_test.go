@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -19,19 +20,6 @@ import (
 type handler struct {
 	urls   []string
 	bodies []string
-}
-
-func deepEquals(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	} else {
-		for ix := range a {
-			if a[ix] != b[ix] {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func (h *handler) reset() {
@@ -135,10 +123,10 @@ func TestHttp(t *testing.T) {
 					t.Error("closing wasm module instance:", err)
 				}
 			}
-			if !deepEquals(expectedPaths[testIx], h.urls) {
+			if !reflect.DeepEqual(expectedPaths[testIx], h.urls) {
 				t.Errorf("Unexpected paths: %v vs %v", h.urls, expectedPaths[testIx])
 			}
-			if !deepEquals(expectedBodies[testIx], h.bodies) {
+			if !reflect.DeepEqual(expectedBodies[testIx], h.bodies) {
 				t.Errorf("Unexpected paths: %v vs %v", h.bodies, expectedBodies[testIx])
 			}
 
