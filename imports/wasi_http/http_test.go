@@ -3,9 +3,11 @@ package wasi_http
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -16,14 +18,32 @@ import (
 )
 
 type handler struct {
-	urls []string
+	urls   []string
+	bodies []string
+}
+
+func (h *handler) reset() {
+	h.bodies = []string{}
+	h.urls = []string{}
 }
 
 func (h *handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+	body := ""
+
+	if req.Body != nil {
+		defer req.Body.Close()
+		data, err := ioutil.ReadAll(req.Body)
+		if err != nil {
+			panic(err.Error())
+		}
+		body = string(data)
+	}
+
 	res.WriteHeader(200)
 	res.Write([]byte("Response"))
 
 	h.urls = append(h.urls, req.URL.String())
+	h.bodies = append(h.bodies, body)
 }
 
 func TestHttp(t *testing.T) {
@@ -44,7 +64,17 @@ func TestHttp(t *testing.T) {
 	defer s.Shutdown(context.TODO())
 
 	expectedPaths := [][]string{
-		[]string{"/get?some=arg&goes=here"},
+		{
+			"/get?some=arg&goes=here",
+			"/post",
+		},
+	}
+
+	expectedBodies := [][]string{
+		{
+			"",
+			"{\"foo\": \"bar\"}",
+		},
 	}
 
 	for testIx, test := range filePaths {
@@ -82,6 +112,7 @@ func TestHttp(t *testing.T) {
 				case *sys.ExitError:
 					if exitCode := e.ExitCode(); exitCode != 0 {
 						t.Error("exit code:", exitCode)
+						t.FailNow()
 					}
 				default:
 					t.Error("instantiating wasm module instance:", err)
@@ -92,21 +123,14 @@ func TestHttp(t *testing.T) {
 					t.Error("closing wasm module instance:", err)
 				}
 			}
-			ok := true
-			if len(h.urls) != len(expectedPaths[testIx]) {
-				ok = false
-			} else {
-				for ix := range h.urls {
-					if h.urls[ix] != expectedPaths[testIx][ix] {
-						ok = false
-						break
-					}
-				}
-			}
-			if !ok {
+			if !reflect.DeepEqual(expectedPaths[testIx], h.urls) {
 				t.Errorf("Unexpected paths: %v vs %v", h.urls, expectedPaths[testIx])
 			}
-			h.urls = []string{}
+			if !reflect.DeepEqual(expectedBodies[testIx], h.bodies) {
+				t.Errorf("Unexpected paths: %v vs %v", h.bodies, expectedBodies[testIx])
+			}
+
+			h.reset()
 		})
 	}
 }
