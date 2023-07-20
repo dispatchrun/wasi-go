@@ -25,7 +25,11 @@ type Request struct {
 }
 
 func (r Request) Url() string {
-	return fmt.Sprintf("%s://%s%s%s", r.Scheme, r.Authority, r.Path, r.Query)
+	u := fmt.Sprintf("%s://%s%s", r.Scheme, r.Authority, r.Path)
+	if len(r.Query) > 0 {
+		u = u + "?" + r.Query
+	}
+	return u
 }
 
 type Requests struct {
