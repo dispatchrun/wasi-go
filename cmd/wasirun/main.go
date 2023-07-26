@@ -103,6 +103,7 @@ var (
 	wasiHttpAddr     string
 	wasiHttpPath     string
 	trace            bool
+	tracerStringSize int
 	nonBlockingStdio bool
 	version          bool
 	maxOpenFiles     int
@@ -125,6 +126,7 @@ func main() {
 	flagSet.StringVar(&wasiHttpAddr, "http-server-addr", "", "")
 	flagSet.StringVar(&wasiHttpPath, "http-server-path", "/", "")
 	flagSet.BoolVar(&trace, "trace", false, "")
+	flagSet.IntVar(&tracerStringSize, "tracer-string-size", 32, "")
 	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
 	flagSet.BoolVar(&version, "version", false, "")
 	flagSet.BoolVar(&version, "v", false, "")
@@ -212,7 +214,7 @@ func run(wasmFile string, args []string) error {
 		WithDials(dials...).
 		WithNonBlockingStdio(nonBlockingStdio).
 		WithSocketsExtension(socketExt, wasmModule).
-		WithTracer(trace, os.Stderr).
+		WithTracer(trace, os.Stderr, wasi.WithTracerStringSize(tracerStringSize)).
 		WithMaxOpenFiles(maxOpenFiles).
 		WithMaxOpenDirs(maxOpenDirs)
 
