@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 )
 
 // RIFlags are flags provided to SockRecv.
@@ -317,23 +318,35 @@ func (st SocketType) String() string {
 type SocketOptionLevel int32
 
 const (
-	SocketLevel SocketOptionLevel = iota
+	SocketLevel SocketOptionLevel = 0 // SOL_SOCKET
+	TcpLevel    SocketOptionLevel = 6 // IPPROTO_TCP
 )
 
 func (sl SocketOptionLevel) String() string {
 	switch sl {
 	case SocketLevel:
 		return "SocketLevel"
+	case TcpLevel:
+		return "TcpLevel"
 	default:
 		return fmt.Sprintf("SocketOptionLevel(%d)", sl)
 	}
 }
 
 // SocketOption is a socket option that can be queried or set.
-type SocketOption int32
+type SocketOption int64
 
+func (s SocketOption) Level() SocketOptionLevel {
+	return SocketOptionLevel(s >> 32)
+}
+
+func MakeSocketOption(level SocketOptionLevel, option int32) SocketOption {
+	return (SocketOption(level) << 32) | SocketOption(option)
+}
+
+// SOL_SOCKET level options.
 const (
-	ReuseAddress SocketOption = iota
+	ReuseAddress SocketOption = (SocketOption(SocketLevel) << 32) | iota
 	QuerySocketType
 	QuerySocketError
 	DontRoute
@@ -348,6 +361,11 @@ const (
 	SendTimeout
 	QueryAcceptConnections
 	BindToDevice
+)
+
+// IPPROTO_TCP level options
+const (
+	TcpNoDelay SocketOption = (SocketOption(TcpLevel) << 32) | (15)
 )
 
 func (so SocketOption) String() string {
@@ -382,8 +400,10 @@ func (so SocketOption) String() string {
 		return "QueryAcceptConnections"
 	case BindToDevice:
 		return "BindToDevice"
+	case TcpNoDelay:
+		return "TcpNoDelay"
 	default:
-		return fmt.Sprintf("SocketOption(%d)", so)
+		return fmt.Sprintf("SocketOption(%d|%d)", so.Level(), int32(so))
 	}
 }
 
@@ -461,6 +481,24 @@ func (IntValue) sockopt() {}
 
 func (i IntValue) String() string {
 	return strconv.Itoa(int(i))
+}
+
+// TimeValue is used to represent socket options with a duration value.
+type TimeValue Timestamp
+
+func (TimeValue) sockopt() {}
+
+func (tv TimeValue) String() string {
+	return time.Duration(tv).String()
+}
+
+// BytesValue is used to represent an arbitrary socket option value.
+type BytesValue []byte
+
+func (BytesValue) sockopt() {}
+
+func (s BytesValue) String() string {
+	return string(s)
 }
 
 // SocketsNotSupported is a helper type intended to be embeded in

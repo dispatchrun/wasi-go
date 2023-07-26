@@ -1,5 +1,7 @@
 .PHONY: all clean test testdata wasi-libc wasi-testsuite
 
+count ?= 1
+
 wasi-go.src = \
 	$(wildcard *.go) \
 	$(wildcard */*.go) \
@@ -10,6 +12,9 @@ wasirun.src = $(wasi-go.src)
 testdata.c.src = $(wildcard testdata/c/*.c)
 testdata.c.wasm = $(testdata.c.src:.c=.wasm)
 
+testdata.http.src = $(wildcard testdata/c/http/http*.c)
+testdata.http.wasm = $(testdata.http.src:.c=.wasm)
+
 testdata.go.src = $(wildcard testdata/go/*.go)
 testdata.go.wasm = $(testdata.go.src:.go=.wasm)
 
@@ -18,6 +23,7 @@ testdata.tinygo.wasm = $(testdata.tinygo.src:.go=.wasm)
 
 testdata.files = \
 	$(testdata.c.wasm) \
+	$(testdata.http.wasm) \
 	$(testdata.go.wasm) \
 	$(testdata.tinygo.wasm)
 
@@ -27,7 +33,7 @@ clean:
 	rm -f $(testdata.files)
 
 test: testdata
-	go test ./...
+	go test -count=$(count) ./...
 
 testdata: $(testdata.files)
 
@@ -51,13 +57,16 @@ testdata/c/%.c: wasi-libc
 testdata/c/%.wasm: testdata/c/%.c
 	clang $< -o $@ -Wall -Os -target wasm32-unknown-wasi --sysroot testdata/.sysroot
 
+testdata/c/http/http.wasm: testdata/c/http/http.c
+	clang $< -o $@ -Wall -Os -target wasm32-unknown-wasi testdata/c/http/proxy.c testdata/c/http/proxy_component_type.o
+
 testdata/go/%.wasm: testdata/go/%.go
 	GOARCH=wasm GOOS=wasip1 gotip build -o $@ $<
 
 testdata/tinygo/%.wasm: testdata/tinygo/%.go
 	tinygo build -target=wasi -o $@ $<
 
-wasirun:
+wasirun: go.mod $(wasirun.src)
 	go build -o wasirun ./cmd/wasirun
 
 wasi-libc: testdata/.sysroot/lib/wasm32-wasi/libc.a

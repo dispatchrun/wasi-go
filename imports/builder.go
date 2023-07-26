@@ -39,6 +39,8 @@ type Builder struct {
 	decorators         []wasi_snapshot_preview1.Decorator
 	wrappers           []func(wasi.System) wasi.System
 	errors             []error
+	maxOpenFiles       int
+	maxOpenDirs        int
 }
 
 // NewBuilder creates a Builder.
@@ -213,5 +215,19 @@ func (b *Builder) WithDecorators(decorators ...wasi_snapshot_preview1.Decorator)
 // WithWrappers sets the wasi.System wrappers.
 func (b *Builder) WithWrappers(wrappers ...func(wasi.System) wasi.System) *Builder {
 	b.wrappers = wrappers
+	return b
+}
+
+// WithMaxOpenFiles sets the limit on the maximum number of files that may be
+// opened by the guest module.
+func (b *Builder) WithMaxOpenFiles(n int) *Builder {
+	b.maxOpenFiles = n
+	return b
+}
+
+// WithMaxOpenFiles sets the limit on the maximum number of directories that may
+// be opened by the guest module.
+func (b *Builder) WithMaxOpenDirs(n int) *Builder {
+	b.maxOpenDirs = n
 	return b
 }

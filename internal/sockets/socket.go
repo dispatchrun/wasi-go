@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -41,7 +42,17 @@ func Socket(rawAddr string) (u *url.URL, sa syscall.Sockaddr, fd int, err error)
 
 // Close closes a file descriptor created with Socket, Listen or Dial.
 func Close(fd int) error {
-	return syscall.Close(fd)
+	if fd < 0 {
+		return syscall.EBADF
+	}
+	err := syscall.Close(fd)
+	if err != nil {
+		if err == syscall.EBADF {
+			println("DEBUG: close", fd, "=> EBADF")
+			debug.PrintStack()
+		}
+	}
+	return err
 }
 
 func socketAddress(network, addr string) (int, syscall.Sockaddr, error) {

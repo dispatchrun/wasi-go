@@ -682,9 +682,9 @@ func (t *tracer) SockRecvFrom(ctx context.Context, fd FD, iovecs []IOVec, iflags
 	return n, oflags, addr, errno
 }
 
-func (t *tracer) SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption) (SocketOptionValue, Errno) {
-	t.printf("SockGetOpt(%d, %s, %s) => ", fd, level, option)
-	value, errno := t.system.SockGetOpt(ctx, fd, level, option)
+func (t *tracer) SockGetOpt(ctx context.Context, fd FD, option SocketOption) (SocketOptionValue, Errno) {
+	t.printf("SockGetOpt(%d, %s) => ", fd, option)
+	value, errno := t.system.SockGetOpt(ctx, fd, option)
 	if errno == ESUCCESS {
 		t.printf("%d", value)
 	} else {
@@ -694,9 +694,9 @@ func (t *tracer) SockGetOpt(ctx context.Context, fd FD, level SocketOptionLevel,
 	return value, errno
 }
 
-func (t *tracer) SockSetOpt(ctx context.Context, fd FD, level SocketOptionLevel, option SocketOption, value SocketOptionValue) Errno {
-	t.printf("SockSetOpt(%d, %s, %s, %d) => ", fd, level, option, value)
-	errno := t.system.SockSetOpt(ctx, fd, level, option, value)
+func (t *tracer) SockSetOpt(ctx context.Context, fd FD, option SocketOption, value SocketOptionValue) Errno {
+	t.printf("SockSetOpt(%d, %s, %s) => ", fd, option, value)
+	errno := t.system.SockSetOpt(ctx, fd, option, value)
 	if errno == ESUCCESS {
 		t.printf("ok")
 	} else {

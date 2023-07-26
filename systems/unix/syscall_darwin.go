@@ -15,7 +15,7 @@ func accept(socket, flags int) (int, unix.Sockaddr, error) {
 	}
 	if (flags & unix.O_NONBLOCK) != 0 {
 		if err := unix.SetNonblock(conn, true); err != nil {
-			unix.Close(conn)
+			closeTraceEBADF(conn)
 			return -1, addr, err
 		}
 	}
@@ -65,8 +65,8 @@ func pipeCloseOnExec(fds []int) error {
 }
 
 func closePipe(fds []int) {
-	unix.Close(fds[1])
-	unix.Close(fds[0])
+	closeTraceEBADF(fds[1])
+	closeTraceEBADF(fds[0])
 	fds[0] = -1
 	fds[1] = -1
 }
@@ -241,4 +241,8 @@ func pwritev(fd int, iovs [][]byte, offset int64) (int, error) {
 		}
 	}
 	return written, nil
+}
+
+func getsocketdomain(fd int) (int, error) {
+	return 0, unix.ENOSYS
 }

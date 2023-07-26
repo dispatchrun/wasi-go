@@ -89,3 +89,7 @@ func preadv(fd int, iovs [][]byte, offset int64) (int, error) {
 func pwritev(fd int, iovs [][]byte, offset int64) (int, error) {
 	return unix.Pwritev(fd, iovs, offset)
 }
+
+func getsocketdomain(fd int) (int, error) {
+	return unix.GetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_DOMAIN)
+}

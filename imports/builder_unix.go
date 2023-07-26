@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"syscall"
 
 	"github.com/stealthrocket/wasi-go"
@@ -20,7 +19,7 @@ import (
 
 // Instantiate compiles and instantiates the WASI module and binds it to
 // the specified context.
-func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxret context.Context, system wasi.System, err error) {
+func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxret context.Context, sys wasi.System, err error) {
 	if len(b.errors) > 0 {
 		return ctx, nil, errors.Join(b.errors...)
 	}
@@ -81,9 +80,12 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		Rand:               rand,
 		Exit:               exit,
 	}
-	system = unixSystem
+	unixSystem.MaxOpenFiles = b.maxOpenFiles
+	unixSystem.MaxOpenDirs = b.maxOpenDirs
+
+	system := wasi.System(unixSystem)
 	defer func() {
-		if err != nil {
+		if system != nil {
 			system.Close(context.Background())
 		}
 	}()
@@ -98,7 +100,7 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		system = wrap(system)
 	}
 
-	for _, stdio := range []struct {
+	for fd, stdio := range []struct {
 		fd   int
 		open int
 		path string
@@ -110,11 +112,20 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 		var err error
 		if stdio.fd < 0 {
 			stdio.fd, err = syscall.Open(stdio.path, stdio.open, 0)
+			// Some systems may not allow opening stdio files on /dev, fallback
+			// duplicating the process file descriptors which comes with the
+			// limitation that setting the file descriptors to non-blocking will
+			// also impact the behavior of stdio streams on the host.
+			//
+			// See: https://github.com/gitpod-io/gitpod/issues/17551
+			if errors.Is(err, syscall.EACCES) {
+				stdio.fd, err = dup(fd)
+			}
 		} else {
 			stdio.fd, err = dup(stdio.fd)
 		}
 		if err != nil {
-			return ctx, nil, fmt.Errorf("unable to create %s: %w", strings.TrimPrefix("/dev/", stdio.path), err)
+			return ctx, nil, fmt.Errorf("unable to open %s: %w", stdio.path, err)
 		}
 		rights := wasi.FileRights
 		if descriptor.IsATTY(stdio.fd) {
@@ -188,7 +199,9 @@ func (b *Builder) Instantiate(ctx context.Context, runtime wazero.Runtime) (ctxr
 	)
 
 	ctx = wazergo.WithModuleInstance(ctx, instance)
-	return ctx, system, nil
+	sys = system
+	system = nil
+	return ctx, sys, nil
 }
 
 func dup(fd int) (int, error) {

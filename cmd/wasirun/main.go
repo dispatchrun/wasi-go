@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports"
+	"github.com/stealthrocket/wasi-go/imports/wasi_http"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/sys"
 )
@@ -33,20 +35,27 @@ OPTIONS:
    --dir <DIR>
       Grant access to the specified host directory
 
-   --listen <ADDR>
+   --listen <ADDR:PORT>
       Grant access to a socket listening on the specified address
 
-   --dial <ADDR>
+   --dial <ADDR:PORT>
       Grant access to a socket connected to the specified address
 
+   --dns-server <ADDR:PORT>
+      Sets the address of the DNS server to use for name resolution
+
+   --env-inherit
+      Inherits all environment variables from the calling process
+
    --env <NAME=VAL>
-      Pass an environment variable to the module
+      Pass an environment variable to the module. Overrides
+      any inherited environment variables from --env-inherit
 
    --sockets <NAME>
       Enable a sockets extension, either {none, auto, path_open,
       wasmedgev1, wasmedgev2}
 
-   --pprof-addr <ADDR>
+   --pprof-addr <ADDR:PORT>
       Start a pprof server listening on the specified address
 
    --trace
@@ -54,6 +63,24 @@ OPTIONS:
 
    --non-blocking-stdio
       Enable non-blocking stdio
+
+   --max-open-files <N>
+      Limit the number of files that may be opened by the module
+
+   --max-open-dirs <N>
+      Limit the number of directories that may be opened by the module
+
+   --http <MODE>
+      Optionally enable wasi-http client support and select a
+      version {none, auto, v1}
+	
+   --http-server-addr <host:port>
+      If present, assume run this module as an http server which
+	  listens for requests on this address.
+
+   --http-server-path <path>
+      If present, and --http-server-addr is not empty, serve WebAssembly
+	  on this URL prefix path. Default is '/'	
 
    -v, --version
       Print the version and exit
@@ -64,31 +91,45 @@ OPTIONS:
 }
 
 var (
+	envInherit       bool
 	envs             stringList
 	dirs             stringList
 	listens          stringList
 	dials            stringList
+	dnsServer        string
 	socketExt        string
 	pprofAddr        string
+	wasiHttp         string
+	wasiHttpAddr     string
+	wasiHttpPath     string
 	trace            bool
 	nonBlockingStdio bool
 	version          bool
+	maxOpenFiles     int
+	maxOpenDirs      int
 )
 
 func main() {
 	flagSet := flag.NewFlagSet("wasirun", flag.ExitOnError)
 	flagSet.Usage = printUsage
 
+	flagSet.BoolVar(&envInherit, "env-inherit", false, "")
 	flagSet.Var(&envs, "env", "")
 	flagSet.Var(&dirs, "dir", "")
 	flagSet.Var(&listens, "listen", "")
 	flagSet.Var(&dials, "dial", "")
+	flagSet.StringVar(&dnsServer, "dns-server", "", "")
 	flagSet.StringVar(&socketExt, "sockets", "auto", "")
 	flagSet.StringVar(&pprofAddr, "pprof-addr", "", "")
+	flagSet.StringVar(&wasiHttp, "http", "auto", "")
+	flagSet.StringVar(&wasiHttpAddr, "http-server-addr", "", "")
+	flagSet.StringVar(&wasiHttpPath, "http-server-path", "/", "")
 	flagSet.BoolVar(&trace, "trace", false, "")
 	flagSet.BoolVar(&nonBlockingStdio, "non-blocking-stdio", false, "")
 	flagSet.BoolVar(&version, "version", false, "")
 	flagSet.BoolVar(&version, "v", false, "")
+	flagSet.IntVar(&maxOpenFiles, "max-open-files", 1024, "")
+	flagSet.IntVar(&maxOpenDirs, "max-open-dirs", 1024, "")
 	flagSet.Parse(os.Args[1:])
 
 	if version {
@@ -104,6 +145,28 @@ func main() {
 	if len(args) == 0 {
 		printUsage()
 		os.Exit(1)
+	}
+
+	if envInherit {
+		envs = append(append([]string{}, os.Environ()...), envs...)
+	}
+
+	if dnsServer != "" {
+		_, dnsServerPort, _ := net.SplitHostPort(dnsServer)
+		net.DefaultResolver.PreferGo = true
+		net.DefaultResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+			var d net.Dialer
+			if dnsServerPort != "" {
+				address = dnsServer
+			} else {
+				_, port, err := net.SplitHostPort(address)
+				if err != nil {
+					return nil, net.InvalidAddrError(address)
+				}
+				address = net.JoinHostPort(dnsServer, port)
+			}
+			return d.DialContext(ctx, network, address)
+		}
 	}
 
 	if err := run(args[0], args[1:]); err != nil {
@@ -149,7 +212,9 @@ func run(wasmFile string, args []string) error {
 		WithDials(dials...).
 		WithNonBlockingStdio(nonBlockingStdio).
 		WithSocketsExtension(socketExt, wasmModule).
-		WithTracer(trace, os.Stderr)
+		WithTracer(trace, os.Stderr).
+		WithMaxOpenFiles(maxOpenFiles).
+		WithMaxOpenDirs(maxOpenDirs)
 
 	var system wasi.System
 	ctx, system, err = builder.Instantiate(ctx, runtime)
@@ -158,9 +223,32 @@ func run(wasmFile string, args []string) error {
 	}
 	defer system.Close(ctx)
 
+	importWasi := false
+	switch wasiHttp {
+	case "auto":
+		importWasi = wasi_http.DetectWasiHttp(wasmModule)
+	case "v1":
+		importWasi = true
+	case "none":
+		importWasi = false
+	default:
+		return fmt.Errorf("invalid value for -http '%v', expected 'auto', 'v1' or 'none'", wasiHttp)
+	}
+	if importWasi {
+		if err := wasi_http.Instantiate(ctx, runtime); err != nil {
+			return err
+		}
+	}
+
 	instance, err := runtime.InstantiateModule(ctx, wasmModule, wazero.NewModuleConfig())
 	if err != nil {
 		return err
+	}
+	if len(wasiHttpAddr) > 0 {
+		http.HandleFunc(wasiHttpPath, func(w http.ResponseWriter, r *http.Request) {
+			wasi_http.HandleHTTP(w, r, instance)
+		})
+		return http.ListenAndServe(wasiHttpAddr, nil)
 	}
 	return instance.Close(ctx)
 }
