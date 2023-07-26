@@ -4,19 +4,39 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"strconv"
 )
 
 // Trace wraps a System to log all calls to its methods in a human-readable
 // format to the given io.Writer.
-func Trace(w io.Writer, s System) System {
-	return &tracer{writer: w, system: s}
+func Trace(w io.Writer, s System, options ...TracerOption) System {
+	t := &tracer{
+		writer:     w,
+		system:     s,
+		stringSize: 32,
+	}
+	for _, option := range options {
+		option(t)
+	}
+	return t
+}
+
+// TracerOption configures a tracer.
+type TracerOption func(*tracer)
+
+// WithTracerStringSize sets the number of bytes to print when
+// printing strings.
+//
+// To disable truncation of strings, use stringSize < 0.
+//
+// The default string size is 32.
+func WithTracerStringSize(stringSize int) TracerOption {
+	return func(t *tracer) { t.stringSize = stringSize }
 }
 
 type tracer struct {
-	writer io.Writer
-	system System
+	writer     io.Writer
+	system     System
+	stringSize int
 }
 
 func (t *tracer) ArgsSizesGet(ctx context.Context) (int, int, Errno) {
@@ -878,23 +898,13 @@ func (t *tracer) printAddressInfo(a AddressInfo) {
 	t.printf("}")
 }
 
-var maxBytes = 32
-
-func init() {
-	if m := os.Getenv("TRACER_MAX_BYTES"); m != "" {
-		if i, err := strconv.Atoi(m); err == nil {
-			maxBytes = i
-		}
-	}
-}
-
 func (t *tracer) printBytes(b []byte) {
 	t.printf("[%d]byte(\"", len(b))
 
 	if len(b) > 0 {
 		trunc := b
-		if maxBytes > 0 && len(b) > maxBytes {
-			trunc = trunc[:maxBytes]
+		if t.stringSize >= 0 && len(b) > t.stringSize {
+			trunc = trunc[:t.stringSize]
 		}
 		for _, c := range trunc {
 			if c < 32 || c >= 127 || c == '"' {
@@ -921,7 +931,7 @@ func (t *tracer) printBytes(b []byte) {
 		}
 	}
 	t.printf("\"")
-	if maxBytes > 0 && len(b) > maxBytes {
+	if t.stringSize >= 0 && len(b) > t.stringSize {
 		t.printf("...")
 	}
 	t.printf(")")

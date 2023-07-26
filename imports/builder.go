@@ -36,6 +36,7 @@ type Builder struct {
 	pathOpenSockets    bool
 	nonBlockingStdio   bool
 	tracer             io.Writer
+	tracerOptions      []wasi.TracerOption
 	decorators         []wasi_snapshot_preview1.Decorator
 	wrappers           []func(wasi.System) wasi.System
 	errors             []error
@@ -198,11 +199,12 @@ func (b *Builder) WithNonBlockingStdio(enable bool) *Builder {
 
 // WithTracer enables the Tracer, and instructs it to write to the
 // specified io.Writer.
-func (b *Builder) WithTracer(enable bool, w io.Writer) *Builder {
+func (b *Builder) WithTracer(enable bool, w io.Writer, options ...wasi.TracerOption) *Builder {
 	if !enable {
 		w = nil
 	}
 	b.tracer = w
+	b.tracerOptions = options
 	return b
 }
 
