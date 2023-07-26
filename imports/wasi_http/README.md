@@ -11,3 +11,9 @@ There are existing examples of working guest code in the following languages
 * [AssemblyScript](https://github.com/dev-wasm/dev-wasm-ts/tree/main/http)
 * [Dotnet](https://github.com/dev-wasm/dev-wasm-dotnet/tree/main/http)
 * [Rust](https://github.com/bytecodealliance/wasmtime/blob/main/crates/test-programs/wasi-http-tests/src/bin/outbound_request.rs)
+
+## Example server code
+There is an example server in the following languages (more to come):
+* [Golang](https://github.com/dev-wasm/dev-wasm-go/blob/main/http/server.go)
+* [C](https://github.com/brendandburns/wasi-go/blob/server/testdata/c/http/server.c)
+

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"log"
@@ -12,7 +13,9 @@ import (
 
 type Response struct {
 	*http.Response
-	headerHandle uint32
+	HeaderHandle uint32
+	streamHandle uint32
+	Buffer       *bytes.Buffer
 }
 
 type responses struct {
@@ -20,12 +23,29 @@ type responses struct {
 	baseResponseId uint32
 }
 
+type outResponses struct {
+	responses      map[uint32]uint32
+	baseResponseId uint32
+}
+
 var data = responses{make(map[uint32]*Response), 0}
+var outData = outResponses{make(map[uint32]uint32), 0}
 
 func MakeResponse(res *http.Response) uint32 {
+	r := &Response{res, 0, 0, nil}
 	data.baseResponseId++
-	data.responses[data.baseResponseId] = &Response{res, 0}
+	data.responses[data.baseResponseId] = r
 	return data.baseResponseId
+}
+
+func MakeOutparameter() uint32 {
+	outData.baseResponseId++
+	return outData.baseResponseId
+}
+
+func GetResponseByOutparameter(out uint32) (uint32, bool) {
+	r, ok := outData.responses[out]
+	return r, ok
 }
 
 func GetResponse(handle uint32) (*Response, bool) {
@@ -33,8 +53,55 @@ func GetResponse(handle uint32) (*Response, bool) {
 	return res, ok
 }
 
+func DeleteResponse(handle uint32) {
+	delete(data.responses, handle)
+}
+
 func dropIncomingResponseFn(_ context.Context, mod api.Module, handle uint32) {
 	delete(data.responses, handle)
+}
+
+func dropOutgoingResponseFn(_ context.Context, mod api.Module, handle uint32) {
+	// pass
+}
+
+func outgoingResponseWriteFn(ctx context.Context, mod api.Module, res, ptr uint32) {
+	response, found := GetResponse(res)
+	data := []byte{}
+	if !found {
+		// Error
+		data = binary.LittleEndian.AppendUint32(data, 1)
+		data = binary.LittleEndian.AppendUint32(data, 0)
+	} else {
+		writer := &bytes.Buffer{}
+		stream := streams.Streams.NewOutputStream(writer)
+
+		response.streamHandle = stream
+		response.Buffer = writer
+		// 0 == no error
+		data = binary.LittleEndian.AppendUint32(data, 0)
+		data = binary.LittleEndian.AppendUint32(data, stream)
+	}
+	if !mod.Memory().Write(ptr, data) {
+		panic("Failed to write data!")
+	}
+}
+
+func newOutgoingResponseFn(_ context.Context, status, headers uint32) uint32 {
+	data.baseResponseId++
+	r := &Response{&http.Response{}, headers, 0, nil}
+	r.StatusCode = int(status)
+	data.responses[data.baseResponseId] = r
+	return data.baseResponseId
+}
+
+func setResponseOutparamFn(_ context.Context, mod api.Module, res, err, resOut, _msg_ptr, _msg_str uint32) uint32 {
+	if err == 1 {
+		// TODO: details here.
+		return 1
+	}
+	outData.responses[res] = resOut
+	return 0
 }
 
 func incomingResponseStatusFn(_ context.Context, mod api.Module, handle uint32) int32 {
@@ -52,10 +119,10 @@ func incomingResponseHeadersFn(_ context.Context, mod api.Module, handle uint32)
 		log.Printf("Unknown handle: %v", handle)
 		return 0
 	}
-	if res.headerHandle == 0 {
-		res.headerHandle = MakeFields(Fields(res.Header))
+	if res.HeaderHandle == 0 {
+		res.HeaderHandle = MakeFields(Fields(res.Header))
 	}
-	return res.headerHandle
+	return res.HeaderHandle
 }
 
 func incomingResponseConsumeFn(_ context.Context, mod api.Module, handle, ptr uint32) {

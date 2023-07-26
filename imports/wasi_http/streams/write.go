@@ -16,7 +16,7 @@ func writeStreamFn(_ context.Context, mod api.Module, stream, ptr, l, result_ptr
 	}
 	n, err := Streams.Write(stream, data)
 	if err != nil {
-		log.Printf("Failed to read: %v\n", err.Error())
+		log.Printf("Failed to write: %v\n", err.Error())
 	}
 
 	data = []byte{}

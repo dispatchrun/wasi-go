@@ -1,8 +1,7 @@
 #include "proxy.h"
 #include <stdio.h>
 
-void http_handle(uint32_t arg, uint32_t arg0) {
-
+void http_handle(uint32_t req, uint32_t resp_out) {
 }
 
 int request(uint8_t method_tag, uint8_t scheme_tag, const char * authority_str, const char* path_str, const char* query_str, const char* body) {
@@ -117,11 +116,12 @@ int request(uint8_t method_tag, uint8_t scheme_tag, const char * authority_str, 
 }
 
 int main() {
-    int r = request(TYPES_METHOD_GET, TYPES_SCHEME_HTTP, "localhost:8080", "/get", "?some=arg&goes=here", NULL);
+    const char *authority = getenv("SERVER");
+    int r = request(TYPES_METHOD_GET, TYPES_SCHEME_HTTP, authority, "/get", "?some=arg&goes=here", NULL);
     if (r != 0) {
         return r;
     }
-    r = request(TYPES_METHOD_POST, TYPES_SCHEME_HTTP, "localhost:8080", "/post", "", "{\"foo\": \"bar\"}");
+    r = request(TYPES_METHOD_POST, TYPES_SCHEME_HTTP, authority, "/post", "", "{\"foo\": \"bar\"}");
     if (r != 0) {
         return r;
     }

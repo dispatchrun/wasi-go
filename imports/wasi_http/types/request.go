@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/stealthrocket/wasi-go/imports/wasi_http/common"
 	"github.com/stealthrocket/wasi-go/imports/wasi_http/streams"
 	"github.com/tetratelabs/wazero/api"
 )
@@ -33,6 +34,17 @@ type requests struct {
 }
 
 var r = &requests{make(map[uint32]*Request), 1}
+
+func MakeRequest(req *http.Request) uint32 {
+	request, id := r.newRequest()
+	request.Method = req.Method
+	// Fix this if port is missing.
+	request.Authority = req.Host
+	request.Path = req.URL.Path
+	request.Headers = MakeFields(Fields(req.Header))
+
+	return id
+}
 
 func (r *requests) newRequest() (*Request, uint32) {
 	request := &Request{}
@@ -65,6 +77,79 @@ func (request *Request) MakeRequest() (*http.Response, error) {
 	}
 
 	return http.DefaultClient.Do(r)
+}
+
+func incomingRequestConsumeFn(ctx context.Context, mod api.Module, request, ptr uint32) {
+	data := []byte{}
+	// Unsupported for now.
+	// error
+	data = binary.LittleEndian.AppendUint32(data, 1)
+	data = binary.LittleEndian.AppendUint32(data, 0)
+
+	mod.Memory().Write(ptr, data)
+}
+
+func incomingRequestHeadersFn(ctx context.Context, mod api.Module, request uint32) uint32 {
+	req, ok := r.requests[request]
+	if !ok {
+		return 0
+	}
+	return req.Headers
+}
+
+func incomingRequestPathFn(ctx context.Context, mod api.Module, request, ptr uint32) {
+	req, ok := r.requests[request]
+	if !ok {
+		return
+	}
+	if err := common.WriteString(ctx, mod, ptr, req.Path); err != nil {
+		panic(err.Error())
+	}
+}
+
+func incomingRequestAuthorityFn(ctx context.Context, mod api.Module, request, ptr uint32) {
+	req, ok := r.requests[request]
+	if !ok {
+		return
+	}
+	if err := common.WriteString(ctx, mod, ptr, req.Authority); err != nil {
+		panic(err.Error())
+	}
+}
+
+func incomingRequestMethodFn(_ context.Context, mod api.Module, request, ptr uint32) {
+	req, ok := r.requests[request]
+	if !ok {
+		return
+	}
+
+	method := 0
+	switch req.Method {
+	case "GET":
+		method = 0
+	case "HEAD":
+		method = 1
+	case "POST":
+		method = 2
+	case "PUT":
+		method = 3
+	case "DELETE":
+		method = 4
+	case "CONNECT":
+		method = 5
+	case "OPTIONS":
+		method = 6
+	case "TRACE":
+		method = 7
+	case "PATCH":
+		method = 8
+	default:
+		log.Fatalf("Unknown method: %s", req.Method)
+	}
+
+	data := []byte{}
+	data = binary.LittleEndian.AppendUint32(data, uint32(method))
+	mod.Memory().Write(ptr, data)
 }
 
 func newOutgoingRequestFn(_ context.Context, mod api.Module,
@@ -137,6 +222,16 @@ func newOutgoingRequestFn(_ context.Context, mod api.Module,
 }
 
 func dropOutgoingRequestFn(_ context.Context, mod api.Module, handle uint32) {
+	r.deleteRequest(handle)
+}
+
+func dropIncomingRequestFn(_ context.Context, mod api.Module, handle uint32) {
+	req, found := r.requests[handle]
+	if !found {
+		return
+	}
+	delete(f.fields, req.Headers)
+	// Delete body stream here
 	r.deleteRequest(handle)
 }
 
