@@ -9,9 +9,9 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-func streamReadFn(ctx context.Context, mod api.Module, stream_handle uint32, length uint64, out_ptr uint32) {
+func (s *Streams) streamReadFn(ctx context.Context, mod api.Module, stream_handle uint32, length uint64, out_ptr uint32) {
 	rawData := make([]byte, length)
-	n, done, err := Streams.Read(stream_handle, rawData)
+	n, done, err := s.Read(stream_handle, rawData)
 
 	//	data, err := types.ResponseBody()
 	if err != nil {
@@ -41,6 +41,6 @@ func streamReadFn(ctx context.Context, mod api.Module, stream_handle uint32, len
 	mod.Memory().Write(out_ptr, data)
 }
 
-func dropInputStreamFn(_ context.Context, mod api.Module, stream uint32) {
-	Streams.DeleteStream(stream)
+func (s *Streams) dropInputStreamFn(_ context.Context, mod api.Module, stream uint32) {
+	s.DeleteStream(stream)
 }

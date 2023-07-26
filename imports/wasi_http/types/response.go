@@ -18,55 +18,47 @@ type Response struct {
 	Buffer       *bytes.Buffer
 }
 
-type responses struct {
+type Responses struct {
 	responses      map[uint32]*Response
 	baseResponseId uint32
+	streams        *streams.Streams
+	fields         *FieldsCollection
 }
 
-type outResponses struct {
+type OutResponses struct {
 	responses      map[uint32]uint32
 	baseResponseId uint32
 }
 
-var data = responses{make(map[uint32]*Response), 0}
-var outData = outResponses{make(map[uint32]uint32), 0}
-
-func MakeResponse(res *http.Response) uint32 {
-	r := &Response{res, 0, 0, nil}
-	data.baseResponseId++
-	data.responses[data.baseResponseId] = r
-	return data.baseResponseId
+func (o *OutResponses) MakeOutparameter() uint32 {
+	o.baseResponseId++
+	return o.baseResponseId
 }
 
-func MakeOutparameter() uint32 {
-	outData.baseResponseId++
-	return outData.baseResponseId
-}
-
-func GetResponseByOutparameter(out uint32) (uint32, bool) {
-	r, ok := outData.responses[out]
+func (o *OutResponses) GetResponseByOutparameter(out uint32) (uint32, bool) {
+	r, ok := o.responses[out]
 	return r, ok
 }
 
-func GetResponse(handle uint32) (*Response, bool) {
-	res, ok := data.responses[handle]
+func (r *Responses) GetResponse(handle uint32) (*Response, bool) {
+	res, ok := r.responses[handle]
 	return res, ok
 }
 
-func DeleteResponse(handle uint32) {
-	delete(data.responses, handle)
+func (r *Responses) DeleteResponse(handle uint32) {
+	delete(r.responses, handle)
 }
 
-func dropIncomingResponseFn(_ context.Context, mod api.Module, handle uint32) {
-	delete(data.responses, handle)
+func (r *Responses) dropIncomingResponseFn(_ context.Context, mod api.Module, handle uint32) {
+	delete(r.responses, handle)
 }
 
 func dropOutgoingResponseFn(_ context.Context, mod api.Module, handle uint32) {
 	// pass
 }
 
-func outgoingResponseWriteFn(ctx context.Context, mod api.Module, res, ptr uint32) {
-	response, found := GetResponse(res)
+func (r *Responses) outgoingResponseWriteFn(ctx context.Context, mod api.Module, res, ptr uint32) {
+	response, found := r.GetResponse(res)
 	data := []byte{}
 	if !found {
 		// Error
@@ -74,7 +66,7 @@ func outgoingResponseWriteFn(ctx context.Context, mod api.Module, res, ptr uint3
 		data = binary.LittleEndian.AppendUint32(data, 0)
 	} else {
 		writer := &bytes.Buffer{}
-		stream := streams.Streams.NewOutputStream(writer)
+		stream := r.streams.NewOutputStream(writer)
 
 		response.streamHandle = stream
 		response.Buffer = writer
@@ -87,25 +79,25 @@ func outgoingResponseWriteFn(ctx context.Context, mod api.Module, res, ptr uint3
 	}
 }
 
-func newOutgoingResponseFn(_ context.Context, status, headers uint32) uint32 {
-	data.baseResponseId++
-	r := &Response{&http.Response{}, headers, 0, nil}
-	r.StatusCode = int(status)
-	data.responses[data.baseResponseId] = r
-	return data.baseResponseId
+func (r *Responses) newOutgoingResponseFn(_ context.Context, status, headers uint32) uint32 {
+	res := &Response{&http.Response{}, headers, 0, nil}
+	res.StatusCode = int(status)
+	r.baseResponseId++
+	r.responses[r.baseResponseId] = res
+	return r.baseResponseId
 }
 
-func setResponseOutparamFn(_ context.Context, mod api.Module, res, err, resOut, _msg_ptr, _msg_str uint32) uint32 {
+func (o *OutResponses) setResponseOutparamFn(_ context.Context, mod api.Module, res, err, resOut, _msg_ptr, _msg_str uint32) uint32 {
 	if err == 1 {
 		// TODO: details here.
 		return 1
 	}
-	outData.responses[res] = resOut
+	o.responses[res] = resOut
 	return 0
 }
 
-func incomingResponseStatusFn(_ context.Context, mod api.Module, handle uint32) int32 {
-	response, found := GetResponse(handle)
+func (r *Responses) incomingResponseStatusFn(_ context.Context, mod api.Module, handle uint32) int32 {
+	response, found := r.GetResponse(handle)
 	if !found {
 		log.Printf("Unknown handle: %v", handle)
 		return 0
@@ -113,20 +105,30 @@ func incomingResponseStatusFn(_ context.Context, mod api.Module, handle uint32) 
 	return int32(response.StatusCode)
 }
 
-func incomingResponseHeadersFn(_ context.Context, mod api.Module, handle uint32) uint32 {
-	res, found := GetResponse(handle)
+func MakeResponses(s *streams.Streams, f *FieldsCollection) *Responses {
+	return &Responses{map[uint32]*Response{}, 1, s, f}
+}
+
+func (r *Responses) MakeResponse(res *http.Response) uint32 {
+	r.baseResponseId++
+	r.responses[r.baseResponseId] = &Response{res, 0, 0, nil}
+	return r.baseResponseId
+}
+
+func (r *Responses) incomingResponseHeadersFn(_ context.Context, mod api.Module, handle uint32) uint32 {
+	res, found := r.GetResponse(handle)
 	if !found {
 		log.Printf("Unknown handle: %v", handle)
 		return 0
 	}
 	if res.HeaderHandle == 0 {
-		res.HeaderHandle = MakeFields(Fields(res.Header))
+		res.HeaderHandle = r.fields.MakeFields(Fields(res.Header))
 	}
 	return res.HeaderHandle
 }
 
-func incomingResponseConsumeFn(_ context.Context, mod api.Module, handle, ptr uint32) {
-	response, found := GetResponse(handle)
+func (r *Responses) incomingResponseConsumeFn(_ context.Context, mod api.Module, handle, ptr uint32) {
+	response, found := r.GetResponse(handle)
 	le := binary.LittleEndian
 	data := []byte{}
 	if !found {
@@ -135,7 +137,7 @@ func incomingResponseConsumeFn(_ context.Context, mod api.Module, handle, ptr ui
 	} else {
 		// 0 == ok, 1 == is_err
 		data = le.AppendUint32(data, 0)
-		stream := streams.Streams.NewInputStream(response.Body)
+		stream := r.streams.NewInputStream(response.Body)
 		// This is the stream number
 		data = le.AppendUint32(data, stream)
 	}

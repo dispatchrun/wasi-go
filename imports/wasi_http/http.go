@@ -13,13 +13,18 @@ import (
 )
 
 func Instantiate(ctx context.Context, rt wazero.Runtime) error {
-	if err := types.Instantiate(ctx, rt); err != nil {
+	s := streams.MakeStreams()
+	f := types.MakeFields()
+	r := types.MakeRequests(s, f)
+	rs := types.MakeResponses(s, f)
+
+	if err := types.Instantiate(ctx, rt, s, r, rs, f); err != nil {
 		return err
 	}
-	if err := streams.Instantiate(ctx, rt); err != nil {
+	if err := streams.Instantiate(ctx, rt, s); err != nil {
 		return err
 	}
-	if err := default_http.Instantiate(ctx, rt); err != nil {
+	if err := default_http.Instantiate(ctx, rt, r, rs, f); err != nil {
 		return err
 	}
 	return nil
