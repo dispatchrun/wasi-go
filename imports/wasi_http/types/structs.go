@@ -11,27 +11,35 @@ import (
 )
 
 type Fields map[string][]string
-type fieldsCollection struct {
+type FieldsCollection struct {
 	fields       map[uint32]Fields
 	baseFieldsId uint32
 }
 
-var f = fieldsCollection{make(map[uint32]Fields), 0}
+func MakeFields() *FieldsCollection {
+	return &FieldsCollection{map[uint32]Fields{}, 1}
+}
 
-func GetFields(handle uint32) (Fields, bool) {
+func (f *FieldsCollection) MakeFields(fields Fields) uint32 {
+	f.baseFieldsId++
+	f.fields[f.baseFieldsId] = fields
+	return f.baseFieldsId
+}
+
+func (f *FieldsCollection) GetFields(handle uint32) (Fields, bool) {
 	fields, found := f.fields[handle]
 	return fields, found
 }
 
-func DeleteFields(handle uint32) {
+func (f *FieldsCollection) DeleteFields(handle uint32) {
 	delete(f.fields, handle)
 }
 
-func dropFieldsFn(_ context.Context, handle uint32) {
-	DeleteFields(handle)
+func (f *FieldsCollection) dropFieldsFn(_ context.Context, handle uint32) {
+	f.DeleteFields(handle)
 }
 
-func newFieldsFn(_ context.Context, mod api.Module, ptr, len uint32) uint32 {
+func (f *FieldsCollection) newFieldsFn(_ context.Context, mod api.Module, ptr, len uint32) uint32 {
 	data, ok := mod.Memory().Read(ptr, len*16)
 	if !ok {
 		fmt.Println("Error reading fields.")
@@ -58,13 +66,7 @@ func newFieldsFn(_ context.Context, mod api.Module, ptr, len uint32) uint32 {
 		}
 		fields[key] = append(fields[key], val)
 	}
-	return MakeFields(fields)
-}
-
-func MakeFields(fields Fields) uint32 {
-	f.baseFieldsId++
-	f.fields[f.baseFieldsId] = fields
-	return f.baseFieldsId
+	return f.MakeFields(fields)
 }
 
 func allocateWriteString(ctx context.Context, m api.Module, s string) uint32 {
@@ -76,8 +78,8 @@ func allocateWriteString(ctx context.Context, m api.Module, s string) uint32 {
 	return ptr
 }
 
-func fieldsEntriesFn(ctx context.Context, mod api.Module, handle, out_ptr uint32) {
-	headers, found := GetFields(handle)
+func (f *FieldsCollection) fieldsEntriesFn(ctx context.Context, mod api.Module, handle, out_ptr uint32) {
+	headers, found := f.GetFields(handle)
 	if !found {
 		return
 	}

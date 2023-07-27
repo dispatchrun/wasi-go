@@ -28,41 +28,45 @@ func (r Request) Url() string {
 	return fmt.Sprintf("%s://%s%s%s", r.Scheme, r.Authority, r.Path, r.Query)
 }
 
-type requests struct {
+type Requests struct {
 	requests      map[uint32]*Request
 	requestIdBase uint32
+	streams       *streams.Streams
+	fields        *FieldsCollection
 }
 
-var r = &requests{make(map[uint32]*Request), 1}
+func MakeRequests(s *streams.Streams, f *FieldsCollection) *Requests {
+	return &Requests{map[uint32]*Request{}, 1, s, f}
+}
 
-func MakeRequest(req *http.Request) uint32 {
+func (r *Requests) MakeRequest(req *http.Request) uint32 {
 	request, id := r.newRequest()
 	request.Method = req.Method
 	// Fix this if port is missing.
 	request.Authority = req.Host
 	request.Path = req.URL.Path
-	request.Headers = MakeFields(Fields(req.Header))
+	request.Headers = r.fields.MakeFields(Fields(req.Header))
 
 	return id
 }
 
-func (r *requests) newRequest() (*Request, uint32) {
+func (r *Requests) newRequest() (*Request, uint32) {
 	request := &Request{}
 	r.requestIdBase++
 	r.requests[r.requestIdBase] = request
 	return request, r.requestIdBase
 }
 
-func (r *requests) deleteRequest(handle uint32) {
+func (r *Requests) deleteRequest(handle uint32) {
 	delete(r.requests, handle)
 }
 
-func GetRequest(handle uint32) (*Request, bool) {
-	r, ok := r.requests[handle]
-	return r, ok
+func (r *Requests) GetRequest(handle uint32) (*Request, bool) {
+	req, ok := r.requests[handle]
+	return req, ok
 }
 
-func (request *Request) MakeRequest() (*http.Response, error) {
+func (request *Request) MakeRequest(f *FieldsCollection) (*http.Response, error) {
 	var body io.Reader = nil
 	if request.BodyBuffer != nil {
 		body = bytes.NewReader(request.BodyBuffer.Bytes())
@@ -72,7 +76,7 @@ func (request *Request) MakeRequest() (*http.Response, error) {
 		return nil, err
 	}
 
-	if fields, found := GetFields(request.Headers); found {
+	if fields, found := f.GetFields(request.Headers); found {
 		r.Header = http.Header(fields)
 	}
 
@@ -89,7 +93,7 @@ func incomingRequestConsumeFn(ctx context.Context, mod api.Module, request, ptr 
 	mod.Memory().Write(ptr, data)
 }
 
-func incomingRequestHeadersFn(ctx context.Context, mod api.Module, request uint32) uint32 {
+func (r *Requests) incomingRequestHeadersFn(ctx context.Context, mod api.Module, request uint32) uint32 {
 	req, ok := r.requests[request]
 	if !ok {
 		return 0
@@ -97,7 +101,7 @@ func incomingRequestHeadersFn(ctx context.Context, mod api.Module, request uint3
 	return req.Headers
 }
 
-func incomingRequestPathFn(ctx context.Context, mod api.Module, request, ptr uint32) {
+func (r *Requests) incomingRequestPathFn(ctx context.Context, mod api.Module, request, ptr uint32) {
 	req, ok := r.requests[request]
 	if !ok {
 		return
@@ -107,7 +111,7 @@ func incomingRequestPathFn(ctx context.Context, mod api.Module, request, ptr uin
 	}
 }
 
-func incomingRequestAuthorityFn(ctx context.Context, mod api.Module, request, ptr uint32) {
+func (r *Requests) incomingRequestAuthorityFn(ctx context.Context, mod api.Module, request, ptr uint32) {
 	req, ok := r.requests[request]
 	if !ok {
 		return
@@ -117,7 +121,7 @@ func incomingRequestAuthorityFn(ctx context.Context, mod api.Module, request, pt
 	}
 }
 
-func incomingRequestMethodFn(_ context.Context, mod api.Module, request, ptr uint32) {
+func (r *Requests) incomingRequestMethodFn(_ context.Context, mod api.Module, request, ptr uint32) {
 	req, ok := r.requests[request]
 	if !ok {
 		return
@@ -152,7 +156,7 @@ func incomingRequestMethodFn(_ context.Context, mod api.Module, request, ptr uin
 	mod.Memory().Write(ptr, data)
 }
 
-func newOutgoingRequestFn(_ context.Context, mod api.Module,
+func (r *Requests) newOutgoingRequestFn(_ context.Context, mod api.Module,
 	method, method_ptr, method_len,
 	path_ptr, path_len,
 	query_ptr, query_len,
@@ -221,28 +225,28 @@ func newOutgoingRequestFn(_ context.Context, mod api.Module,
 	return id
 }
 
-func dropOutgoingRequestFn(_ context.Context, mod api.Module, handle uint32) {
+func (r *Requests) dropOutgoingRequestFn(_ context.Context, mod api.Module, handle uint32) {
 	r.deleteRequest(handle)
 }
 
-func dropIncomingRequestFn(_ context.Context, mod api.Module, handle uint32) {
+func (r *Requests) dropIncomingRequestFn(_ context.Context, mod api.Module, handle uint32) {
 	req, found := r.requests[handle]
 	if !found {
 		return
 	}
-	delete(f.fields, req.Headers)
+	delete(r.fields.fields, req.Headers)
 	// Delete body stream here
 	r.deleteRequest(handle)
 }
 
-func outgoingRequestWriteFn(_ context.Context, mod api.Module, handle, ptr uint32) {
-	request, found := GetRequest(handle)
+func (r *Requests) outgoingRequestWriteFn(_ context.Context, mod api.Module, handle, ptr uint32) {
+	request, found := r.GetRequest(handle)
 	if !found {
 		fmt.Printf("Failed to find request: %d\n", handle)
 		return
 	}
 	request.BodyBuffer = &bytes.Buffer{}
-	stream := streams.Streams.NewOutputStream(request.BodyBuffer)
+	stream := r.streams.NewOutputStream(request.BodyBuffer)
 
 	data := []byte{}
 	data = binary.LittleEndian.AppendUint32(data, 0)

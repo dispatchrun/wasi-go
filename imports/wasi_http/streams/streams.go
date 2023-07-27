@@ -10,53 +10,55 @@ import (
 
 const ModuleName = "streams"
 
-type stream struct {
+type Stream struct {
 	reader io.Reader
 	writer io.Writer
 }
 
-type streams struct {
-	streams          map[uint32]stream
+type Streams struct {
+	streams          map[uint32]Stream
 	streamHandleBase uint32
 }
 
-var Streams = &streams{
-	make(map[uint32]stream),
-	1,
+func MakeStreams() *Streams {
+	return &Streams{
+		make(map[uint32]Stream),
+		1,
+	}
 }
 
-func Instantiate(ctx context.Context, r wazero.Runtime) error {
+func Instantiate(ctx context.Context, r wazero.Runtime, s *Streams) error {
 	_, err := r.NewHostModuleBuilder(ModuleName).
-		NewFunctionBuilder().WithFunc(streamReadFn).Export("read").
-		NewFunctionBuilder().WithFunc(dropInputStreamFn).Export("drop-input-stream").
-		NewFunctionBuilder().WithFunc(writeStreamFn).Export("write").
+		NewFunctionBuilder().WithFunc(s.streamReadFn).Export("read").
+		NewFunctionBuilder().WithFunc(s.dropInputStreamFn).Export("drop-input-stream").
+		NewFunctionBuilder().WithFunc(s.writeStreamFn).Export("write").
 		Instantiate(ctx)
 	return err
 }
 
-func (s *streams) NewInputStream(reader io.Reader) uint32 {
+func (s *Streams) NewInputStream(reader io.Reader) uint32 {
 	s.streamHandleBase++
-	s.streams[s.streamHandleBase] = stream{
+	s.streams[s.streamHandleBase] = Stream{
 		reader: reader,
 		writer: nil,
 	}
 	return s.streamHandleBase
 }
 
-func (s *streams) DeleteStream(handle uint32) {
+func (s *Streams) DeleteStream(handle uint32) {
 	delete(s.streams, handle)
 }
 
-func (s *streams) NewOutputStream(writer io.Writer) uint32 {
+func (s *Streams) NewOutputStream(writer io.Writer) uint32 {
 	s.streamHandleBase++
-	s.streams[s.streamHandleBase] = stream{
+	s.streams[s.streamHandleBase] = Stream{
 		reader: nil,
 		writer: writer,
 	}
 	return s.streamHandleBase
 }
 
-func (s *streams) Read(handle uint32, data []byte) (int, bool, error) {
+func (s *Streams) Read(handle uint32, data []byte) (int, bool, error) {
 	stream, found := s.streams[handle]
 	if !found {
 		return 0, false, fmt.Errorf("stream not found: %d", handle)
@@ -72,7 +74,7 @@ func (s *streams) Read(handle uint32, data []byte) (int, bool, error) {
 	return n, false, err
 }
 
-func (s *streams) Write(handle uint32, data []byte) (int, error) {
+func (s *Streams) Write(handle uint32, data []byte) (int, error) {
 	stream, found := s.streams[handle]
 	if !found {
 		return 0, fmt.Errorf("stream not found: %d", handle)

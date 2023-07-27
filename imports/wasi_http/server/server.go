@@ -9,7 +9,11 @@ import (
 )
 
 type WasmServer struct {
-	Module api.Module
+	Module    api.Module
+	Fields    *types.FieldsCollection
+	Requests  *types.Requests
+	Responses *types.Responses
+	OutParams *types.OutResponses
 }
 
 func (w WasmServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
@@ -19,9 +23,8 @@ func (w WasmServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		res.Write([]byte("Handler not found"))
 		return
 	}
-
-	id := types.MakeRequest(req)
-	out := types.MakeOutparameter()
+	id := w.Requests.MakeRequest(req)
+	out := w.OutParams.MakeOutparameter()
 
 	_, err := fn.Call(context.TODO(), uint64(id), uint64(out))
 	if err != nil {
@@ -29,27 +32,29 @@ func (w WasmServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		res.Write([]byte(err.Error()))
 		return
 	}
-	responseId, found := types.GetResponseByOutparameter(out)
+	responseId, found := w.OutParams.GetResponseByOutparameter(out)
 	if !found {
 		res.WriteHeader(500)
 		res.Write([]byte("Couldn't find outparameter mapping"))
+		return
 	}
-	r, found := types.GetResponse(responseId)
+	r, found := w.Responses.GetResponse(responseId)
 	if !found || r == nil {
 		res.WriteHeader(500)
 		res.Write([]byte("Couldn't find response"))
+		return
 	}
-	if headers, found := types.GetFields(r.HeaderHandle); found {
+	if headers, found := w.Fields.GetFields(r.HeaderHandle); found {
 		for key, value := range headers {
 			for ix := range value {
 				res.Header().Add(key, value[ix])
 			}
 		}
-		types.DeleteFields(r.HeaderHandle)
+		w.Fields.DeleteFields(r.HeaderHandle)
 	}
 	res.WriteHeader(r.StatusCode)
 	data := r.Buffer.Bytes()
 	res.Write(data)
 
-	types.DeleteResponse(responseId)
+	w.Responses.DeleteResponse(responseId)
 }

@@ -12,14 +12,38 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-func Instantiate(ctx context.Context, rt wazero.Runtime) error {
-	if err := types.Instantiate(ctx, rt); err != nil {
+type WasiHTTP struct {
+	s  *streams.Streams
+	f  *types.FieldsCollection
+	r  *types.Requests
+	rs *types.Responses
+	o  *types.OutResponses
+}
+
+func MakeWasiHTTP() *WasiHTTP {
+	s := streams.MakeStreams()
+	f := types.MakeFields()
+	r := types.MakeRequests(s, f)
+	rs := types.MakeResponses(s, f)
+	o := types.MakeOutresponses()
+
+	return &WasiHTTP{
+		s:  s,
+		f:  f,
+		r:  r,
+		rs: rs,
+		o:  o,
+	}
+}
+
+func (w *WasiHTTP) Instantiate(ctx context.Context, rt wazero.Runtime) error {
+	if err := types.Instantiate(ctx, rt, w.s, w.r, w.rs, w.f, w.o); err != nil {
 		return err
 	}
-	if err := streams.Instantiate(ctx, rt); err != nil {
+	if err := streams.Instantiate(ctx, rt, w.s); err != nil {
 		return err
 	}
-	if err := default_http.Instantiate(ctx, rt); err != nil {
+	if err := default_http.Instantiate(ctx, rt, w.r, w.rs, w.f); err != nil {
 		return err
 	}
 	return nil
@@ -41,7 +65,17 @@ func DetectWasiHttp(module wazero.CompiledModule) bool {
 	return hasWasiHttp
 }
 
-func HandleHTTP(w http.ResponseWriter, r *http.Request, m api.Module) {
-	handler := server.WasmServer{Module: m}
-	handler.ServeHTTP(w, r)
+func (w *WasiHTTP) MakeHandler(m api.Module) http.Handler {
+	return server.WasmServer{
+		Module:    m,
+		Requests:  w.r,
+		Responses: w.rs,
+		Fields:    w.f,
+		OutParams: w.o,
+	}
+}
+
+func (w *WasiHTTP) HandleHTTP(writer http.ResponseWriter, req *http.Request, m api.Module) {
+	handler := w.MakeHandler(m)
+	handler.ServeHTTP(writer, req)
 }
