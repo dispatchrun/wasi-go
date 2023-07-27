@@ -226,6 +226,7 @@ func run(wasmFile string, args []string) error {
 	defer system.Close(ctx)
 
 	importWasi := false
+	var wasiHTTP *wasi_http.WasiHTTP = nil
 	switch wasiHttp {
 	case "auto":
 		importWasi = wasi_http.DetectWasiHttp(wasmModule)
@@ -237,7 +238,8 @@ func run(wasmFile string, args []string) error {
 		return fmt.Errorf("invalid value for -http '%v', expected 'auto', 'v1' or 'none'", wasiHttp)
 	}
 	if importWasi {
-		if err := wasi_http.Instantiate(ctx, runtime); err != nil {
+		wasiHTTP = wasi_http.MakeWasiHTTP()
+		if err := wasiHTTP.Instantiate(ctx, runtime); err != nil {
 			return err
 		}
 	}
@@ -247,9 +249,8 @@ func run(wasmFile string, args []string) error {
 		return err
 	}
 	if len(wasiHttpAddr) > 0 {
-		http.HandleFunc(wasiHttpPath, func(w http.ResponseWriter, r *http.Request) {
-			wasi_http.HandleHTTP(w, r, instance)
-		})
+		handler := wasiHTTP.MakeHandler(instance)
+		http.Handle(wasiHttpPath, handler)
 		return http.ListenAndServe(wasiHttpAddr, nil)
 	}
 	return instance.Close(ctx)

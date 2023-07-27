@@ -17,8 +17,7 @@ func logFn(ctx context.Context, mod api.Module, ptr, len uint32) {
 	fmt.Print(str)
 }
 
-func Instantiate(ctx context.Context, rt wazero.Runtime, s *streams.Streams, r *Requests, rs *Responses, f *FieldsCollection) error {
-	o := &OutResponses{}
+func Instantiate(ctx context.Context, rt wazero.Runtime, s *streams.Streams, r *Requests, rs *Responses, f *FieldsCollection, o *OutResponses) error {
 	_, err := rt.NewHostModuleBuilder(ModuleName).
 		NewFunctionBuilder().WithFunc(r.newOutgoingRequestFn).Export("new-outgoing-request").
 		NewFunctionBuilder().WithFunc(f.newFieldsFn).Export("new-fields").

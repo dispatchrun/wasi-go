@@ -14,7 +14,6 @@ import (
 
 	"github.com/stealthrocket/wasi-go"
 	"github.com/stealthrocket/wasi-go/imports"
-	"github.com/stealthrocket/wasi-go/imports/wasi_http/server"
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/sys"
 )
@@ -103,7 +102,8 @@ func TestHttpClient(t *testing.T) {
 			}
 			defer system.Close(ctx)
 
-			Instantiate(ctx, runtime)
+			w := MakeWasiHTTP()
+			w.Instantiate(ctx, runtime)
 
 			instance, err := runtime.Instantiate(ctx, bytecode)
 			if err != nil {
@@ -170,7 +170,8 @@ func TestServer(t *testing.T) {
 			}
 			defer system.Close(ctx)
 
-			Instantiate(ctx, runtime)
+			w := MakeWasiHTTP()
+			w.Instantiate(ctx, runtime)
 
 			instance, err := runtime.Instantiate(ctx, bytecode)
 			if err != nil {
@@ -184,9 +185,7 @@ func TestServer(t *testing.T) {
 				}
 			}
 			if instance != nil {
-				h := server.WasmServer{
-					Module: instance,
-				}
+				h := w.MakeHandler(instance)
 				s := httptest.NewServer(h)
 				defer s.Close()
 

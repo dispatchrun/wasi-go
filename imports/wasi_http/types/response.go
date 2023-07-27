@@ -30,6 +30,13 @@ type OutResponses struct {
 	baseResponseId uint32
 }
 
+func MakeOutresponses() *OutResponses {
+	return &OutResponses{
+		responses:      make(map[uint32]uint32),
+		baseResponseId: 1,
+	}
+}
+
 func (o *OutResponses) MakeOutparameter() uint32 {
 	o.baseResponseId++
 	return o.baseResponseId
