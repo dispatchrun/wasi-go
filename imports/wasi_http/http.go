@@ -65,17 +65,13 @@ func DetectWasiHttp(module wazero.CompiledModule) bool {
 	return hasWasiHttp
 }
 
-func (w *WasiHTTP) MakeHandler(m api.Module) http.Handler {
+func (w *WasiHTTP) MakeHandler(ctx context.Context, m api.Module) http.Handler {
 	return server.WasmServer{
+		Ctx:       ctx,
 		Module:    m,
 		Requests:  w.r,
 		Responses: w.rs,
 		Fields:    w.f,
 		OutParams: w.o,
 	}
-}
-
-func (w *WasiHTTP) HandleHTTP(writer http.ResponseWriter, req *http.Request, m api.Module) {
-	handler := w.MakeHandler(m)
-	handler.ServeHTTP(writer, req)
 }

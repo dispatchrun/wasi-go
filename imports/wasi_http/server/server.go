@@ -9,6 +9,7 @@ import (
 )
 
 type WasmServer struct {
+	Ctx       context.Context
 	Module    api.Module
 	Fields    *types.FieldsCollection
 	Requests  *types.Requests
@@ -26,7 +27,7 @@ func (w WasmServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	id := w.Requests.MakeRequest(req)
 	out := w.OutParams.MakeOutparameter()
 
-	_, err := fn.Call(context.TODO(), uint64(id), uint64(out))
+	_, err := fn.Call(w.Ctx, uint64(id), uint64(out))
 	if err != nil {
 		res.WriteHeader(500)
 		res.Write([]byte(err.Error()))
