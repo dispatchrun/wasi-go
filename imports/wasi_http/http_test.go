@@ -185,7 +185,7 @@ func TestServer(t *testing.T) {
 				}
 			}
 			if instance != nil {
-				h := w.MakeHandler(instance)
+				h := w.MakeHandler(ctx, instance)
 				s := httptest.NewServer(h)
 				defer s.Close()
 
