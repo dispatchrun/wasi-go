@@ -109,9 +109,8 @@ As the providers of a Go implementation of WASI, we're naturally interested in
 Go's support for WebAssembly and WASI, and are championing the efforts to make
 Go a first class citizen in the ecosystem (along with Rust and Zig).
 
-Go v1.21, scheduled for release in August 2023, has native support for
-WebAssembly and WASI. To test these features before release, use [`gotip`][gotip]
-in place of `go`:
+[Go v1.21][go-121] has native support for WebAssembly and WASI:
+
 
 ```go
 package main
@@ -124,7 +123,9 @@ func main() {
 ```
 
 ```console
-$ GOOS=wasip1 GOARCH=wasm gotip build -o hello.wasm hello.go
+# go version
+go version go1.21.0 darwin/arm64
+$ GOOS=wasip1 GOARCH=wasm go build -o hello.wasm hello.go
 $ wasirun hello.wasm
 Hello, World!
 ```
@@ -150,7 +151,7 @@ Remember to be respectful and open minded!
 [wasitest]: https://github.com/stealthrocket/wasi-go/tree/main/wasitest
 [tracer]: https://github.com/stealthrocket/wasi-go/blob/main/tracer.go
 [sockets-extension]: https://github.com/stealthrocket/wasi-go/blob/main/sockets_extension.go
-[gotip]: https://pkg.go.dev/golang.org/dl/gotip
+[go-121]: https://go.dev/blog/go1.21
 [go-script]: https://github.com/stealthrocket/wasi-go/blob/main/share/go_wasip1_wasm_exec
 [wasmer]: https://github.com/wasmerio/wasmer
 [wasmedge]: https://github.com/WasmEdge/WasmEdge

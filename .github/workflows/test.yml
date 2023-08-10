@@ -6,7 +6,8 @@ on:
   pull_request:
 
 jobs:
-  Go:
+  go-test:
+    name: Go Test
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -14,9 +15,9 @@ jobs:
         submodules: recursive
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: '1.20'
+        go-version-file: go.mod
         check-latest: true
 
     # We run the tests 20 times because sometimes it helps highlight flaky
@@ -24,7 +25,24 @@ jobs:
     - name: Go Tests
       run: make test count=20
 
-  WASI:
+  golangci-lint:
+    name: Go Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - run: go mod download
+      - uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.54.0
+          args: --timeout 5m --issues-exit-code 0 # warn only
+
+  wasi-test:
+    name: WASI Test Suite
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -32,9 +50,9 @@ jobs:
         submodules: recursive
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
-        go-version: '1.20'
+        go-version-file: go.mod
         check-latest: true
 
     - name: WASI Tests
