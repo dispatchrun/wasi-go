@@ -1,4 +1,6 @@
-.PHONY: all clean test testdata wasi-libc wasi-testsuite
+.PHONY: all clean fmt lint test testdata wasi-libc wasi-testsuite
+
+GO ?= go
 
 count ?= 1
 
@@ -33,7 +35,13 @@ clean:
 	rm -f $(testdata.files)
 
 test: testdata
-	go test -count=$(count) ./...
+	$(GO) test -count=$(count) ./...
+
+fmt:
+	$(GO) fmt ./...
+
+lint:
+	which golangci-lint >/dev/null && golangci-lint run
 
 testdata: $(testdata.files)
 
@@ -61,13 +69,13 @@ testdata/c/http/http.wasm: testdata/c/http/http.c
 	clang $< -o $@ -Wall -Os -target wasm32-unknown-wasi testdata/c/http/proxy.c testdata/c/http/proxy_component_type.o
 
 testdata/go/%.wasm: testdata/go/%.go
-	GOARCH=wasm GOOS=wasip1 gotip build -o $@ $<
+	GOARCH=wasm GOOS=wasip1 $(GO) build -o $@ $<
 
 testdata/tinygo/%.wasm: testdata/tinygo/%.go
 	tinygo build -target=wasi -o $@ $<
 
 wasirun: go.mod $(wasirun.src)
-	go build -o wasirun ./cmd/wasirun
+	$(GO) build -o wasirun ./cmd/wasirun
 
 wasi-libc: testdata/.sysroot/lib/wasm32-wasi/libc.a
 

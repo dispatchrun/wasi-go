@@ -1,6 +1,6 @@
 module github.com/stealthrocket/wasi-go
 
-go 1.20
+go 1.21
 
 require (
 	github.com/stealthrocket/wazergo v0.19.1

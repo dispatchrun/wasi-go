@@ -2,11 +2,11 @@ package wasitest
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/stealthrocket/wasi-go"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 // TestSystem is a test suite which validates the behavior of wasi.System
