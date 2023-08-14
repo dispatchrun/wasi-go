@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"log"
 	"net/http"
+	"sync"
+	"sync/atomic"
 
 	"github.com/stealthrocket/wasi-go/imports/wasi_http/streams"
 	"github.com/tetratelabs/wazero/api"
@@ -19,6 +21,7 @@ type Response struct {
 }
 
 type Responses struct {
+	lock           sync.RWMutex
 	responses      map[uint32]*Response
 	baseResponseId uint32
 	streams        *streams.Streams
@@ -26,6 +29,7 @@ type Responses struct {
 }
 
 type OutResponses struct {
+	lock           sync.RWMutex
 	responses      map[uint32]uint32
 	baseResponseId uint32
 }
@@ -38,26 +42,32 @@ func MakeOutresponses() *OutResponses {
 }
 
 func (o *OutResponses) MakeOutparameter() uint32 {
-	o.baseResponseId++
-	return o.baseResponseId
+	baseResponseId := atomic.AddUint32(&o.baseResponseId, 1)
+	return baseResponseId
 }
 
 func (o *OutResponses) GetResponseByOutparameter(out uint32) (uint32, bool) {
+	o.lock.RLock()
+	defer o.lock.RUnlock()
 	r, ok := o.responses[out]
 	return r, ok
 }
 
 func (r *Responses) GetResponse(handle uint32) (*Response, bool) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
 	res, ok := r.responses[handle]
 	return res, ok
 }
 
 func (r *Responses) DeleteResponse(handle uint32) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	delete(r.responses, handle)
 }
 
 func (r *Responses) dropIncomingResponseFn(_ context.Context, mod api.Module, handle uint32) {
-	delete(r.responses, handle)
+	r.DeleteResponse(handle)
 }
 
 func dropOutgoingResponseFn(_ context.Context, mod api.Module, handle uint32) {
@@ -89,9 +99,11 @@ func (r *Responses) outgoingResponseWriteFn(ctx context.Context, mod api.Module,
 func (r *Responses) newOutgoingResponseFn(_ context.Context, status, headers uint32) uint32 {
 	res := &Response{&http.Response{}, headers, 0, nil}
 	res.StatusCode = int(status)
-	r.baseResponseId++
-	r.responses[r.baseResponseId] = res
-	return r.baseResponseId
+	baseResponseId := atomic.AddUint32(&r.baseResponseId, 1)
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.responses[baseResponseId] = res
+	return baseResponseId
 }
 
 func (o *OutResponses) setResponseOutparamFn(_ context.Context, mod api.Module, res, err, resOut, _msg_ptr, _msg_str uint32) uint32 {
@@ -99,6 +111,8 @@ func (o *OutResponses) setResponseOutparamFn(_ context.Context, mod api.Module, 
 		// TODO: details here.
 		return 1
 	}
+	o.lock.Lock()
+	defer o.lock.Unlock()
 	o.responses[res] = resOut
 	return 0
 }
@@ -113,13 +127,15 @@ func (r *Responses) incomingResponseStatusFn(_ context.Context, mod api.Module, 
 }
 
 func MakeResponses(s *streams.Streams, f *FieldsCollection) *Responses {
-	return &Responses{map[uint32]*Response{}, 1, s, f}
+	return &Responses{responses: map[uint32]*Response{}, baseResponseId: 1, streams: s, fields: f}
 }
 
 func (r *Responses) MakeResponse(res *http.Response) uint32 {
-	r.baseResponseId++
-	r.responses[r.baseResponseId] = &Response{res, 0, 0, nil}
-	return r.baseResponseId
+	baseResponseId := atomic.AddUint32(&r.baseResponseId, 1)
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.responses[baseResponseId] = &Response{res, 0, 0, nil}
+	return baseResponseId
 }
 
 func (r *Responses) incomingResponseHeadersFn(_ context.Context, mod api.Module, handle uint32) uint32 {

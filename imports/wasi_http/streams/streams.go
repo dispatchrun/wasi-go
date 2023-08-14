@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
+	"sync/atomic"
 
 	"github.com/tetratelabs/wazero"
 )
@@ -16,14 +18,15 @@ type Stream struct {
 }
 
 type Streams struct {
+	lock             sync.RWMutex
 	streams          map[uint32]Stream
 	streamHandleBase uint32
 }
 
 func MakeStreams() *Streams {
 	return &Streams{
-		make(map[uint32]Stream),
-		1,
+		streams:          make(map[uint32]Stream),
+		streamHandleBase: 1,
 	}
 }
 
@@ -37,29 +40,39 @@ func Instantiate(ctx context.Context, r wazero.Runtime, s *Streams) error {
 }
 
 func (s *Streams) NewInputStream(reader io.Reader) uint32 {
-	s.streamHandleBase++
-	s.streams[s.streamHandleBase] = Stream{
-		reader: reader,
-		writer: nil,
-	}
-	return s.streamHandleBase
-}
-
-func (s *Streams) DeleteStream(handle uint32) {
-	delete(s.streams, handle)
+	return s.newStream(reader, nil)
 }
 
 func (s *Streams) NewOutputStream(writer io.Writer) uint32 {
-	s.streamHandleBase++
-	s.streams[s.streamHandleBase] = Stream{
-		reader: nil,
+	return s.newStream(nil, writer)
+}
+
+func (s *Streams) newStream(reader io.Reader, writer io.Writer) uint32 {
+	streamHandleBase := atomic.AddUint32(&s.streamHandleBase, 1)
+	s.lock.Lock()
+	s.streams[streamHandleBase] = Stream{
+		reader: reader,
 		writer: writer,
 	}
-	return s.streamHandleBase
+	s.lock.Unlock()
+	return streamHandleBase
+}
+
+func (s *Streams) DeleteStream(handle uint32) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	delete(s.streams, handle)
+}
+
+func (s *Streams) GetStream(handle uint32) (stream Stream, found bool) {
+	s.lock.RLock()
+	stream, found = s.streams[handle]
+	s.lock.RUnlock()
+	return
 }
 
 func (s *Streams) Read(handle uint32, data []byte) (int, bool, error) {
-	stream, found := s.streams[handle]
+	stream, found := s.GetStream(handle)
 	if !found {
 		return 0, false, fmt.Errorf("stream not found: %d", handle)
 	}
@@ -75,7 +88,7 @@ func (s *Streams) Read(handle uint32, data []byte) (int, bool, error) {
 }
 
 func (s *Streams) Write(handle uint32, data []byte) (int, error) {
-	stream, found := s.streams[handle]
+	stream, found := s.GetStream(handle)
 	if !found {
 		return 0, fmt.Errorf("stream not found: %d", handle)
 	}

@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
+	"sync/atomic"
 
 	"github.com/stealthrocket/wasi-go/imports/wasi_http/common"
 	"github.com/stealthrocket/wasi-go/imports/wasi_http/streams"
@@ -29,6 +31,7 @@ func (r Request) Url() string {
 }
 
 type Requests struct {
+	lock          sync.RWMutex
 	requests      map[uint32]*Request
 	requestIdBase uint32
 	streams       *streams.Streams
@@ -36,7 +39,7 @@ type Requests struct {
 }
 
 func MakeRequests(s *streams.Streams, f *FieldsCollection) *Requests {
-	return &Requests{map[uint32]*Request{}, 1, s, f}
+	return &Requests{requests: map[uint32]*Request{}, requestIdBase: 1, streams: s, fields: f}
 }
 
 func (r *Requests) MakeRequest(req *http.Request) uint32 {
@@ -52,17 +55,23 @@ func (r *Requests) MakeRequest(req *http.Request) uint32 {
 
 func (r *Requests) newRequest() (*Request, uint32) {
 	request := &Request{}
-	r.requestIdBase++
-	r.requests[r.requestIdBase] = request
-	return request, r.requestIdBase
+	requestIdBase := atomic.AddUint32(&r.requestIdBase, 1)
+	r.lock.Lock()
+	r.requests[requestIdBase] = request
+	r.lock.Unlock()
+	return request, requestIdBase
 }
 
 func (r *Requests) deleteRequest(handle uint32) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
 	delete(r.requests, handle)
 }
 
 func (r *Requests) GetRequest(handle uint32) (*Request, bool) {
+	r.lock.RLock()
 	req, ok := r.requests[handle]
+	r.lock.RUnlock()
 	return req, ok
 }
 
@@ -94,7 +103,7 @@ func incomingRequestConsumeFn(ctx context.Context, mod api.Module, request, ptr 
 }
 
 func (r *Requests) incomingRequestHeadersFn(ctx context.Context, mod api.Module, request uint32) uint32 {
-	req, ok := r.requests[request]
+	req, ok := r.GetRequest(request)
 	if !ok {
 		return 0
 	}
@@ -102,7 +111,7 @@ func (r *Requests) incomingRequestHeadersFn(ctx context.Context, mod api.Module,
 }
 
 func (r *Requests) incomingRequestPathFn(ctx context.Context, mod api.Module, request, ptr uint32) {
-	req, ok := r.requests[request]
+	req, ok := r.GetRequest(request)
 	if !ok {
 		return
 	}
@@ -112,7 +121,7 @@ func (r *Requests) incomingRequestPathFn(ctx context.Context, mod api.Module, re
 }
 
 func (r *Requests) incomingRequestAuthorityFn(ctx context.Context, mod api.Module, request, ptr uint32) {
-	req, ok := r.requests[request]
+	req, ok := r.GetRequest(request)
 	if !ok {
 		return
 	}
@@ -122,7 +131,7 @@ func (r *Requests) incomingRequestAuthorityFn(ctx context.Context, mod api.Modul
 }
 
 func (r *Requests) incomingRequestMethodFn(_ context.Context, mod api.Module, request, ptr uint32) {
-	req, ok := r.requests[request]
+	req, ok := r.GetRequest(request)
 	if !ok {
 		return
 	}
@@ -230,11 +239,11 @@ func (r *Requests) dropOutgoingRequestFn(_ context.Context, mod api.Module, hand
 }
 
 func (r *Requests) dropIncomingRequestFn(_ context.Context, mod api.Module, handle uint32) {
-	req, found := r.requests[handle]
+	req, found := r.GetRequest(handle)
 	if !found {
 		return
 	}
-	delete(r.fields.fields, req.Headers)
+	r.fields.DeleteFields(req.Headers)
 	// Delete body stream here
 	r.deleteRequest(handle)
 }

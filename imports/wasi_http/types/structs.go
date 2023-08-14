@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"sync"
+	"sync/atomic"
 
 	"github.com/stealthrocket/wasi-go/imports/wasi_http/common"
 	"github.com/tetratelabs/wazero/api"
@@ -12,26 +14,33 @@ import (
 
 type Fields map[string][]string
 type FieldsCollection struct {
+	lock         sync.RWMutex
 	fields       map[uint32]Fields
 	baseFieldsId uint32
 }
 
 func MakeFields() *FieldsCollection {
-	return &FieldsCollection{map[uint32]Fields{}, 1}
+	return &FieldsCollection{fields: map[uint32]Fields{}, baseFieldsId: 1}
 }
 
 func (f *FieldsCollection) MakeFields(fields Fields) uint32 {
-	f.baseFieldsId++
-	f.fields[f.baseFieldsId] = fields
-	return f.baseFieldsId
+	baseFieldsId := atomic.AddUint32(&f.baseFieldsId, 1)
+	f.lock.Lock()
+	f.fields[baseFieldsId] = fields
+	f.lock.Unlock()
+	return baseFieldsId
 }
 
 func (f *FieldsCollection) GetFields(handle uint32) (Fields, bool) {
+	f.lock.RLock()
 	fields, found := f.fields[handle]
+	f.lock.RUnlock()
 	return fields, found
 }
 
 func (f *FieldsCollection) DeleteFields(handle uint32) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	delete(f.fields, handle)
 }
 
