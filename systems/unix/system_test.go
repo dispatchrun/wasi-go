@@ -2,6 +2,7 @@ package unix_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -276,6 +277,7 @@ func TestSockAddressInfo(t *testing.T) {
 	testSystem(func(ctx context.Context, s *unix.System) {
 		results := make([]wasi.AddressInfo, 64)
 		tcp4Hint := wasi.AddressInfo{Family: wasi.InetFamily, SocketType: wasi.StreamSocket, Protocol: wasi.TCPProtocol}
+		tcp6Hint := wasi.AddressInfo{Family: wasi.Inet6Family, SocketType: wasi.StreamSocket, Protocol: wasi.TCPProtocol}
 
 		// Lookup :http. It's probably 80, but let's be sure.
 		httpPort, err := net.LookupPort("tcp", "http")
@@ -314,17 +316,59 @@ func TestSockAddressInfo(t *testing.T) {
 			t.Fatalf("unexpected result: %s", host)
 		}
 
-		// Test AI_PASSIVE.
-		passiveHint := tcp4Hint
-		passiveHint.Flags |= wasi.Passive
-		n, errno = s.SockAddressInfo(ctx, "", "80", passiveHint, results)
-		if n != 1 || errno != wasi.ESUCCESS {
-			t.Fatalf("SockAddressInfo => %d, %s", n, errno)
-		}
-		if ipv4, ok := results[0].Address.(*wasi.Inet4Address); !ok {
-			t.Fatalf("unexpected result: %#v", results[n])
-		} else if host := ipv4.String(); host != "0.0.0.0:80" {
-			t.Fatalf("unexpected result: %s", host)
+		// Test empty name with/without AI_PASSIVE.
+		for _, test := range []struct {
+			node    string
+			service string
+			hint    wasi.AddressInfo
+			flags   wasi.AddressInfoFlags
+			expect  string
+		}{
+			{
+				service: "80",
+				hint:    tcp4Hint,
+				flags:   wasi.Passive,
+				expect:  "0.0.0.0:80",
+			},
+			{
+				service: "80",
+				hint:    tcp6Hint,
+				flags:   wasi.Passive,
+				expect:  "[::]:80",
+			},
+			{
+				service: "80",
+				hint:    tcp4Hint,
+				expect:  "127.0.0.1:80",
+			},
+			{
+				service: "80",
+				hint:    tcp6Hint,
+				expect:  "[::1]:80",
+			},
+		} {
+			t.Run(fmt.Sprintf("%#v hint with %v", test.hint, test.flags), func(t *testing.T) {
+				hint := test.hint
+				hint.Flags |= test.flags
+				n, errno = s.SockAddressInfo(ctx, "", test.service, hint, results)
+				if n != 1 || errno != wasi.ESUCCESS {
+					t.Fatalf("SockAddressInfo => %d, %s", n, errno)
+				}
+				result := results[0]
+
+				var actual string
+				switch a := result.Address.(type) {
+				case *wasi.Inet4Address:
+					actual = a.String()
+				case *wasi.Inet6Address:
+					actual = a.String()
+				default:
+					t.Fatalf("unexpected results %T %#v", result.Address, result)
+				}
+				if actual != test.expect {
+					t.Errorf("unexpected result: got %v, expect %v", actual, test.expect)
+				}
+			})
 		}
 	})
 }
