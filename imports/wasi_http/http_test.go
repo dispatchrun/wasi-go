@@ -102,7 +102,7 @@ func TestHttpClient(t *testing.T) {
 			}
 			defer system.Close(ctx)
 
-			w := MakeWasiHTTP()
+			w := MakeWasiHTTP("v1")
 			w.Instantiate(ctx, runtime)
 
 			instance, err := runtime.Instantiate(ctx, bytecode)
@@ -170,7 +170,7 @@ func TestServer(t *testing.T) {
 			}
 			defer system.Close(ctx)
 
-			w := MakeWasiHTTP()
+			w := MakeWasiHTTP("v1")
 			w.Instantiate(ctx, runtime)
 
 			instance, err := runtime.Instantiate(ctx, bytecode)
