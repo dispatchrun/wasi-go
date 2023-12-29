@@ -11,6 +11,6 @@ import (
 	"github.com/tetratelabs/wazero"
 )
 
-func (b *Builder) Instantiate(ctx context.Context, _ wazero.Runtime) (ctxret context.Context, sys wasi.System, err error) {
+func (b *Builder) Instantiate(ctx context.Context, _ wazero.Runtime) (context.Context, wasi.System, error) {
 	return ctx, nil, fmt.Errorf("wasi-go is not available on GOOS=%s", runtime.GOOS)
 }
