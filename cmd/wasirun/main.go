@@ -229,16 +229,17 @@ func run(wasmFile string, args []string) error {
 	var wasiHTTP *wasi_http.WasiHTTP = nil
 	switch wasiHttp {
 	case "auto":
-		importWasi = wasi_http.DetectWasiHttp(wasmModule)
+		importWasi, wasiHttp = wasi_http.DetectWasiHttp(wasmModule)
 	case "v1":
+	case "2023_10_18":
 		importWasi = true
 	case "none":
 		importWasi = false
 	default:
-		return fmt.Errorf("invalid value for -http '%v', expected 'auto', 'v1' or 'none'", wasiHttp)
+		return fmt.Errorf("invalid value for -http '%v', expected 'auto', 'v1', '2023_10_18' or 'none'", wasiHttp)
 	}
 	if importWasi {
-		wasiHTTP = wasi_http.MakeWasiHTTP()
+		wasiHTTP = wasi_http.MakeWasiHTTP(wasiHttp)
 		if err := wasiHTTP.Instantiate(ctx, runtime); err != nil {
 			return err
 		}

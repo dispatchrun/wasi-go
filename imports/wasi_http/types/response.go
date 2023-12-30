@@ -96,6 +96,44 @@ func (r *Responses) outgoingResponseWriteFn(ctx context.Context, mod api.Module,
 	}
 }
 
+func (r *Responses) outgoingResponseWriteFn_2023_10_18(ctx context.Context, mod api.Module, res, ptr uint32) {
+	data := []byte{}
+
+	data = binary.LittleEndian.AppendUint32(data, 0)
+	data = binary.LittleEndian.AppendUint32(data, res)
+
+	if !mod.Memory().Write(ptr, data) {
+		panic("Failed to write data!")
+	}
+}
+
+func (r *Responses) outgoingBodyWriteFn(ctx context.Context, mod api.Module, res, ptr uint32) {
+	// For now the body is just the response. Eventually we may need an actual body struct.
+	response, found := r.GetResponse(res)
+	data := []byte{}
+	if !found {
+		// Error
+		data = binary.LittleEndian.AppendUint32(data, 1)
+		data = binary.LittleEndian.AppendUint32(data, 0)
+	} else {
+		writer := &bytes.Buffer{}
+		stream := r.streams.NewOutputStream(writer)
+
+		response.streamHandle = stream
+		response.Buffer = writer
+		// 0 == no error
+		data = binary.LittleEndian.AppendUint32(data, 0)
+		data = binary.LittleEndian.AppendUint32(data, stream)
+	}
+	if !mod.Memory().Write(ptr, data) {
+		panic("Failed to write data!")
+	}
+}
+
+func (r *Responses) outgoingBodyFinishFn(ctx context.Context, mod api.Module, body, res, ptr uint32) {
+	// TODO: lock buffer here.
+}
+
 func (r *Responses) newOutgoingResponseFn(_ context.Context, status, headers uint32) uint32 {
 	res := &Response{&http.Response{}, headers, 0, nil}
 	res.StatusCode = int(status)
@@ -117,10 +155,20 @@ func (o *OutResponses) setResponseOutparamFn(_ context.Context, mod api.Module, 
 	return 0
 }
 
+func (o *OutResponses) setResponseOutparamFn_2023_10_18(_ context.Context, mod api.Module, res, err, resOut, _msg_ptr, _msg_str uint32) {
+	if err == 1 {
+		// TODO: details here.
+		return
+	}
+	o.lock.Lock()
+	defer o.lock.Unlock()
+	o.responses[res] = resOut
+}
+
 func (r *Responses) incomingResponseStatusFn(_ context.Context, mod api.Module, handle uint32) int32 {
 	response, found := r.GetResponse(handle)
 	if !found {
-		log.Printf("Unknown handle: %v", handle)
+		log.Printf("Unknown response handle: %v", handle)
 		return 0
 	}
 	return int32(response.StatusCode)
@@ -173,6 +221,20 @@ func futureResponseGetFn(_ context.Context, mod api.Module, handle, ptr uint32) 
 	// 1 == is_some, 0 == none
 	data = le.AppendUint32(data, 1)
 	// 0 == ok, 1 == is_err, consistency ftw!
+	data = le.AppendUint32(data, 0)
+	// Copy the future into the actual
+	data = le.AppendUint32(data, handle)
+	mod.Memory().Write(ptr, data)
+}
+
+func futureResponseGetFn_2023_10_18(_ context.Context, mod api.Module, handle, ptr uint32) {
+	le := binary.LittleEndian
+	data := []byte{}
+	// 1 == is_some, 0 == none
+	data = le.AppendUint32(data, 1)
+	// 0 == ok, 1 == is_err, consistency ftw!
+	data = le.AppendUint32(data, 0)
+	// There are two Results here, for some reason
 	data = le.AppendUint32(data, 0)
 	// Copy the future into the actual
 	data = le.AppendUint32(data, handle)

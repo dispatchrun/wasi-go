@@ -19,7 +19,7 @@ import (
 type Request struct {
 	Method     string
 	Path       string
-	Query      string
+	Query      string // not used in newer versions
 	Scheme     string
 	Authority  string
 	Headers    uint32
@@ -120,12 +120,32 @@ func (r *Requests) incomingRequestPathFn(ctx context.Context, mod api.Module, re
 	}
 }
 
+func (r *Requests) incomingRequestPathFn_2023_10_18(ctx context.Context, mod api.Module, request, ptr uint32) {
+	req, ok := r.GetRequest(request)
+	if !ok {
+		return
+	}
+	if err := common.WriteOptionalString(ctx, mod, ptr, req.Path); err != nil {
+		panic(err.Error())
+	}
+}
+
 func (r *Requests) incomingRequestAuthorityFn(ctx context.Context, mod api.Module, request, ptr uint32) {
 	req, ok := r.GetRequest(request)
 	if !ok {
 		return
 	}
 	if err := common.WriteString(ctx, mod, ptr, req.Authority); err != nil {
+		panic(err.Error())
+	}
+}
+
+func (r *Requests) incomingRequestAuthorityFn_2023_10_18(ctx context.Context, mod api.Module, request, ptr uint32) {
+	req, ok := r.GetRequest(request)
+	if !ok {
+		return
+	}
+	if err := common.WriteOptionalString(ctx, mod, ptr, req.Authority); err != nil {
 		panic(err.Error())
 	}
 }
@@ -208,6 +228,68 @@ func (r *Requests) newOutgoingRequestFn(_ context.Context, mod api.Module,
 		return 0
 	}
 	request.Query = string(query)
+
+	request.Scheme = "https"
+	if scheme_is_some == 1 {
+		if scheme == 0 {
+			request.Scheme = "http"
+		}
+		if scheme == 2 {
+			d, ok := mod.Memory().Read(uint32(scheme_ptr), uint32(scheme_len))
+			if !ok {
+				return 0
+			}
+			request.Scheme = string(d)
+		}
+	}
+
+	authority, ok := mod.Memory().Read(uint32(authority_ptr), uint32(authority_len))
+	if !ok {
+		return 0
+	}
+	request.Authority = string(authority)
+
+	request.Headers = header_handle
+
+	return id
+}
+
+func (r *Requests) newOutgoingRequestFn_2023_10_18(_ context.Context, mod api.Module,
+	method, method_ptr, method_len,
+	path_is_some, path_ptr, path_len,
+	scheme_is_some, scheme, scheme_ptr, scheme_len,
+	authority_is_some, authority_ptr, authority_len, header_handle uint32) uint32 {
+
+	request, id := r.newRequest()
+
+	switch method {
+	case 0:
+		request.Method = "GET"
+	case 1:
+		request.Method = "HEAD"
+	case 2:
+		request.Method = "POST"
+	case 3:
+		request.Method = "PUT"
+	case 4:
+		request.Method = "DELETE"
+	case 5:
+		request.Method = "CONNECT"
+	case 6:
+		request.Method = "OPTIONS"
+	case 7:
+		request.Method = "TRACE"
+	case 8:
+		request.Method = "PATCH"
+	default:
+		log.Fatalf("Unknown method: %d", method)
+	}
+
+	path, ok := mod.Memory().Read(uint32(path_ptr), uint32(path_len))
+	if !ok {
+		return 0
+	}
+	request.Path = string(path)
 
 	request.Scheme = "https"
 	if scheme_is_some == 1 {

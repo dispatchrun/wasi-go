@@ -26,22 +26,44 @@ func ReadString(mod api.Module, ptr, len uint32) (string, bool) {
 	return string(data), true
 }
 
-func WriteString(ctx context.Context, module api.Module, ptr uint32, str string) error {
+func writeStringToMemory(ctx context.Context, module api.Module, str string) (uint32, error) {
 	data := []byte(str)
 	strPtr, err := Malloc(ctx, module, uint32(len(data)))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if !module.Memory().WriteString(strPtr, str) {
-		return fmt.Errorf("failed to write string")
+		return 0, fmt.Errorf("failed to write string")
 	}
-	data = []byte{}
+	return strPtr, nil
+}
+
+func WriteOptionalString(ctx context.Context, module api.Module, ptr uint32, str string) error {
+	strPtr, err := writeStringToMemory(ctx, module, str)
+	if err != nil {
+		return err
+	}
+	data := []byte{}
+	data = binary.LittleEndian.AppendUint32(data, 1) // is some
 	data = binary.LittleEndian.AppendUint32(data, strPtr)
 	data = binary.LittleEndian.AppendUint32(data, uint32(len(str)))
 	if !module.Memory().Write(ptr, data) {
 		return fmt.Errorf("failed to write struct")
 	}
+	return nil
+}
 
+func WriteString(ctx context.Context, module api.Module, ptr uint32, str string) error {
+	strPtr, err := writeStringToMemory(ctx, module, str)
+	if err != nil {
+		return err
+	}
+	data := []byte{}
+	data = binary.LittleEndian.AppendUint32(data, strPtr)
+	data = binary.LittleEndian.AppendUint32(data, uint32(len(str)))
+	if !module.Memory().Write(ptr, data) {
+		return fmt.Errorf("failed to write struct")
+	}
 	return nil
 }
 
