@@ -117,11 +117,15 @@ int request(uint8_t method_tag, uint8_t scheme_tag, const char * authority_str, 
 
 int main() {
     const char *authority = getenv("SERVER");
-    int r = request(TYPES_METHOD_GET, TYPES_SCHEME_HTTP, authority, "/get", "?some=arg&goes=here", NULL);
+    int r = request(TYPES_METHOD_GET, TYPES_SCHEME_HTTP, authority, "/get", "some=arg&goes=here", NULL);
     if (r != 0) {
         return r;
     }
     r = request(TYPES_METHOD_POST, TYPES_SCHEME_HTTP, authority, "/post", "", "{\"foo\": \"bar\"}");
+    if (r != 0) {
+        return r;
+    }
+    r = request(TYPES_METHOD_PUT, TYPES_SCHEME_HTTP, authority, "/put", "", "{\"baz\": \"blah\"}");
     if (r != 0) {
         return r;
     }

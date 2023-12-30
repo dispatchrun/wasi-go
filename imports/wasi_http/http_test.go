@@ -3,7 +3,7 @@ package wasi_http
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,13 +19,15 @@ import (
 )
 
 type handler struct {
-	urls   []string
-	bodies []string
+	urls    []string
+	bodies  []string
+	methods []string
 }
 
 func (h *handler) reset() {
 	h.bodies = []string{}
 	h.urls = []string{}
+	h.methods = []string{}
 }
 
 func (h *handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
@@ -33,7 +35,7 @@ func (h *handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 	if req.Body != nil {
 		defer req.Body.Close()
-		data, err := ioutil.ReadAll(req.Body)
+		data, err := io.ReadAll(req.Body)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -45,15 +47,13 @@ func (h *handler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 	h.urls = append(h.urls, req.URL.String())
 	h.bodies = append(h.bodies, body)
+	h.methods = append(h.methods, req.Method)
 }
 
 func TestHttpClient(t *testing.T) {
-	filePaths, _ := filepath.Glob("../../testdata/c/http/http*.wasm")
-	for _, file := range filePaths {
-		fmt.Printf("%v\n", file)
-	}
+	filePaths, _ := filepath.Glob("../../testdata/*/http/http*.wasm")
 	if len(filePaths) == 0 {
-		t.Log("nothing to test")
+		t.Error("nothing to test")
 	}
 
 	h := handler{}
@@ -64,6 +64,12 @@ func TestHttpClient(t *testing.T) {
 		{
 			"/get?some=arg&goes=here",
 			"/post",
+			"/put",
+		},
+		{
+			"/get?some=arg&goes=here",
+			"/post",
+			"/put",
 		},
 	}
 
@@ -71,6 +77,25 @@ func TestHttpClient(t *testing.T) {
 		{
 			"",
 			"{\"foo\": \"bar\"}",
+			"{\"baz\": \"blah\"}",
+		},
+		{
+			"",
+			"{\"foo\": \"bar\"}",
+			"{\"baz\": \"blah\"}",
+		},
+	}
+
+	expectedMethods := [][]string{
+		{
+			"GET",
+			"POST",
+			"PUT",
+		},
+		{
+			"GET",
+			"POST",
+			"PUT",
 		},
 	}
 
@@ -128,6 +153,9 @@ func TestHttpClient(t *testing.T) {
 			if !reflect.DeepEqual(expectedBodies[testIx], h.bodies) {
 				t.Errorf("Unexpected paths: %v vs %v", h.bodies, expectedBodies[testIx])
 			}
+			if !reflect.DeepEqual(expectedMethods[testIx], h.methods) {
+				t.Errorf("Unexpected paths: %v vs %v", h.methods, expectedMethods[testIx])
+			}
 
 			h.reset()
 		})
@@ -135,12 +163,9 @@ func TestHttpClient(t *testing.T) {
 }
 
 func TestServer(t *testing.T) {
-	filePaths, _ := filepath.Glob("../../testdata/c/http/server*.wasm")
-	for _, file := range filePaths {
-		fmt.Printf("%v\n", file)
-	}
+	filePaths, _ := filepath.Glob("../../testdata/*/http/server*.wasm")
 	if len(filePaths) == 0 {
-		t.Log("nothing to test")
+		t.Error("nothing to test")
 	}
 
 	for _, test := range filePaths {
@@ -192,12 +217,12 @@ func TestServer(t *testing.T) {
 				for i := 0; i < 3; i++ {
 					res, err := http.Get(s.URL)
 					if err != nil {
-						t.Error("Failed to read from server.")
+						t.Errorf("Failed to read from server: %s", err.Error())
 						continue
 					}
 					defer res.Body.Close()
 
-					data, err := ioutil.ReadAll(res.Body)
+					data, err := io.ReadAll(res.Body)
 					if err != nil {
 						t.Error("Failed to read body.")
 						continue

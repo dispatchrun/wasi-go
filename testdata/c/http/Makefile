@@ -4,3 +4,7 @@ default: http.wasm
 
 http.wasm: http.c
 	${cc} proxy.c proxy_component_type.o http.c -o http.wasm
+
+server.wasm: server.c
+	${cc} proxy.c proxy_component_type.o server.c -o server.wasm
+
